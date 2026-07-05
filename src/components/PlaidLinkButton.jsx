@@ -69,16 +69,18 @@ export default function PlaidLinkButton({ onLinked, onSync }) {
 
   const { open, ready } = usePlaidLink({ token: linkToken, onSuccess, onExit })
 
-  async function handleSync() {
+  async function handleSync(full = false) {
     setBusy(true)
     setError(null)
     setStatus(null)
     try {
-      const result = await callFunction('plaid-sync-transactions', {})
+      const result = await callFunction('plaid-sync-transactions', full ? { full: true } : {})
       setStatus(
-        result.imported > 0
-          ? `Imported ${result.imported} transaction(s).`
-          : 'No new transactions found (they may not be ready yet — wait a few seconds and sync again).'
+        full
+          ? `Re-imported ${result.imported} transaction(s) and refreshed balances.`
+          : result.imported > 0
+            ? `Imported ${result.imported} transaction(s).`
+            : 'No new transactions found (they may not be ready yet — wait a few seconds and sync again).'
       )
       onSync?.()
     } catch (e) {
@@ -98,14 +100,22 @@ export default function PlaidLinkButton({ onLinked, onSync }) {
         Connect a bank
       </button>
       <button
-        onClick={handleSync}
+        onClick={() => handleSync(false)}
         disabled={busy}
         className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-3 py-1.5 disabled:opacity-50"
       >
         {busy ? 'Working…' : 'Sync transactions'}
       </button>
-      {status && <span className="text-sm text-slate-600 dark:text-slate-300">{status}</span>}
-      {error && <span className="text-sm text-red-600 dark:text-red-400">{error}</span>}
+      <button
+        onClick={() => handleSync(true)}
+        disabled={busy}
+        title="Re-import your full history and re-classify it — use this once to fix transfers that were counted as income."
+        className="rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition text-sm px-2 py-1.5 disabled:opacity-50 underline decoration-dotted"
+      >
+        Re-import &amp; fix
+      </button>
+      {status && <span className="text-sm text-slate-600 dark:text-slate-300 w-full sm:w-auto">{status}</span>}
+      {error && <span className="text-sm text-red-600 dark:text-red-400 w-full sm:w-auto">{error}</span>}
     </div>
   )
 }

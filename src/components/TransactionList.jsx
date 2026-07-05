@@ -43,6 +43,7 @@ export default function TransactionList({ transactions, categories, onCreate, on
           <option value="all">All types</option>
           <option value="income">Income</option>
           <option value="expense">Expense</option>
+          <option value="transfer">Transfers</option>
         </select>
         <select
           value={categoryFilter}
@@ -109,9 +110,9 @@ export default function TransactionList({ transactions, categories, onCreate, on
               <div className="flex items-center gap-4 min-w-0">
                 <span className="text-slate-500 dark:text-slate-400 w-24 shrink-0">{t.date}</span>
                 <span
-                  className={`w-20 shrink-0 font-medium ${t.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
+                  className={`w-20 shrink-0 font-medium ${t.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : t.kind === 'transfer' ? 'text-slate-500 dark:text-slate-400' : 'text-red-600 dark:text-red-400'}`}
                 >
-                  {t.kind === 'income' ? '+' : '-'}${Number(t.amount).toFixed(2)}
+                  {t.kind === 'income' ? '+' : t.kind === 'transfer' ? '⇄ ' : '-'}${Number(t.amount).toFixed(2)}
                 </span>
                 <span className="w-40 shrink-0 truncate text-slate-700 dark:text-slate-200">
                   {t.category?.name ?? (

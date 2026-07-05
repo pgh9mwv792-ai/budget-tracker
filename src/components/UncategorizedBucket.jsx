@@ -1,5 +1,7 @@
 export default function UncategorizedBucket({ transactions, categories, onAssign, onApplyRules, savedMatchCount = 0 }) {
-  const uncategorized = transactions.filter((t) => !t.category_id)
+  // Transfers (e.g. savings -> checking) aren't spending or income, so they
+  // don't need a category — leave them out of the "needs categorizing" list.
+  const uncategorized = transactions.filter((t) => !t.category_id && t.kind !== 'transfer')
 
   if (uncategorized.length === 0) return null
 

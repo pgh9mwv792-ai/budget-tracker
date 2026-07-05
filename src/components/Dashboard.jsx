@@ -23,6 +23,7 @@ export default function Dashboard({
   budgets = [],
   categories = [],
   foodLogs = [],
+  accounts = [],
   onNavigate,
   onAsk,
 }) {
@@ -73,6 +74,8 @@ export default function Dashboard({
       {onAsk && <QuickAsk onAsk={onAsk} />}
 
       <VerdictCard outlook={outlook} onNavigate={onNavigate} />
+
+      {accounts.length > 0 && <AccountsPanel accounts={accounts} />}
 
       {insights.length > 0 && <InsightsStrip insights={insights} onAsk={onAsk} />}
 
@@ -125,6 +128,65 @@ export default function Dashboard({
       </div>
 
       <RecurringPanel items={recurring} />
+    </div>
+  )
+}
+
+// Shows each linked bank account (checking, savings, credit card…) with its
+// balance, so the user sees checking and savings separately at a glance.
+function AccountsPanel({ accounts }) {
+  const fmt = (n) =>
+    n == null ? '—' : Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+
+  const label = (a) => {
+    const s = (a.subtype || a.type || 'account').replace(/_/g, ' ')
+    return s.charAt(0).toUpperCase() + s.slice(1)
+  }
+
+  // "Cash on hand" = spendable money = checking + savings (depository accounts).
+  // Credit-card and loan balances are money owed, so they're excluded.
+  const depository = accounts.filter((a) => a.type === 'depository')
+  const cash = depository.reduce((sum, a) => sum + (Number(a.current_balance) || 0), 0)
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Accounts</h3>
+        {depository.length > 0 && (
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            Cash on hand:{' '}
+            <span className="font-semibold text-slate-700 dark:text-slate-200">{fmt(cash)}</span>
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {accounts.map((a) => {
+          const owed = a.type === 'credit' || a.type === 'loan'
+          return (
+            <div key={a.account_id} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  {label(a)}
+                </span>
+                {a.mask && <span className="text-xs text-slate-400 dark:text-slate-500">••{a.mask}</span>}
+              </div>
+              <p className="text-sm text-slate-600 dark:text-slate-300 truncate" title={a.name || 'Account'}>
+                {a.name || 'Account'}
+              </p>
+              <p className={`text-xl font-semibold mt-1 ${owed ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                {fmt(a.current_balance)}
+              </p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                {owed
+                  ? 'owed'
+                  : a.available_balance != null && Number(a.available_balance) !== Number(a.current_balance)
+                    ? `${fmt(a.available_balance)} available`
+                    : ' '}
+              </p>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -359,8 +421,8 @@ function VerdictCard({ outlook, onNavigate }) {
               <div key={r.key} className="flex items-center justify-between text-sm">
                 <span className="truncate text-slate-600 dark:text-slate-300">{r.label}</span>
                 <span className="shrink-0 ml-3 tabular-nums">
-                  <span className={r.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200'}>
-                    {r.kind === 'income' ? '+' : '-'}${r.amount.toFixed(2)}
+                  <span className={r.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : r.kind === 'transfer' ? 'text-slate-500 dark:text-slate-400' : 'text-slate-700 dark:text-slate-200'}>
+                    {r.kind === 'income' ? '+' : r.kind === 'transfer' ? '⇄ ' : '-'}${r.amount.toFixed(2)}
                   </span>
                   <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">{r.nextDate.slice(5)}</span>
                 </span>
@@ -400,8 +462,8 @@ function RecurringPanel({ items }) {
               </p>
             </div>
             <div className="text-right shrink-0 ml-3">
-              <p className={`font-medium ${r.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                {r.kind === 'income' ? '+' : '-'}${r.amount.toFixed(2)}
+              <p className={`font-medium ${r.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : r.kind === 'transfer' ? 'text-slate-500 dark:text-slate-400' : 'text-red-600 dark:text-red-400'}`}>
+                {r.kind === 'income' ? '+' : r.kind === 'transfer' ? '⇄ ' : '-'}${r.amount.toFixed(2)}
               </p>
               <p className={`text-xs ${r.overdue ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>
                 {r.overdue ? 'expected by ' : 'next ~ '}

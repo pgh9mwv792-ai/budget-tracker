@@ -22,6 +22,9 @@ export function matchRules(transactions, rulesByKey) {
   const matches = []
   for (const t of transactions) {
     if (t.category_id) continue
+    // Never auto-categorize a transfer — assigning a category would flip its
+    // kind back to income/expense and re-pollute the totals.
+    if (t.kind === 'transfer') continue
     const key = merchantKey(t.note)
     if (!key) continue
     const categoryId = rulesByKey.get(key)

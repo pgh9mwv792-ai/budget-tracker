@@ -33,6 +33,7 @@ function AppShell() {
   const [foodLogs, setFoodLogs] = useState([])
   const [nutritionTargets, setNutritionTargets] = useState(null)
   const [memories, setMemories] = useState([])
+  const [plaidAccounts, setPlaidAccounts] = useState([])
   const [dataLoading, setDataLoading] = useState(true)
   const [onboardDismissed, setOnboardDismissed] = useState(false)
   // A prompt handed to the assistant from elsewhere (e.g. the Dashboard quick-ask
@@ -52,7 +53,7 @@ function AppShell() {
   const loadAll = useCallback(async () => {
     if (!user) return
     if (!hasLoadedOnce.current) setDataLoading(true)
-    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems] = await Promise.all([
+    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts] = await Promise.all([
       api.ensureDefaultCategories(user.id),
       api.fetchTransactions(),
       api.fetchGoals(),
@@ -67,6 +68,8 @@ function AppShell() {
       api.fetchNutritionTargets().catch(() => null),
       // Assistant memory lives in migration 0004; degrade gracefully until run.
       api.fetchMemories().catch(() => []),
+      // Plaid account balances live in migration 0007; degrade gracefully.
+      api.fetchPlaidAccounts().catch(() => []),
     ])
 
     // Auto-categorize: apply saved merchant rules to any uncategorized
@@ -93,6 +96,7 @@ function AppShell() {
     setFoodLogs(flogs)
     setNutritionTargets(ntargets)
     setMemories(mems)
+    setPlaidAccounts(paccts ?? [])
     hasLoadedOnce.current = true
     setDataLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -309,6 +313,7 @@ function AppShell() {
             budgets={budgets}
             categories={categories}
             foodLogs={foodLogs}
+            accounts={plaidAccounts}
             onNavigate={setActiveTab}
             onAsk={setAssistantPrompt}
           />

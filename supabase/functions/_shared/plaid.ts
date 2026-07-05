@@ -32,3 +32,53 @@ export async function plaidFetch(path: string, body: Record<string, unknown>) {
   }
   return data
 }
+
+// Pulls the latest balances + metadata for every account behind one linked
+// bank (access_token) and upserts them into plaid_accounts. Called after
+// linking and on every sync so checking/savings balances stay current.
+// `supabase` is a service-role client (bypasses RLS); `userId` is the verified
+// owner so we can never write another user's accounts.
+export async function syncAccounts(
+  supabase: any,
+  userId: string,
+  accessToken: string,
+) {
+  const data = await plaidFetch('/accounts/get', { access_token: accessToken })
+  const itemId = data.item?.item_id ?? null
+  const rows = (data.accounts ?? []).map((a: any) => ({
+    user_id: userId,
+    item_id: itemId,
+    account_id: a.account_id,
+    name: a.name ?? null,
+    official_name: a.official_name ?? null,
+    type: a.type ?? null,
+    subtype: a.subtype ?? null,
+    mask: a.mask ?? null,
+    current_balance: a.balances?.current ?? null,
+    available_balance: a.balances?.available ?? null,
+    iso_currency_code: a.balances?.iso_currency_code ?? null,
+    updated_at: new Date().toISOString(),
+  }))
+  if (rows.length > 0) {
+    const { error } = await supabase
+      .from('plaid_accounts')
+      .upsert(rows, { onConflict: 'account_id' })
+    if (error) throw error
+  }
+  return rows
+}
+
+// Plaid's personal_finance_category marks internal money movements as
+// TRANSFER_IN / TRANSFER_OUT. Those are moving your own money between accounts
+// (e.g. savings -> checking), not real income or spending — so we tag them
+// 'transfer' and they drop out of every income/expense total. Falls back to
+// the legacy category array, then to the amount sign.
+export function classifyKind(t: any): 'income' | 'expense' | 'transfer' {
+  const primary = t.personal_finance_category?.primary
+  if (primary === 'TRANSFER_IN' || primary === 'TRANSFER_OUT') return 'transfer'
+  const legacy = Array.isArray(t.category) ? t.category : []
+  if (legacy.some((c: string) => /transfer/i.test(c))) return 'transfer'
+  // Plaid convention: positive amount = money out (expense),
+  // negative amount = money in (income/credit).
+  return t.amount >= 0 ? 'expense' : 'income'
+}

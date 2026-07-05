@@ -11,6 +11,7 @@ export default function Settings({ data }) {
       <EmailSection />
       <PasswordSection />
       <TwoFactorSection />
+      <ConnectedBanksSection />
       <DataSection data={data} />
       <DangerZone />
     </div>
@@ -428,6 +429,103 @@ function TwoFactorSection() {
         </button>
       )}
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Connected banks: list linked institutions and disconnect them.
+// ---------------------------------------------------------------------------
+function ConnectedBanksSection() {
+  const [banks, setBanks] = useState(null) // null = loading, [] = none
+  const [status, setStatus] = useState(null)
+  const [removingId, setRemovingId] = useState(null)
+
+  async function refresh() {
+    const { data, error } = await supabase.rpc('get_plaid_connections')
+    if (error) {
+      setStatus({ type: 'error', text: error.message })
+      setBanks([])
+    } else {
+      setBanks(data ?? [])
+    }
+  }
+
+  useEffect(() => {
+    refresh()
+  }, [])
+
+  async function remove(bank) {
+    const name = bank.institution_name || 'this bank'
+    if (!window.confirm(`Disconnect ${name}? This stops importing new transactions. Transactions already imported will stay in your history.`)) {
+      return
+    }
+    setRemovingId(bank.id)
+    setStatus(null)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const { error } = await supabase.functions.invoke('plaid-remove-item', {
+        body: { id: bank.id },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      if (error) {
+        let message = error.message
+        try {
+          const details = await error.context.json()
+          if (details?.error) message = details.error
+        } catch {
+          // keep default
+        }
+        throw new Error(message)
+      }
+      setStatus({ type: 'success', text: `${name} disconnected.` })
+      await refresh()
+    } catch (e) {
+      setStatus({ type: 'error', text: e.message })
+    } finally {
+      setRemovingId(null)
+    }
+  }
+
+  return (
+    <Card
+      title="Connected banks"
+      description="Banks you've linked through Plaid. Disconnecting one stops new transactions from importing; your existing history is kept."
+    >
+      {banks === null ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
+      ) : banks.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          No banks connected. You can link one from the Transactions tab with “Connect a bank.”
+        </p>
+      ) : (
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-slate-200 dark:border-slate-800">
+          {banks.map((bank) => (
+            <li key={bank.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+                  🏦 {bank.institution_name || 'Linked bank'}
+                </p>
+                {bank.created_at && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Connected {new Date(bank.created_at).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => remove(bank)}
+                disabled={removingId === bank.id}
+                className="shrink-0 rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:border-red-800 dark:hover:text-red-400 transition text-sm px-3 py-1.5 disabled:opacity-50"
+              >
+                {removingId === bank.id ? 'Removing…' : 'Disconnect'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Notice status={status} />
     </Card>
   )
 }

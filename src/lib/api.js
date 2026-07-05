@@ -372,3 +372,11 @@ export async function fetchPlaidConnections() {
   if (error) throw error
   return data
 }
+
+// Per-account balances (checking, savings, etc.) — non-sensitive columns only,
+// via the SECURITY DEFINER function get_plaid_accounts.
+export async function fetchPlaidAccounts() {
+  const { data, error } = await supabase.rpc('get_plaid_accounts')
+  if (error) throw error
+  return data
+}

@@ -187,10 +187,11 @@ export function summarizeAppData({ categories = [], transactions = [], budgets =
     if (monthKey(t.date) !== thisMonth) continue
     const amt = Number(t.amount) || 0
     if (t.kind === 'income') inc += amt
-    else {
+    else if (t.kind === 'expense') {
       exp += amt
       spentByCat.set(t.category_id, (spentByCat.get(t.category_id) || 0) + amt)
     }
+    // transfers are internal moves — excluded from income and spending
   }
 
   const catLines = categories.map((c) => `- ${c.name} (${c.kind})`).join('\n') || '(none)'
@@ -211,7 +212,8 @@ export function summarizeAppData({ categories = [], transactions = [], budgets =
       .slice(0, 12)
       .map((t) => {
         const c = t.category_id ? catById.get(t.category_id)?.name : null
-        return `- ${t.date} ${t.kind === 'income' ? '+' : '-'}${money(t.amount)} ${c ? `[${c}]` : '[uncategorized]'}${t.note ? ` "${t.note}"` : ''}`
+        const sign = t.kind === 'income' ? '+' : t.kind === 'transfer' ? '⇄' : '-'
+        return `- ${t.date} ${sign}${money(t.amount)} ${c ? `[${c}]` : t.kind === 'transfer' ? '[transfer]' : '[uncategorized]'}${t.note ? ` "${t.note}"` : ''}`
       })
       .join('\n') || '(none yet)'
 

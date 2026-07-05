@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { getUserId, getServiceClient } from '../_shared/auth.ts'
-import { plaidFetch } from '../_shared/plaid.ts'
+import { plaidFetch, syncAccounts } from '../_shared/plaid.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -20,6 +20,14 @@ Deno.serve(async (req) => {
       institution_name: institution_name ?? null,
     })
     if (error) throw error
+
+    // Pull the account list (checking, savings, etc.) right away so balances
+    // show immediately, before the first transaction sync. Best-effort.
+    try {
+      await syncAccounts(supabase, userId, data.access_token)
+    } catch (_e) {
+      // ignore — the next sync will populate accounts
+    }
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
