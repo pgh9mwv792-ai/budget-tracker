@@ -1,0 +1,16 @@
+# Supabase CLI project config.
+#
+# This file exists mainly so the CI deploy (`supabase functions deploy`, which
+# deploys ALL functions at once) knows that the Stripe webhook must be reachable
+# WITHOUT a Supabase JWT. Stripe calls that endpoint unauthenticated and proves
+# itself with a signed Stripe-Signature header instead, which the function
+# verifies. Every other function keeps JWT verification on (the default).
+#
+# Because the setting lives here, the existing GitHub Action needs no change:
+# its plain `supabase functions deploy` reads this per-function config and
+# applies verify_jwt = false to stripe-webhook only.
+
+project_id = "flnppvzyevcuawqxiksu"
+
+[functions.stripe-webhook]
+verify_jwt = false
