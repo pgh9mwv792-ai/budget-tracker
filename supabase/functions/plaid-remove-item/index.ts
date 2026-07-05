@@ -1,6 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { getUserId, getServiceClient } from '../_shared/auth.ts'
 import { plaidFetch, resolveAccessToken } from '../_shared/plaid.ts'
+import { logError } from '../_shared/log-error.ts'
 
 // Disconnects a linked bank: tells Plaid to remove the Item (which stops any
 // further access and frees the connection on Plaid's side), then deletes our
@@ -53,7 +54,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    const message = logError('plaid-remove-item', err)
+    return new Response(JSON.stringify({ error: message }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

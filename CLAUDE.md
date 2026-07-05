@@ -34,6 +34,8 @@ extra steps to do**, or it will look "broken" to them.
 | `ANTHROPIC_API_KEY` (opt. `ANTHROPIC_MODEL`, `AI_DAILY_LIMIT`) | Claude, via `chat` only |
 | `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-GCM key encrypting `plaid_items.access_token_enc` at rest. Losing it makes stored bank tokens unrecoverable (re-link required). |
 
+**Frontend env vars** (Vercel + local `.env`, safe to expose — not secrets): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SENTRY_DSN` (error monitoring; when unset, Sentry is a no-op).
+
 ## Guardrails / conventions (don't break)
 - **Secrets** (Plaid, Anthropic) live only in edge functions; never expose to the
   browser.
