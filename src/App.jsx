@@ -456,6 +456,10 @@ function AppShell() {
               const created = await api.createFood(values)
               setFoods((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
             }}
+            onUpdateFood={async (id, updates) => {
+              const updated = await api.updateFood(id, updates)
+              setFoods((prev) => prev.map((f) => (f.id === id ? updated : f)))
+            }}
             onDeleteFood={async (id) => {
               await api.deleteFood(id)
               setFoods((prev) => prev.filter((f) => f.id !== id))

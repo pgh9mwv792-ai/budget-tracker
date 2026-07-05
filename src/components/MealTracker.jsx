@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { monthKey } from '../lib/dateHelpers'
+import { monthKey, addDays } from '../lib/dateHelpers'
+import { costPerDay, costPerProtein } from '../lib/foodCost'
 
 const MEALS = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -35,6 +36,7 @@ export default function MealTracker({
   targets,
   transactions,
   onAddFood,
+  onUpdateFood,
   onDeleteFood,
   onLogFood,
   onUpdateLog,
@@ -58,6 +60,8 @@ export default function MealTracker({
         />
       </div>
 
+      <WeeklyStrip transactions={transactions} logs={logs} />
+
       <DailySummary totals={totals} targets={targets} transactions={transactions} logs={logs} date={date} />
 
       {MEALS.map((m) => (
@@ -67,6 +71,7 @@ export default function MealTracker({
           logs={dayLogs.filter((l) => l.meal === m.key)}
           foods={foods}
           onLogFood={(payload) => onLogFood({ ...payload, date, meal: m.key })}
+          onUpdateFood={onUpdateFood}
           onUpdateLog={onUpdateLog}
           onDeleteLog={onDeleteLog}
         />
@@ -74,6 +79,92 @@ export default function MealTracker({
 
       <FoodLibrary foods={foods} onAddFood={onAddFood} onDeleteFood={onDeleteFood} />
       <TargetsEditor targets={targets} onSetTargets={onSetTargets} />
+    </div>
+  )
+}
+
+// This-week-vs-last-week strip at the top of the Meals tab: food spend (from
+// transactions), protein logged, and cost per 100g protein — the money+food
+// health check in one line. Uses the shared foodCost lib so the numbers match
+// the dashboard. Always relative to the real "today", not the viewed day.
+function WeeklyStrip({ transactions, logs }) {
+  const strip = useMemo(() => {
+    const t = today()
+    const lastWeekAnchor = addDays(t, -7)
+    const thisSpend = costPerDay(transactions, { today: t, days: 7 })
+    const lastSpend = costPerDay(transactions, { today: lastWeekAnchor, days: 7 })
+    const thisProtein = costPerProtein(logs, { today: t, days: 7 })
+    const lastProtein = costPerProtein(logs, { today: lastWeekAnchor, days: 7 })
+    return { thisSpend, lastSpend, thisProtein, lastProtein }
+  }, [transactions, logs])
+
+  const { thisSpend, lastSpend, thisProtein, lastProtein } = strip
+  const hasAny =
+    thisSpend.hasData || lastSpend.hasData || thisProtein.totalProtein > 0 || lastProtein.totalProtein > 0
+  if (!hasAny) return null
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">This week</h3>
+      <div className="grid grid-cols-3 gap-3">
+        <WeekStat
+          label="Food spend"
+          value={thisSpend.hasData ? `$${thisSpend.total.toFixed(0)}` : '—'}
+          delta={pctDelta(thisSpend.total, lastSpend.total)}
+          lowerIsBetter
+        />
+        <WeekStat
+          label="Protein logged"
+          value={thisProtein.totalProtein > 0 ? `${Math.round(thisProtein.totalProtein)}g` : '—'}
+          delta={pctDelta(thisProtein.totalProtein, lastProtein.totalProtein)}
+        />
+        <WeekStat
+          label="$ / 100g protein"
+          value={thisProtein.hasData ? `$${thisProtein.costPer100g.toFixed(2)}` : '—'}
+          delta={pctDelta(thisProtein.costPer100g, lastProtein.costPer100g)}
+          lowerIsBetter
+          hint={
+            thisProtein.hasData && thisProtein.coverage != null && thisProtein.coverage < 0.999
+              ? `${Math.round(thisProtein.coverage * 100)}% priced`
+              : null
+          }
+        />
+      </div>
+    </div>
+  )
+}
+
+// Percent change from a→b, or null when there's no comparable baseline.
+function pctDelta(current, previous) {
+  if (!(previous > 0) || current == null) return null
+  return (current - previous) / previous
+}
+
+function WeekStat({ label, value, delta, lowerIsBetter = false, hint = null }) {
+  let trend = null
+  if (delta != null && Math.abs(delta) >= 0.05) {
+    const up = delta > 0
+    const good = lowerIsBetter ? !up : up
+    trend = {
+      text: `${up ? '↑' : '↓'} ${Math.round(Math.abs(delta) * 100)}%`,
+      cls: good ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+    }
+  } else if (delta != null) {
+    trend = { text: 'flat', cls: 'text-slate-400 dark:text-slate-500' }
+  }
+  return (
+    <div>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{value}</p>
+      <p className="text-xs h-4">
+        {trend ? (
+          <span className={trend.cls}>
+            {trend.text} <span className="text-slate-400 dark:text-slate-500">vs last week</span>
+          </span>
+        ) : hint ? (
+          <span className="text-slate-400 dark:text-slate-500">{hint}</span>
+        ) : null}
+      </p>
     </div>
   )
 }
@@ -168,15 +259,25 @@ function MacroStat({ label, value, target, unit }) {
   )
 }
 
-function MealGroup({ meal, logs, foods, onLogFood, onUpdateLog, onDeleteLog }) {
+function MealGroup({ meal, logs, foods, onLogFood, onUpdateFood, onUpdateLog, onDeleteLog }) {
   const [foodId, setFoodId] = useState('')
   const [servings, setServings] = useState('1')
+  // Per-serving cost for this log. Pre-filled from the selected food's saved
+  // default cost; editing it here also updates that default (see add()).
+  const [cost, setCost] = useState('')
 
   const groupTotals = totalsFor(logs)
+
+  const selectFood = (id) => {
+    setFoodId(id)
+    const f = foods.find((x) => x.id === id)
+    setCost(f && f.cost != null ? String(f.cost) : '')
+  }
 
   async function add() {
     const food = foods.find((f) => f.id === foodId)
     if (!food) return
+    const enteredCost = cost === '' ? null : Number(cost)
     await onLogFood({
       foodId: food.id,
       name: food.name,
@@ -185,8 +286,14 @@ function MealGroup({ meal, logs, foods, onLogFood, onUpdateLog, onDeleteLog }) {
       protein: food.protein,
       carbs: food.carbs,
       fat: food.fat,
-      cost: food.cost,
+      cost: enteredCost,
     })
+    // Remember the cost as this food's new default when it changed, so next
+    // time it pre-fills correctly (per-food default cost on the foods row).
+    const prev = food.cost == null ? null : Number(food.cost)
+    if (onUpdateFood && enteredCost != null && enteredCost !== prev) {
+      await onUpdateFood(food.id, { cost: enteredCost })
+    }
     setServings('1')
   }
 
@@ -211,7 +318,7 @@ function MealGroup({ meal, logs, foods, onLogFood, onUpdateLog, onDeleteLog }) {
       <div className="flex items-center gap-2 px-4 py-2 border-t border-slate-100 dark:border-slate-800">
         <select
           value={foodId}
-          onChange={(e) => setFoodId(e.target.value)}
+          onChange={(e) => selectFood(e.target.value)}
           className="flex-1 min-w-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
         >
           <option value="">{foods.length ? 'Add a food…' : 'Add foods in the library below first'}</option>
@@ -231,6 +338,19 @@ function MealGroup({ meal, logs, foods, onLogFood, onUpdateLog, onDeleteLog }) {
           title="Servings"
           className="w-16 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
         />
+        <div className="relative w-24 shrink-0">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm" aria-hidden>$</span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+            placeholder="cost"
+            title="Cost per serving"
+            className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-5 pr-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          />
+        </div>
         <button
           onClick={add}
           disabled={!foodId}
