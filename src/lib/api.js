@@ -365,6 +365,41 @@ export async function deleteMemory(id) {
   if (error) throw error
 }
 
+// ---------- credit scores (manual log) ----------
+
+export async function fetchCreditScores() {
+  const { data, error } = await supabase
+    .from('credit_scores')
+    .select('*')
+    .order('recorded_on', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createCreditScore({ score, source, recordedOn, note }) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('credit_scores')
+    .insert({
+      user_id: user.id,
+      score,
+      source: source || null,
+      recorded_on: recordedOn || new Date().toISOString().slice(0, 10),
+      note: note || null,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteCreditScore(id) {
+  const { error } = await supabase.from('credit_scores').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ---------- plaid ----------
 
 export async function fetchPlaidConnections() {

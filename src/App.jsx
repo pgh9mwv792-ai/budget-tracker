@@ -14,6 +14,7 @@ import BudgetManager from './components/BudgetManager'
 import MealTracker from './components/MealTracker'
 import ChatWidget from './components/ChatWidget'
 import PlaidLinkButton from './components/PlaidLinkButton'
+import CreditTab from './components/CreditTab'
 import ReceiptScanner from './components/ReceiptScanner'
 import Onboarding from './components/Onboarding'
 import * as api from './lib/api'
@@ -34,6 +35,7 @@ function AppShell() {
   const [nutritionTargets, setNutritionTargets] = useState(null)
   const [memories, setMemories] = useState([])
   const [plaidAccounts, setPlaidAccounts] = useState([])
+  const [creditScores, setCreditScores] = useState([])
   const [dataLoading, setDataLoading] = useState(true)
   const [onboardDismissed, setOnboardDismissed] = useState(false)
   // A prompt handed to the assistant from elsewhere (e.g. the Dashboard quick-ask
@@ -53,7 +55,7 @@ function AppShell() {
   const loadAll = useCallback(async () => {
     if (!user) return
     if (!hasLoadedOnce.current) setDataLoading(true)
-    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts] = await Promise.all([
+    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts, cscores] = await Promise.all([
       api.ensureDefaultCategories(user.id),
       api.fetchTransactions(),
       api.fetchGoals(),
@@ -70,6 +72,8 @@ function AppShell() {
       api.fetchMemories().catch(() => []),
       // Plaid account balances live in migration 0007; degrade gracefully.
       api.fetchPlaidAccounts().catch(() => []),
+      // Manual credit-score log lives in migration 0009; degrade gracefully.
+      api.fetchCreditScores().catch(() => []),
     ])
 
     // Auto-categorize: apply saved merchant rules to any uncategorized
@@ -97,6 +101,7 @@ function AppShell() {
     setNutritionTargets(ntargets)
     setMemories(mems)
     setPlaidAccounts(paccts ?? [])
+    setCreditScores(cscores ?? [])
     hasLoadedOnce.current = true
     setDataLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -361,6 +366,22 @@ function AppShell() {
             onRemoveBudget={async (categoryId) => {
               await api.deleteBudget(categoryId)
               setBudgets((prev) => prev.filter((b) => b.category_id !== categoryId))
+            }}
+          />
+        )}
+
+        {activeTab === 'Credit' && (
+          <CreditTab
+            scores={creditScores}
+            accounts={plaidAccounts}
+            onAdd={async (values) => {
+              const created = await api.createCreditScore(values)
+              setCreditScores((prev) => [...prev, created])
+              return created
+            }}
+            onDelete={async (id) => {
+              await api.deleteCreditScore(id)
+              setCreditScores((prev) => prev.filter((s) => s.id !== id))
             }}
           />
         )}

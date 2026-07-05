@@ -1,6 +1,6 @@
 import { useTheme } from '../contexts/ThemeContext'
 
-const TABS = ['Dashboard', 'Transactions', 'Budgets', 'Meals', 'Goals', 'Categories']
+const TABS = ['Dashboard', 'Transactions', 'Budgets', 'Credit', 'Meals', 'Goals', 'Categories']
 
 export default function NavBar({ activeTab, onTabChange, userEmail, userName, avatarUrl, onSignOut }) {
   const { theme, toggleTheme } = useTheme()
