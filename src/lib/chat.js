@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient'
 import { monthKey } from './dateHelpers'
+import { computeFoodCost } from './foodCost'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -241,6 +242,51 @@ export function summarizeAppData({ categories = [], transactions = [], budgets =
 
   const memoryLines = memories.map((m) => `- ${m.content}`).join('\n') || '(nothing remembered yet)'
 
+  // Food-cost intelligence: the money+food angle the app now leads with, so the
+  // assistant can answer "what's my cheapest protein", "how much am I spending
+  // on food", "am I eating out too much" from the same numbers the dashboard shows.
+  const fc = computeFoodCost({ transactions, foodLogs, foods, nutritionTargets })
+  const foodCostLines = (() => {
+    if (!fc.hasData) return '(not enough food data yet — no meals with cost or tagged food spending)'
+    const lines = []
+    if (fc.spend.hasData) {
+      lines.push(
+        `- Food spend: ${money(fc.spend.perDay)}/day over the last ${fc.spend.days} days (${money(
+          fc.spend.grocery
+        )} groceries, ${money(fc.spend.restaurant)} eating out).`
+      )
+    }
+    if (fc.protein.hasData) {
+      const cov =
+        fc.protein.coverage != null && fc.protein.coverage < 0.999
+          ? ` (based on ${Math.round(fc.protein.coverage * 100)}% of logged meals having a cost)`
+          : ''
+      lines.push(`- Cost per 100g of logged protein: ${money(fc.protein.costPer100g)}${cov}.`)
+    }
+    if (fc.burn.average != null) {
+      lines.push(
+        `- This month's food spend: ${money(fc.burn.spentSoFar)} so far, projected ${money(
+          fc.burn.projected
+        )} vs a 3-month average of ${money(fc.burn.average)}.`
+      )
+    }
+    if (fc.efficiency.hasData) {
+      const top = fc.efficiency.ranked
+        .slice(0, 5)
+        .map((f) => `${f.name} (${money(f.costPer30g)}/30g protein)`)
+        .join(', ')
+      lines.push(`- Cheapest protein in the library, cheapest first: ${top}.`)
+    }
+    if (fc.bulk) {
+      lines.push(
+        `- Hitting the ${Math.round(fc.bulk.proteinTarget)}g daily protein target for a month runs about ${money(
+          fc.bulk.monthlyCost
+        )}.`
+      )
+    }
+    return lines.join('\n')
+  })()
+
   return `Today's date: ${today()}
 
 WHAT YOU REMEMBER ABOUT THIS USER:
@@ -261,7 +307,10 @@ RECENT TRANSACTIONS (up to 12 most recent):
 ${recent}
 
 MEAL TRACKER — today logged: ${Math.round(nut.calories)} kcal, ${Math.round(nut.protein)}g protein, ${Math.round(nut.carbs)}g carbs, ${Math.round(nut.fat)}g fat. ${targetLine}.
-Food library: ${foodNames}`
+Food library: ${foodNames}
+
+FOOD & MONEY (computed — use these for cost-per-protein and food-spending questions):
+${foodCostLines}`
 }
 
 export function buildSystemPrompt(dataSummary) {

@@ -305,9 +305,10 @@ function AppShell() {
     supabase.auth.updateUser({ data: { onboarded: true } }).catch(() => {})
   }
 
-  // Seeds a realistic month of example transactions so a new user sees a full
-  // dashboard (verdict, charts, recurring detection) instantly. Uses the
-  // existing default categories by name.
+  // Seeds a realistic month of example transactions AND a few logged meals so a
+  // new user immediately sees the money+food dashboard fully populated — the
+  // Food & Money hero (cost/day, cost per protein), the cheapest-protein card,
+  // and the verdict/charts. Uses the existing default categories by name.
   const loadSampleData = async () => {
     const today = new Date().toISOString().slice(0, 10)
     const catId = (name) => categories.find((c) => c.name === name)?.id ?? null
@@ -320,12 +321,64 @@ function AppShell() {
       { date: addDays(today, -1), amount: 15.99, kind: 'expense', categoryId: catId('Entertainment'), note: 'Netflix' },
       { date: addDays(today, -6), amount: 82.4, kind: 'expense', categoryId: catId('Groceries'), note: 'Whole Foods' },
       { date: addDays(today, -2), amount: 54.1, kind: 'expense', categoryId: catId('Groceries'), note: 'Trader Joes' },
+      // Older food spend so the "vs 3-month average" food burn has a baseline.
+      { date: addDays(today, -38), amount: 61.0, kind: 'expense', categoryId: catId('Groceries'), note: 'Safeway' },
+      { date: addDays(today, -68), amount: 73.5, kind: 'expense', categoryId: catId('Groceries'), note: 'Costco' },
+      { date: addDays(today, -40), amount: 24.0, kind: 'expense', categoryId: catId('Dining & Restaurants'), note: 'Local Diner' },
       { date: addDays(today, -5), amount: 44.0, kind: 'expense', categoryId: catId('Transportation'), note: 'Shell Gas' },
       { date: addDays(today, -4), amount: 65.0, kind: 'expense', categoryId: catId('Utilities'), note: 'Electric Bill' },
       { date: addDays(today, -3), amount: 12.75, kind: 'expense', categoryId: catId('Dining & Restaurants'), note: 'Chipotle' },
       { date: addDays(today, -1), amount: 8.5, kind: 'expense', categoryId: catId('Dining & Restaurants'), note: 'Blue Bottle Coffee' },
     ]
     await Promise.all(samples.map((s) => actions.addTransaction(s)))
+
+    // A small food library with per-serving protein + cost powers the
+    // cheapest-protein ranking and the cost-per-protein number.
+    const sampleFoods = [
+      { name: 'Chicken breast', servingDesc: '6 oz', calories: 220, protein: 40, carbs: 0, fat: 5, cost: 2.5 },
+      { name: 'Whey protein', servingDesc: '1 scoop', calories: 120, protein: 24, carbs: 3, fat: 1.5, cost: 1.1 },
+      { name: 'Eggs', servingDesc: '2 eggs', calories: 140, protein: 12, carbs: 1, fat: 10, cost: 0.6 },
+      { name: 'Greek yogurt', servingDesc: '1 cup', calories: 100, protein: 17, carbs: 6, fat: 0, cost: 1.2 },
+      { name: 'White rice', servingDesc: '1 cup', calories: 200, protein: 4, carbs: 44, fat: 0, cost: 0.4 },
+    ]
+    const createdFoods = await Promise.all(sampleFoods.map((f) => actions.addFood(f)))
+    const food = (name) => createdFoods.find((f) => f.name === name)
+    const logOne = (offset, meal, name, servings, costOverride) => {
+      const f = food(name)
+      if (!f) return null
+      return actions.logFood({
+        date: addDays(today, offset),
+        meal,
+        foodId: f.id,
+        name: f.name,
+        servings,
+        calories: f.calories,
+        protein: f.protein,
+        carbs: f.carbs,
+        fat: f.fat,
+        // One meal is left costless on purpose so the coverage % is realistic.
+        cost: costOverride === undefined ? f.cost : costOverride,
+      })
+    }
+    await Promise.all(
+      [
+        logOne(-1, 'breakfast', 'Greek yogurt', 1),
+        logOne(-1, 'breakfast', 'Eggs', 1),
+        logOne(-1, 'lunch', 'Chicken breast', 1),
+        logOne(-1, 'lunch', 'White rice', 1),
+        logOne(-1, 'snack', 'Whey protein', 1),
+        logOne(-2, 'lunch', 'Chicken breast', 1),
+        logOne(-2, 'dinner', 'White rice', 1, null),
+        logOne(-3, 'breakfast', 'Greek yogurt', 1),
+        logOne(-3, 'snack', 'Whey protein', 1),
+        logOne(-4, 'lunch', 'Eggs', 2),
+      ].filter(Boolean)
+    )
+
+    // A protein-forward daily target lights up the "hitting your goal runs
+    // $X/mo" line on the hero card.
+    await actions.setTargets({ calories: 2200, protein: 150, carbs: 220, fat: 70 }).catch(() => {})
+
     setActiveTab('Dashboard')
   }
 

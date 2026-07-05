@@ -30,17 +30,17 @@ export default function Onboarding({ onFinish, onNavigate, onLoadSample }) {
 
   const steps = [
     {
-      emoji: '👋',
-      title: 'Welcome to Budget Tracker',
-      body: 'A calm home for your money and your meals. In a few taps you’ll see exactly where you stand this month — and an assistant that can do the busywork for you.',
+      emoji: '🍗',
+      title: 'See what your food really costs',
+      body: 'Budget Tracker connects your spending to what you actually eat — cost per day on food, cost per gram of protein, and groceries vs. eating out — alongside the rest of your money. Plus an assistant that does the busywork for you.',
       actions: (
         <PrimaryButton onClick={() => setStep(1)}>Get started</PrimaryButton>
       ),
     },
     {
       emoji: '💸',
-      title: 'Add your money',
-      body: 'Pick the fastest way to start. You can always change or add more later.',
+      title: 'Add your money & meals',
+      body: 'Pick the fastest way to start — the sample data includes a few logged meals so you can see the food-cost dashboard right away. You can always change or add more later.',
       actions: (
         <div className="w-full space-y-2">
           <PrimaryButton onClick={() => go('Transactions')}>Connect a bank (auto-import)</PrimaryButton>
