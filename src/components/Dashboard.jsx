@@ -161,7 +161,11 @@ function AccountsPanel({ accounts }) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {accounts.map((a) => {
-          const owed = a.type === 'credit' || a.type === 'loan'
+          const isCredit = a.type === 'credit'
+          const owed = isCredit || a.type === 'loan'
+          const limit = Number(a.credit_limit)
+          const bal = Number(a.current_balance)
+          const util = isCredit && limit > 0 ? Math.round((bal / limit) * 100) : null
           return (
             <div key={a.account_id} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
               <div className="flex items-center justify-between gap-2">
@@ -176,13 +180,38 @@ function AccountsPanel({ accounts }) {
               <p className={`text-xl font-semibold mt-1 ${owed ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-100'}`}>
                 {fmt(a.current_balance)}
               </p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
-                {owed
-                  ? 'owed'
-                  : a.available_balance != null && Number(a.available_balance) !== Number(a.current_balance)
-                    ? `${fmt(a.available_balance)} available`
-                    : ' '}
-              </p>
+              {isCredit ? (
+                <>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                    {owed ? 'owed' : ' '}
+                    {limit > 0 && ` · limit ${fmt(limit)}`}
+                  </p>
+                  {util != null && (
+                    <div className="mt-1.5">
+                      <div className="flex items-center justify-between text-xs mb-0.5">
+                        <span className="text-slate-500 dark:text-slate-400">Utilization</span>
+                        <span className={util > 30 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-slate-500 dark:text-slate-400'}>
+                          {util}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${util > 30 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                          style={{ width: `${Math.min(100, util)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {owed
+                    ? 'owed'
+                    : a.available_balance != null && Number(a.available_balance) !== Number(a.current_balance)
+                      ? `${fmt(a.available_balance)} available`
+                      : ' '}
+                </p>
+              )}
             </div>
           )
         })}

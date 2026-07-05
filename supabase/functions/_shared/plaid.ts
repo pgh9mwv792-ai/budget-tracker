@@ -56,6 +56,7 @@ export async function syncAccounts(
     mask: a.mask ?? null,
     current_balance: a.balances?.current ?? null,
     available_balance: a.balances?.available ?? null,
+    credit_limit: a.balances?.limit ?? null,
     iso_currency_code: a.balances?.iso_currency_code ?? null,
     updated_at: new Date().toISOString(),
   }))
