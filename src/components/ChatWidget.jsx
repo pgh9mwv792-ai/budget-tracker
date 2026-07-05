@@ -46,6 +46,18 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openWith])
 
+  // Press Esc while the assistant is working to stop it. Only active when a
+  // request is in flight, so it never clashes with Esc-to-cancel in the editor.
+  useEffect(() => {
+    if (!busy) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') stop()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy])
+
   // Cancels the current request. We only flip a flag + abort the fetch here; the
   // running send() loop notices the flag, rolls the model history back to the
   // last valid point, and stops.
@@ -399,7 +411,7 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
           <button
             type="button"
             onClick={stop}
-            title="Stop"
+            title="Stop (Esc)"
             aria-label="Stop generating"
             className="rounded-full bg-slate-700 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500 text-white text-sm px-4 font-medium transition grid place-items-center"
           >
