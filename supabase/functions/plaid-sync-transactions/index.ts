@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { getUserId, getServiceClient } from '../_shared/auth.ts'
-import { plaidFetch, syncAccounts, classifyKind } from '../_shared/plaid.ts'
+import { plaidFetch, syncAccounts, classifyKind, resolveAccessToken } from '../_shared/plaid.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -23,17 +23,19 @@ Deno.serve(async (req) => {
 
     const { data: items, error: itemsError } = await supabase
       .from('plaid_items')
-      .select('id, item_id, access_token, cursor')
+      .select('id, item_id, access_token_enc, access_token, cursor')
       .eq('user_id', userId)
     if (itemsError) throw itemsError
 
     let imported = 0
 
     for (const item of items ?? []) {
+      const accessToken = await resolveAccessToken(item)
+
       // Keep account balances fresh (checking/savings). Don't let a balance
       // hiccup block transaction syncing.
       try {
-        await syncAccounts(supabase, userId, item.access_token)
+        await syncAccounts(supabase, userId, accessToken)
       } catch (_e) {
         // ignore — balances are best-effort
       }
@@ -44,7 +46,7 @@ Deno.serve(async (req) => {
 
       while (hasMore) {
         const page = await plaidFetch('/transactions/sync', {
-          access_token: item.access_token,
+          access_token: accessToken,
           cursor,
         })
         added.push(...page.added)

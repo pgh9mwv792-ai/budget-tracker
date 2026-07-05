@@ -27,9 +27,19 @@ Anthropic Claude API (only via the `chat` edge function).
 When a change needs more than a git push, **tell the user exactly which of these
 extra steps to do**, or it will look "broken" to them.
 
+## Secrets (edge functions only — never in `VITE_` vars or frontend)
+| Secret | Purpose |
+| --- | --- |
+| `PLAID_ENV`, `PLAID_CLIENT_ID`, `PLAID_SECRET` | Plaid API (production) |
+| `ANTHROPIC_API_KEY` (opt. `ANTHROPIC_MODEL`, `AI_DAILY_LIMIT`) | Claude, via `chat` only |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-GCM key encrypting `plaid_items.access_token_enc` at rest. Losing it makes stored bank tokens unrecoverable (re-link required). |
+
 ## Guardrails / conventions (don't break)
 - **Secrets** (Plaid, Anthropic) live only in edge functions; never expose to the
   browser.
+- **Plaid access tokens are encrypted at rest** (`access_token_enc`, AES-GCM via
+  `encryptToken`/`decryptToken` in `_shared/plaid.ts`). Read tokens through
+  `resolveAccessToken`; never persist a decrypted token.
 - **`plaid_items` / `plaid_accounts`** use RLS-with-no-policies + `SECURITY
   DEFINER` RPCs (`get_plaid_connections`, `get_plaid_accounts`). Never add a broad
   select policy to these — `access_token` must never reach the frontend.

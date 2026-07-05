@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { getUserId, getServiceClient } from '../_shared/auth.ts'
-import { plaidFetch, syncAccounts } from '../_shared/plaid.ts'
+import { plaidFetch, syncAccounts, encryptToken } from '../_shared/plaid.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -13,10 +13,12 @@ Deno.serve(async (req) => {
     const data = await plaidFetch('/item/public_token/exchange', { public_token })
 
     const supabase = getServiceClient()
+    // Store the token encrypted at rest. New rows keep access_token null — only
+    // the encrypted column is written from here on.
     const { error } = await supabase.from('plaid_items').insert({
       user_id: userId,
       item_id: data.item_id,
-      access_token: data.access_token,
+      access_token_enc: await encryptToken(data.access_token),
       institution_name: institution_name ?? null,
     })
     if (error) throw error

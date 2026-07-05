@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { getUserId, getServiceClient } from '../_shared/auth.ts'
-import { plaidFetch } from '../_shared/plaid.ts'
+import { plaidFetch, resolveAccessToken } from '../_shared/plaid.ts'
 
 // Disconnects a linked bank: tells Plaid to remove the Item (which stops any
 // further access and frees the connection on Plaid's side), then deletes our
@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
     // what stops one user from removing another user's bank.
     const { data: item, error: findErr } = await supabase
       .from('plaid_items')
-      .select('id, item_id, access_token')
+      .select('id, item_id, access_token_enc, access_token')
       .eq('id', id)
       .eq('user_id', userId)
       .single()
@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     // don't block the user from clearing it on our side — we still delete our
     // record below so the bank disappears from their list.
     try {
-      await plaidFetch('/item/remove', { access_token: item.access_token })
+      await plaidFetch('/item/remove', { access_token: await resolveAccessToken(item) })
     } catch (_e) {
       // swallow — proceed to delete our record regardless
     }
