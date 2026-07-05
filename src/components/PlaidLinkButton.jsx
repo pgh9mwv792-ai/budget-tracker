@@ -97,7 +97,7 @@ export default function PlaidLinkButton({ onLinked, onSync }) {
         disabled={!ready || busy}
         className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-3 py-1.5 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
       >
-        Connect a bank
+        Connect a bank or credit card
       </button>
       <button
         onClick={() => handleSync(false)}
@@ -116,6 +116,11 @@ export default function PlaidLinkButton({ onLinked, onSync }) {
       </button>
       {status && <span className="text-sm text-slate-600 dark:text-slate-300 w-full sm:w-auto">{status}</span>}
       {error && <span className="text-sm text-red-600 dark:text-red-400 w-full sm:w-auto">{error}</span>}
+      <p className="w-full text-xs text-slate-500 dark:text-slate-400">
+        To add a credit card, click <span className="font-medium">Connect a bank or credit card</span> and
+        sign in to the company that issued the card (like Chase, Capital One, or Amex). Your card — with its
+        balance and limit — gets added automatically along with any checking or savings accounts there.
+      </p>
     </div>
   )
 }
