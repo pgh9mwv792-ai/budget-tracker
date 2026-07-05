@@ -18,14 +18,26 @@ Anthropic Claude API (only via the `chat` edge function).
 - GitHub: `pgh9mwv792-ai/budget-tracker` (branch `main`)
 - Supabase project ref: `flnppvzyevcuawqxiksu`
 
-## Deploy pipeline (three separate paths — a git push ships ONLY the frontend)
+## Deploy pipeline (a single `git push` to `main` now ships everything)
 1. **Frontend:** `git push` → Vercel auto-rebuilds (~1–2 min).
-2. **Edge Functions:** `npx supabase functions deploy <name>` (per function).
-3. **DB migrations:** run by hand — paste the SQL file into the Supabase SQL
-   Editor and Run. Files are numbered `0001…` and written to be idempotent.
+2. **Edge Functions + DB migrations:** the same push triggers GitHub Actions
+   (`.github/workflows/deploy-functions.yml`) whenever it touched
+   `supabase/functions/**` or `supabase/migrations/**`. The workflow runs
+   `supabase db push` (applies any new numbered migration) then
+   `supabase functions deploy` (redeploys all functions). Watch it under the
+   repo's **Actions** tab; a green check means it shipped.
 
-When a change needs more than a git push, **tell the user exactly which of these
-extra steps to do**, or it will look "broken" to them.
+Manual fallbacks (still valid if CI is down or you want to run one thing):
+- Edge Functions: `npx supabase functions deploy <name>` (per function).
+- DB migrations: paste the numbered `0001…` SQL file into the Supabase SQL
+  Editor and Run. Files are idempotent, so re-running is safe.
+
+CI requires three GitHub repo secrets: `SUPABASE_ACCESS_TOKEN`,
+`SUPABASE_PROJECT_REF` (`flnppvzyevcuawqxiksu`), and `SUPABASE_DB_PASSWORD`
+(the database password — `supabase db push` needs it).
+
+When a change needs more than a git push (e.g. a new edge-function *secret*),
+**tell the user exactly which extra step to do**, or it will look "broken."
 
 ## Secrets (edge functions only — never in `VITE_` vars or frontend)
 | Secret | Purpose |

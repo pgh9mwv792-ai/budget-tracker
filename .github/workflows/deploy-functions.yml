@@ -1,0 +1,41 @@
+name: Deploy Supabase (functions + migrations)
+
+# Runs whenever you push to main and the push touched an edge function or a
+# database migration. Frontend changes still ship via Vercel's own git build —
+# this workflow only handles the two paths a plain `git push` used to miss.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
+
+# If you push twice quickly, cancel the older run so deploys stay in order.
+concurrency:
+  group: supabase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install the Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link this repo to the Supabase project
+        run: supabase link --project-ref "$PROJECT_REF"
+
+      - name: Apply any new database migrations
+        run: supabase db push
+
+      - name: Deploy all edge functions
+        run: supabase functions deploy
