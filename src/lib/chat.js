@@ -418,13 +418,15 @@ export async function executeTool(name, input, ctx) {
 }
 
 // Calls the chat Edge Function (which adds the API key and forwards to Claude).
-export async function callChat({ system, messages }) {
+export async function callChat({ system, messages, signal }) {
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const { data, error } = await supabase.functions.invoke('chat', {
     body: { system, messages, tools: CHAT_TOOLS },
     headers: { Authorization: `Bearer ${session.access_token}` },
+    // Lets the caller cancel an in-flight request (the chat "Stop" button).
+    signal,
   })
   if (error) {
     // supabase.functions.invoke hides the function's response body on a non-2xx

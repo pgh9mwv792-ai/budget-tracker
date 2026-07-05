@@ -14,10 +14,19 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  // Display log: {role:'user'|'assistant', text} or {role:'action', items:[...]}
+  // When set, we're editing the user message at this index in `messages`.
+  const [editingIndex, setEditingIndex] = useState(null)
+  const [editText, setEditText] = useState('')
+  // Display log: {role:'user'|'assistant', text}, {role:'action', items:[...]},
+  // or {role:'note', text} for small system notices like "Stopped".
   const [messages, setMessages] = useState([])
   // Raw message history sent to the model (includes tool_use / tool_result blocks).
   const apiMessages = useRef([])
+  // Aborts the in-flight request when the user hits Stop.
+  const abortRef = useRef(null)
+  // Set by Stop so the agentic loop bails out between steps and we suppress the
+  // resulting "aborted" error.
+  const stoppedRef = useRef(false)
   // Live copies of created-during-this-turn items so a multi-step request (e.g.
   // "make a Travel category and budget it $200") can see what it just created.
   const live = useRef({ categories: [], goals: [], foods: [] })
@@ -37,12 +46,68 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openWith])
 
+  // Cancels the current request. We only flip a flag + abort the fetch here; the
+  // running send() loop notices the flag, rolls the model history back to the
+  // last valid point, and stops.
+  function stop() {
+    if (!busy) return
+    stoppedRef.current = true
+    abortRef.current?.abort()
+    setMessages((prev) => [...prev, { role: 'note', text: 'Stopped. You can edit your message and send it again.' }])
+    setBusy(false)
+  }
+
+  // Edit a previously-sent question: rewind both the on-screen log and the
+  // model's history to just before that message, then resend the new text —
+  // mirroring the "edit your message" flow in Claude.
+  function startEdit(i) {
+    if (busy) return
+    setEditingIndex(i)
+    setEditText(messages[i].text)
+  }
+
+  function cancelEdit() {
+    setEditingIndex(null)
+    setEditText('')
+  }
+
+  async function submitEdit(i) {
+    const newText = editText.trim()
+    if (!newText) return
+    // Which user turn is this among the visible user bubbles?
+    const userTurnIndex =
+      messages.slice(0, i + 1).filter((m) => m.role === 'user').length - 1
+    // Find that same turn in the raw model history (user turns there are the
+    // string-content entries; tool results are also role 'user' but arrays) and
+    // drop it and everything after it.
+    let count = 0
+    let cut = apiMessages.current.length
+    for (let j = 0; j < apiMessages.current.length; j++) {
+      const m = apiMessages.current[j]
+      if (m.role === 'user' && typeof m.content === 'string') {
+        if (count === userTurnIndex) {
+          cut = j
+          break
+        }
+        count++
+      }
+    }
+    apiMessages.current = apiMessages.current.slice(0, cut)
+    setMessages((prev) => prev.slice(0, i))
+    setEditingIndex(null)
+    setEditText('')
+    await send(newText)
+  }
+
   async function send(text) {
     const trimmed = text.trim()
     if (!trimmed || busy) return
     setError(null)
     setInput('')
     setMessages((prev) => [...prev, { role: 'user', text: trimmed }])
+    stoppedRef.current = false
+    const controller = new AbortController()
+    abortRef.current = controller
 
     // Seed live copies from the current app data for this turn.
     live.current = {
@@ -80,12 +145,19 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
     }
 
     let convo = [...apiMessages.current, { role: 'user', content: trimmed }]
+    // The last point that's valid to persist — one that ends on a completed
+    // assistant turn or a tool_result, never on a tool_use still awaiting its
+    // result or an unanswered question. If Stop interrupts, we roll back here.
+    // Starts at the pre-send history so a Stop before any answer leaves history
+    // clean (no dangling question).
+    let safeConvo = apiMessages.current
     const system = buildSystemPrompt(summarizeAppData(context))
     setBusy(true)
     try {
       // Agentic loop: keep going while the model wants to use tools.
       for (let i = 0; i < 8; i++) {
-        const resp = await callChat({ system, messages: convo })
+        const resp = await callChat({ system, messages: convo, signal: controller.signal })
+        if (stoppedRef.current) return
         convo = [...convo, { role: 'assistant', content: resp.content }]
 
         const text = resp.content
@@ -100,21 +172,28 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
           const results = []
           const labels = []
           for (const tu of toolUses) {
+            if (stoppedRef.current) return
             const result = await executeTool(tu.name, tu.input, toolCtx)
             labels.push(result)
             results.push({ type: 'tool_result', tool_use_id: tu.id, content: result })
           }
+          if (stoppedRef.current) return
           setMessages((prev) => [...prev, { role: 'action', items: labels }])
           convo = [...convo, { role: 'user', content: results }]
+          safeConvo = convo
           continue
         }
+        safeConvo = convo
         break
       }
-      apiMessages.current = convo
+      apiMessages.current = safeConvo
     } catch (e) {
-      setError(e.message)
+      // A user-initiated Stop rejects the fetch; that's expected, not an error.
+      if (!stoppedRef.current) setError(e.message)
     } finally {
-      setBusy(false)
+      apiMessages.current = safeConvo
+      abortRef.current = null
+      if (!stoppedRef.current) setBusy(false)
     }
   }
 
@@ -215,9 +294,66 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
               </div>
             )
           }
+          if (m.role === 'note') {
+            return (
+              <div key={i} className="text-center text-xs text-slate-400 dark:text-slate-500 italic">
+                {m.text}
+              </div>
+            )
+          }
           const mine = m.role === 'user'
+
+          // Inline editor for a previously-sent question.
+          if (mine && editingIndex === i) {
+            return (
+              <div key={i} className="flex justify-end">
+                <div className="w-[90%]">
+                  <textarea
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        submitEdit(i)
+                      }
+                      if (e.key === 'Escape') cancelEdit()
+                    }}
+                    rows={2}
+                    autoFocus
+                    className="w-full rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 resize-none"
+                  />
+                  <div className="flex justify-end gap-2 mt-1">
+                    <button
+                      onClick={cancelEdit}
+                      className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 px-2 py-1"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => submitEdit(i)}
+                      disabled={!editText.trim()}
+                      className="text-xs rounded-full bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 font-medium disabled:opacity-50"
+                    >
+                      Save &amp; resend
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          }
+
           return (
-            <div key={i} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+            <div key={i} className={`group flex items-end gap-1 ${mine ? 'justify-end' : 'justify-start'}`}>
+              {mine && !busy && editingIndex === null && (
+                <button
+                  onClick={() => startEdit(i)}
+                  title="Edit and resend"
+                  aria-label="Edit this message"
+                  className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs shrink-0 mb-1"
+                >
+                  ✎
+                </button>
+              )}
               <div
                 className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
                   mine
@@ -259,13 +395,25 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
           disabled={busy}
           className="flex-1 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
         />
-        <button
-          type="submit"
-          disabled={busy || !input.trim()}
-          className="rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 font-medium transition disabled:opacity-50"
-        >
-          Send
-        </button>
+        {busy ? (
+          <button
+            type="button"
+            onClick={stop}
+            title="Stop"
+            aria-label="Stop generating"
+            className="rounded-full bg-slate-700 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500 text-white text-sm px-4 font-medium transition grid place-items-center"
+          >
+            <span className="inline-block w-3 h-3 rounded-[3px] bg-white" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!input.trim()}
+            className="rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 font-medium transition disabled:opacity-50"
+          >
+            Send
+          </button>
+        )}
       </form>
     </div>
   )
