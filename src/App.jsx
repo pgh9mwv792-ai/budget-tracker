@@ -1,22 +1,29 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import Login from './components/Login'
 import MfaChallenge from './components/MfaChallenge'
-import Settings from './components/Settings'
 import NavBar from './components/NavBar'
-import Dashboard from './components/Dashboard'
-import TransactionList from './components/TransactionList'
 import UncategorizedBucket from './components/UncategorizedBucket'
-import GoalTracker from './components/GoalTracker'
-import CategoryManager from './components/CategoryManager'
-import BudgetManager from './components/BudgetManager'
-import MealTracker from './components/MealTracker'
-import ChatWidget from './components/ChatWidget'
-import PlaidLinkButton from './components/PlaidLinkButton'
-import CreditTab from './components/CreditTab'
-import ReceiptScanner from './components/ReceiptScanner'
-import Onboarding from './components/Onboarding'
+// Tab bodies are code-split: each loads its own chunk (and heavy deps like
+// Recharts) only when the user first opens that tab, keeping the initial
+// bundle small. Suspense shows TabSkeleton while a chunk is fetched.
+const Dashboard = lazy(() => import('./components/Dashboard'))
+const TransactionList = lazy(() => import('./components/TransactionList'))
+const BudgetManager = lazy(() => import('./components/BudgetManager'))
+const CreditTab = lazy(() => import('./components/CreditTab'))
+const MealTracker = lazy(() => import('./components/MealTracker'))
+const GoalTracker = lazy(() => import('./components/GoalTracker'))
+const CategoryManager = lazy(() => import('./components/CategoryManager'))
+const Settings = lazy(() => import('./components/Settings'))
+// The floating assistant is always mounted but never needed for first paint,
+// so it (and its chat library) load after the initial render.
+const ChatWidget = lazy(() => import('./components/ChatWidget'))
+// Transactions-only + first-run components: keep react-plaid-link and the
+// receipt/image code out of the entry chunk until actually needed.
+const PlaidLinkButton = lazy(() => import('./components/PlaidLinkButton'))
+const ReceiptScanner = lazy(() => import('./components/ReceiptScanner'))
+const Onboarding = lazy(() => import('./components/Onboarding'))
 import * as api from './lib/api'
 import { supabase } from './lib/supabaseClient'
 import { merchantKey, matchRules } from './lib/analysis'
@@ -312,6 +319,7 @@ function AppShell() {
       />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        <Suspense fallback={<TabSkeleton />}>
         {activeTab === 'Dashboard' && (
           <Dashboard
             transactions={transactions}
@@ -475,18 +483,23 @@ function AppShell() {
             data={{ categories, transactions, budgets, goals, nutritionTargets, foods, foodLogs, memories }}
           />
         )}
+        </Suspense>
       </main>
 
-      <ChatWidget
-        context={{ categories, transactions, budgets, goals, nutritionTargets, foods, foodLogs, memories }}
-        actions={actions}
-        setActiveTab={setActiveTab}
-        openWith={assistantPrompt}
-        onConsumeOpenWith={() => setAssistantPrompt(null)}
-      />
+      <Suspense fallback={null}>
+        <ChatWidget
+          context={{ categories, transactions, budgets, goals, nutritionTargets, foods, foodLogs, memories }}
+          actions={actions}
+          setActiveTab={setActiveTab}
+          openWith={assistantPrompt}
+          onConsumeOpenWith={() => setAssistantPrompt(null)}
+        />
+      </Suspense>
 
       {showOnboarding && (
-        <Onboarding onFinish={finishOnboarding} onNavigate={setActiveTab} onLoadSample={loadSampleData} />
+        <Suspense fallback={null}>
+          <Onboarding onFinish={finishOnboarding} onNavigate={setActiveTab} onLoadSample={loadSampleData} />
+        </Suspense>
       )}
     </div>
   )
@@ -494,6 +507,16 @@ function AppShell() {
 
 function FullScreenMessage({ text }) {
   return <div className="min-h-screen flex items-center justify-center text-slate-500 text-sm">{text}</div>
+}
+
+// Lightweight placeholder shown while a lazily-loaded tab chunk is fetched.
+function TabSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4" aria-hidden="true">
+      <div className="h-32 rounded-xl bg-slate-200 dark:bg-slate-800" />
+      <div className="h-48 rounded-xl bg-slate-200 dark:bg-slate-800" />
+    </div>
+  )
 }
 
 export default function App() {
