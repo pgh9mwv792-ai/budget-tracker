@@ -14,7 +14,8 @@ import {
 } from 'recharts'
 import { monthKey, monthLabel, trailingMonthKeys } from '../lib/dateHelpers'
 import { detectRecurring } from '../lib/analysis'
-import { computeMonthOutlook, computeInsights, computeWeeklySummary, computeFoodMoney } from '../lib/forecast'
+import { computeMonthOutlook, computeInsights, computeWeeklySummary } from '../lib/forecast'
+import { computeFoodCost } from '../lib/foodCost'
 
 const COLORS = ['#0f172a', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#84cc16', '#06b6d4']
 
@@ -22,10 +23,13 @@ export default function Dashboard({
   transactions,
   budgets = [],
   categories = [],
+  foods = [],
   foodLogs = [],
+  nutritionTargets = null,
   accounts = [],
   onNavigate,
   onAsk,
+  onLogFood,
 }) {
   const currentMonth = monthKey(new Date().toISOString())
 
@@ -35,7 +39,10 @@ export default function Dashboard({
     [transactions, budgets, categories]
   )
   const weekly = useMemo(() => computeWeeklySummary(transactions), [transactions])
-  const foodMoney = useMemo(() => computeFoodMoney(transactions, foodLogs), [transactions, foodLogs])
+  const foodCost = useMemo(
+    () => computeFoodCost({ transactions, foodLogs, foods, nutritionTargets }),
+    [transactions, foodLogs, foods, nutritionTargets]
+  )
 
   const currentMonthTx = useMemo(
     () => transactions.filter((t) => monthKey(t.date) === currentMonth),
@@ -73,6 +80,12 @@ export default function Dashboard({
     <div className="space-y-6">
       {onAsk && <QuickAsk onAsk={onAsk} />}
 
+      <FoodMoneyHero food={foodCost} onNavigate={onNavigate} />
+
+      {foodCost.efficiency.hasData && (
+        <ProteinValueCard efficiency={foodCost.efficiency} onLogFood={onLogFood} onNavigate={onNavigate} />
+      )}
+
       <VerdictCard outlook={outlook} onNavigate={onNavigate} />
 
       {accounts.length > 0 && <AccountsPanel accounts={accounts} />}
@@ -85,10 +98,9 @@ export default function Dashboard({
         <StatCard label="Net" value={net} tone={net >= 0 ? 'emerald' : 'red'} />
       </div>
 
-      {(weekly.hasData || foodMoney.hasData) && (
+      {weekly.hasData && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {weekly.hasData && <WeeklyCard weekly={weekly} />}
-          {foodMoney.hasData && <FoodMoneyCard food={foodMoney} onNavigate={onNavigate} />}
+          <WeeklyCard weekly={weekly} />
         </div>
       )}
 
@@ -340,46 +352,193 @@ function WeeklyCard({ weekly }) {
   )
 }
 
-// Money + health, side by side — the story pure-budgeting apps can't tell.
-function FoodMoneyCard({ food, onNavigate }) {
-  const sharePct = food.eatingOutShare == null ? null : Math.round(food.eatingOutShare * 100)
+// Money + food, front and center — the lead of the whole dashboard and the
+// story pure-budgeting apps can't tell. Shows what you spend on food per day,
+// how cheaply you're buying protein, and where the money goes (grocery vs.
+// eating out). Renders a compact "unlock this" fallback when data is thin so
+// it's never a broken empty state.
+function FoodMoneyHero({ food, onNavigate }) {
+  const { spend, protein, burn, bulk } = food
+  const dollars = (n) => `$${Number(n || 0).toFixed(2)}`
+
+  // Grocery vs. restaurant split (of the two — "other" food sits in the total).
+  const splitBase = spend.grocery + spend.restaurant
+  const restPct = splitBase > 0 ? Math.round((spend.restaurant / splitBase) * 100) : null
+
+  const burnTrend =
+    burn.delta == null
+      ? null
+      : burn.delta > 0.05
+      ? { text: `${Math.round(burn.delta * 100)}% above your 3-month average`, cls: 'text-amber-600 dark:text-amber-400' }
+      : burn.delta < -0.05
+      ? { text: `${Math.round(Math.abs(burn.delta) * 100)}% below your 3-month average`, cls: 'text-emerald-600 dark:text-emerald-400' }
+      : { text: 'right around your 3-month average', cls: 'text-slate-500 dark:text-slate-400' }
+
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Food &amp; money (this month)</h3>
-      {food.foodSpend > 0 ? (
+    <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20 shadow-sm p-5 sm:p-6">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+        Food &amp; money
+      </div>
+
+      {!food.hasData ? (
+        <div className="mt-2">
+          <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">See what your food really costs</p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            Log a few meals with their cost, and tag grocery/restaurant spending, to unlock your cost per day and
+            cost per 100g of protein right here.
+          </p>
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate('Meals')}
+              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+            >
+              Start logging meals →
+            </button>
+          )}
+        </div>
+      ) : (
         <>
-          <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">${food.foodSpend.toFixed(2)}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">on food total</p>
-          {sharePct != null && (
-            <div className="mt-3">
+          <div className="mt-2 flex flex-wrap items-end gap-x-8 gap-y-3">
+            <div>
+              <span className="text-4xl sm:text-5xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
+                {spend.hasData ? dollars(spend.perDay) : '—'}
+              </span>
+              <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">/ day on food</span>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">last {spend.days} days</p>
+            </div>
+            <div>
+              <span className="text-2xl sm:text-3xl font-semibold text-slate-900 dark:text-slate-100">
+                {protein.hasData ? dollars(protein.costPer100g) : '—'}
+              </span>
+              <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">/ 100g protein</span>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                {protein.hasData
+                  ? protein.coverage != null && protein.coverage < 0.999
+                    ? `based on ${Math.round(protein.coverage * 100)}% of meals with a cost`
+                    : 'from your logged meals'
+                  : 'log meal costs to see this'}
+              </p>
+            </div>
+          </div>
+
+          {restPct != null && (
+            <div className="mt-4">
               <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-                <span>Eating out ${food.diningSpend.toFixed(0)}</span>
-                <span>Groceries ${food.grocerySpend.toFixed(0)}</span>
+                <span>Eating out {dollars(spend.restaurant)}</span>
+                <span>Groceries {dollars(spend.grocery)}</span>
               </div>
               <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
-                <div className="bg-amber-500" style={{ width: `${sharePct}%` }} />
-                <div className="bg-emerald-500" style={{ width: `${100 - sharePct}%` }} />
+                <div className="bg-amber-500" style={{ width: `${restPct}%` }} />
+                <div className="bg-emerald-500" style={{ width: `${100 - restPct}%` }} />
               </div>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                <b className="text-slate-800 dark:text-slate-100">{sharePct}%</b> of your food spending was eating out.
+                <b className="text-slate-800 dark:text-slate-100">{restPct}%</b> of your food spending was eating out.
               </p>
             </div>
           )}
+
+          {bulk && (
+            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+              Hitting your {Math.round(bulk.proteinTarget)}g protein goal every day runs about{' '}
+              <b className="text-slate-800 dark:text-slate-100">{dollars(bulk.monthlyCost)}/mo</b>
+              {bulk.source === 'library' ? ' at your cheapest food' : ''}.
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+            {burn.spentSoFar > 0 && (
+              <span>
+                This month so far <b className="text-slate-700 dark:text-slate-200">{dollars(burn.spentSoFar)}</b>
+              </span>
+            )}
+            {burn.average != null && (
+              <span>
+                Projected <b className="text-slate-700 dark:text-slate-200">{dollars(burn.projected)}</b>
+                {burnTrend && <span className={`ml-1 ${burnTrend.cls}`}>· {burnTrend.text}</span>}
+              </span>
+            )}
+          </div>
+
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate('Meals')}
+              className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+            >
+              Open meal tracker →
+            </button>
+          )}
         </>
-      ) : (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Log meals and tag food spending to see the link.</p>
       )}
-      {food.mealsLogged > 0 && (
-        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-          {food.mealsLogged} meals logged · {Math.round(food.loggedCalories).toLocaleString()} cal
-        </p>
-      )}
+    </div>
+  )
+}
+
+// The "cheapest protein you already own" ranking, straight from the food
+// library. Each row logs one serving to today with a single tap, reusing the
+// same food-log flow as the Meals tab.
+function ProteinValueCard({ efficiency, onLogFood, onNavigate }) {
+  const [loggedId, setLoggedId] = useState(null)
+  const top = efficiency.ranked.slice(0, 5)
+
+  const logOne = async (food) => {
+    if (!onLogFood) return
+    await onLogFood({
+      date: new Date().toISOString().slice(0, 10),
+      meal: 'snack',
+      foodId: food.id,
+      name: food.name,
+      servings: 1,
+      calories: food.calories,
+      protein: food.protein,
+      carbs: food.carbs,
+      fat: food.fat,
+      cost: food.cost,
+    })
+    setLoggedId(food.id)
+    setTimeout(() => setLoggedId((cur) => (cur === food.id ? null : cur)), 2000)
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cheapest protein in your library</h3>
+        {efficiency.coverage != null && efficiency.priced < efficiency.total && (
+          <span className="text-xs text-slate-400 dark:text-slate-500">
+            {efficiency.priced} of {efficiency.total} foods priced
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Ranked by cost per 30g of protein.</p>
+      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+        {top.map((f) => (
+          <div key={f.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+            <div className="min-w-0">
+              <p className="truncate text-slate-700 dark:text-slate-200">
+                {f.name}
+                {f.serving_desc && <span className="text-slate-400 dark:text-slate-500"> · {f.serving_desc}</span>}
+              </p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                ${f.costPer30g.toFixed(2)} / 30g P · {Math.round(f.protein)}g P for ${f.cost.toFixed(2)}
+              </p>
+            </div>
+            {onLogFood && (
+              <button
+                onClick={() => logOne(f)}
+                className="shrink-0 rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition"
+              >
+                {loggedId === f.id ? 'Logged ✓' : 'Log this'}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
       {onNavigate && (
         <button
           onClick={() => onNavigate('Meals')}
           className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-sky-600 dark:text-sky-400 hover:underline"
         >
-          Open meal tracker →
+          Manage foods →
         </button>
       )}
     </div>

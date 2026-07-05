@@ -368,10 +368,13 @@ function AppShell() {
             transactions={transactions}
             budgets={budgets}
             categories={categories}
+            foods={foods}
             foodLogs={foodLogs}
+            nutritionTargets={nutritionTargets}
             accounts={plaidAccounts}
             onNavigate={setActiveTab}
             onAsk={setAssistantPrompt}
+            onLogFood={actions.logFood}
           />
         )}
 
