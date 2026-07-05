@@ -1,0 +1,12 @@
+PLACEHOLDER — replace this entire file with the exact contents Stripe gives you.
+
+Where to get it:
+  Stripe Dashboard → Settings → Payment methods → Apple Pay →
+  "Add a new domain" → download / copy the domain association file.
+
+Then overwrite this file with that content (no extra spaces or blank lines),
+commit, and push so it deploys to:
+  https://budget-tracker-rose-mu.vercel.app/.well-known/apple-developer-merchantid-domain-association
+
+Apple Pay in Stripe Checkout will not verify until the URL above returns
+Stripe's exact file contents.
