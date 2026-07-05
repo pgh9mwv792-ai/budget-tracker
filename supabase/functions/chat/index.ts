@@ -1,5 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { getUserId, getServiceClient } from '../_shared/auth.ts'
+import { getPlan, paywallResponse } from '../_shared/entitlements.ts'
 import { logError } from '../_shared/log-error.ts'
 
 // Your Anthropic API key, set as a Supabase secret (never shipped to the
@@ -29,6 +30,12 @@ Deno.serve(async (req) => {
       throw new Error(
         'ANTHROPIC_API_KEY is not set. Run: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...'
       )
+    }
+
+    // The AI assistant is a Pro feature — enforce server-side before spending
+    // any tokens, so a free user can't call this directly to bypass the UI gate.
+    if ((await getPlan(getServiceClient(), userId)) !== 'pro') {
+      return paywallResponse(corsHeaders, 'The AI assistant')
     }
 
     // Enforce a per-user daily cap before spending anything on the API. If the

@@ -5,6 +5,7 @@ import Login from './components/Login'
 import MfaChallenge from './components/MfaChallenge'
 import NavBar from './components/NavBar'
 import UncategorizedBucket from './components/UncategorizedBucket'
+import UpgradeGate from './components/UpgradeGate'
 // Tab bodies are code-split: each loads its own chunk (and heavy deps like
 // Recharts) only when the user first opens that tab, keeping the initial
 // bundle small. Suspense shows TabSkeleton while a chunk is fetched.
@@ -43,6 +44,8 @@ function AppShell() {
   const [memories, setMemories] = useState([])
   const [plaidAccounts, setPlaidAccounts] = useState([])
   const [creditScores, setCreditScores] = useState([])
+  // Free vs. pro. Drives which features are gated behind an upgrade card.
+  const [entitlements, setEntitlements] = useState({ plan: 'free', status: null, period_end: null })
   const [dataLoading, setDataLoading] = useState(true)
   const [onboardDismissed, setOnboardDismissed] = useState(false)
   // A prompt handed to the assistant from elsewhere (e.g. the Dashboard quick-ask
@@ -62,7 +65,7 @@ function AppShell() {
   const loadAll = useCallback(async () => {
     if (!user) return
     if (!hasLoadedOnce.current) setDataLoading(true)
-    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts, cscores] = await Promise.all([
+    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts, cscores, ents] = await Promise.all([
       api.ensureDefaultCategories(user.id),
       api.fetchTransactions(),
       api.fetchGoals(),
@@ -81,6 +84,8 @@ function AppShell() {
       api.fetchPlaidAccounts().catch(() => []),
       // Manual credit-score log lives in migration 0009; degrade gracefully.
       api.fetchCreditScores().catch(() => []),
+      // Plan/entitlements live in migration 0012; default to free if unavailable.
+      api.fetchEntitlements().catch(() => ({ plan: 'free', status: null, period_end: null })),
     ])
 
     // Auto-categorize: apply saved merchant rules to any uncategorized
@@ -109,6 +114,7 @@ function AppShell() {
     setMemories(mems)
     setPlaidAccounts(paccts ?? [])
     setCreditScores(cscores ?? [])
+    setEntitlements(ents ?? { plan: 'free', status: null, period_end: null })
     hasLoadedOnce.current = true
     setDataLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,6 +124,42 @@ function AppShell() {
     loadAll()
   }, [loadAll])
 
+  // Re-checks the current plan (after returning from Stripe, or from the
+  // Settings billing section).
+  const refreshEntitlements = useCallback(async () => {
+    const ents = await api.fetchEntitlements().catch(() => null)
+    if (ents) setEntitlements(ents)
+  }, [])
+
+  // Handle the browser coming back from Stripe Checkout / the Billing Portal.
+  // Stripe redirects to /?billing=success|cancel|portal. On success the webhook
+  // grants Pro server-side, but it can lag a couple seconds, so we poll the
+  // plan briefly. We strip the query param first so a refresh doesn't re-run it.
+  useEffect(() => {
+    if (!user) return
+    const params = new URLSearchParams(window.location.search)
+    const billing = params.get('billing')
+    if (!billing) return
+    window.history.replaceState({}, '', window.location.pathname)
+    if (billing === 'success') {
+      setActiveTab('Settings')
+      let tries = 0
+      const id = setInterval(async () => {
+        tries++
+        const ents = await api.fetchEntitlements().catch(() => null)
+        if (ents?.plan === 'pro' || tries >= 6) {
+          if (ents) setEntitlements(ents)
+          clearInterval(id)
+        }
+      }, 2000)
+      return () => clearInterval(id)
+    }
+    if (billing === 'portal') {
+      setActiveTab('Settings')
+      refreshEntitlements()
+    }
+  }, [user, refreshEntitlements])
+
   if (loading) return <FullScreenMessage text="Loading…" />
   if (!user) return <Login />
   if (needsMfa) return <MfaChallenge />
@@ -125,6 +167,7 @@ function AppShell() {
 
   const rulesByKey = new Map(rules.map((r) => [r.merchant_key, r.category_id]))
   const savedMatchCount = matchRules(transactions, rulesByKey).length
+  const plan = entitlements?.plan ?? 'free'
 
   // Applies existing saved rules to whatever is currently uncategorized.
   const applySavedRules = async () => {
@@ -334,7 +377,13 @@ function AppShell() {
 
         {activeTab === 'Transactions' && (
           <>
-            <PlaidLinkButton onLinked={loadAll} onSync={loadAll} />
+            <UpgradeGate
+              plan={plan}
+              title="Connect your bank — a Pro feature"
+              blurb="Free covers manual entry and receipt scanning. Pro adds automatic bank & credit-card import and syncing."
+            >
+              <PlaidLinkButton onLinked={loadAll} onSync={loadAll} />
+            </UpgradeGate>
             <ReceiptScanner categories={categories} onAdd={addScannedTransaction} />
             <UncategorizedBucket
               transactions={transactions}
@@ -481,6 +530,7 @@ function AppShell() {
         {activeTab === 'Settings' && (
           <Settings
             data={{ categories, transactions, budgets, goals, nutritionTargets, foods, foodLogs, memories }}
+            entitlements={entitlements}
           />
         )}
         </Suspense>
@@ -488,6 +538,7 @@ function AppShell() {
 
       <Suspense fallback={null}>
         <ChatWidget
+          plan={plan}
           context={{ categories, transactions, budgets, goals, nutritionTargets, foods, foodLogs, memories }}
           actions={actions}
           setActiveTab={setActiveTab}

@@ -415,3 +415,14 @@ export async function fetchPlaidAccounts() {
   if (error) throw error
   return data
 }
+
+// ---------- entitlements (free vs. pro) ----------
+
+// The single source of truth for the current user's plan. get_entitlements
+// always returns exactly one row: { plan: 'free'|'pro', status, period_end }.
+export async function fetchEntitlements() {
+  const { data, error } = await supabase.rpc('get_entitlements')
+  if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  return row ?? { plan: 'free', status: null, period_end: null }
+}

@@ -1,6 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts'
-import { getUserId } from '../_shared/auth.ts'
+import { getUserId, getServiceClient } from '../_shared/auth.ts'
 import { plaidFetch } from '../_shared/plaid.ts'
+import { getPlan, paywallResponse } from '../_shared/entitlements.ts'
 import { logError } from '../_shared/log-error.ts'
 
 Deno.serve(async (req) => {
@@ -8,6 +9,11 @@ Deno.serve(async (req) => {
 
   try {
     const userId = await getUserId(req)
+
+    // Bank linking is a Pro feature — enforce server-side, never trust the UI.
+    if ((await getPlan(getServiceClient(), userId)) !== 'pro') {
+      return paywallResponse(corsHeaders, 'Connecting a bank')
+    }
 
     const data = await plaidFetch('/link/token/create', {
       user: { client_user_id: userId },

@@ -45,6 +45,16 @@ When a change needs more than a git push (e.g. a new edge-function *secret*),
 | `PLAID_ENV`, `PLAID_CLIENT_ID`, `PLAID_SECRET` | Plaid API (production) |
 | `ANTHROPIC_API_KEY` (opt. `ANTHROPIC_MODEL`, `AI_DAILY_LIMIT`) | Claude, via `chat` only |
 | `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-GCM key encrypting `plaid_items.access_token_enc` at rest. Losing it makes stored bank tokens unrecoverable (re-link required). |
+| `STRIPE_SECRET_KEY` | Stripe API key (`sk_...`) used by `stripe-create-checkout`, `stripe-portal`, `stripe-webhook`. |
+| `STRIPE_PRICE_ID` | The recurring Price ID (`price_...`) for the Pro subscription. |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_...`) for the `stripe-webhook` endpoint; the function verifies every event against it. |
+
+**Stripe webhook deploy note:** `stripe-webhook` is called by Stripe *without* a
+Supabase JWT, so it must be deployed with JWT verification off. This is set once
+in `supabase/config.toml` (`[functions.stripe-webhook] verify_jwt = false`), so
+the CI's bulk `supabase functions deploy` applies it automatically — no manual
+`--no-verify-jwt` and no workflow change. Security comes from the Stripe
+signature check inside the function, not from a JWT.
 
 **Frontend env vars** (Vercel + local `.env`, safe to expose — not secrets): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SENTRY_DSN` (error monitoring; when unset, Sentry is a no-op).
 

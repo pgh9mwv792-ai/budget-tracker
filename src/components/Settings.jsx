@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import { downloadBackup } from '../lib/backup'
+import { startCheckout, openBillingPortal } from '../lib/billing'
 
-export default function Settings({ data }) {
+export default function Settings({ data, entitlements }) {
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Settings</h2>
+      <PlanBillingSection entitlements={entitlements} />
       <ProfileSection />
       <EmailSection />
       <PasswordSection />
@@ -36,6 +38,85 @@ function Notice({ status }) {
     <p className={`text-sm ${status.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
       {status.text}
     </p>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Plan & billing: shows the current plan, renewal date, and an Upgrade button
+// (free) or Manage billing button (pro, opens the Stripe portal).
+// ---------------------------------------------------------------------------
+function PlanBillingSection({ entitlements }) {
+  const plan = entitlements?.plan ?? 'free'
+  const isPro = plan === 'pro'
+  const status = entitlements?.status ?? null
+  const periodEnd = entitlements?.period_end ?? null
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function go(fn) {
+    setBusy(true)
+    setError(null)
+    try {
+      await fn() // redirects to Stripe on success
+    } catch (e) {
+      setError(e.message)
+      setBusy(false)
+    }
+  }
+
+  const renewLine = () => {
+    if (status === 'grandfathered') return 'Pro access — included, no billing.'
+    if (!periodEnd) return null
+    const d = new Date(periodEnd).toLocaleDateString()
+    // Stripe keeps status 'active' with cancel_at_period_end until the date
+    // passes, so "renews/ends on" is a safe, honest phrasing either way.
+    return `Current period ends ${d}.`
+  }
+
+  return (
+    <Card title="Plan & billing" description="Manage your subscription.">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-slate-700 dark:text-slate-200">You're on the</span>
+        <span
+          className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+            isPro
+              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+          }`}
+        >
+          {isPro ? 'Pro' : 'Free'}
+        </span>
+        <span className="text-sm text-slate-700 dark:text-slate-200">plan.</span>
+      </div>
+      {isPro ? (
+        <>
+          {renewLine() && <p className="text-sm text-slate-500 dark:text-slate-400">{renewLine()}</p>}
+          {status !== 'grandfathered' && (
+            <button
+              onClick={() => go(openBillingPortal)}
+              disabled={busy}
+              className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-4 py-2 disabled:opacity-50"
+            >
+              {busy ? 'Opening…' : 'Manage billing'}
+            </button>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Pro ($6/mo) adds automatic bank &amp; credit-card import and the AI assistant. Cancel anytime.
+          </p>
+          <button
+            onClick={() => go(startCheckout)}
+            disabled={busy}
+            className="rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 font-medium transition disabled:opacity-50"
+          >
+            {busy ? 'Opening checkout…' : 'Upgrade to Pro'}
+          </button>
+        </>
+      )}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+    </Card>
   )
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { buildSystemPrompt, summarizeAppData, executeTool, callChat } from '../lib/chat'
+import UpgradeGate from './UpgradeGate'
 
 const SUGGESTIONS = [
   'Add a $12 lunch expense',
@@ -8,7 +9,8 @@ const SUGGESTIONS = [
   'Log 1 serving of oatmeal for breakfast',
 ]
 
-export default function ChatWidget({ context, actions, setActiveTab, openWith, onConsumeOpenWith }) {
+export default function ChatWidget({ plan, context, actions, setActiveTab, openWith, onConsumeOpenWith }) {
+  const isPro = plan === 'pro'
   const [open, setOpen] = useState(false)
   const [showMemory, setShowMemory] = useState(false)
   const [input, setInput] = useState('')
@@ -41,7 +43,9 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
   useEffect(() => {
     if (!openWith) return
     setOpen(true)
-    send(openWith)
+    // Free users get the upgrade card instead of an answer (the assistant is a
+    // Pro feature); only actually send the prompt for Pro users.
+    if (isPro) send(openWith)
     onConsumeOpenWith?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openWith])
@@ -114,6 +118,10 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
   async function send(text) {
     const trimmed = text.trim()
     if (!trimmed || busy) return
+    if (!isPro) {
+      setOpen(true)
+      return
+    }
     setError(null)
     setInput('')
     setMessages((prev) => [...prev, { role: 'user', text: trimmed }])
@@ -218,6 +226,35 @@ export default function ChatWidget({ context, actions, setActiveTab, openWith, o
       >
         💬
       </button>
+    )
+  }
+
+  // Free users see the upgrade card in place of the chat UI. The assistant is a
+  // Pro feature, and the backend enforces this too — this is just the front door.
+  if (!isPro) {
+    return (
+      <div className="fixed bottom-5 right-5 z-20 w-[min(24rem,calc(100vw-2.5rem))] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+          <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+            Assistant
+          </span>
+          <button
+            onClick={() => setOpen(false)}
+            aria-label="Close assistant"
+            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg leading-none"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="p-4">
+          <UpgradeGate
+            plan={plan}
+            title="The AI assistant is a Pro feature"
+            blurb="Upgrade to ask questions about your money and food and have the assistant make changes for you."
+          />
+        </div>
+      </div>
     )
   }
 

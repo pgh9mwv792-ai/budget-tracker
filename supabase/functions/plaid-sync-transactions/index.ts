@@ -1,6 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { getUserId, getServiceClient } from '../_shared/auth.ts'
 import { plaidFetch, syncAccounts, classifyKind, resolveAccessToken } from '../_shared/plaid.ts'
+import { getPlan, paywallResponse } from '../_shared/entitlements.ts'
 import { logError } from '../_shared/log-error.ts'
 
 Deno.serve(async (req) => {
@@ -8,6 +9,11 @@ Deno.serve(async (req) => {
 
   try {
     const userId = await getUserId(req)
+
+    // Bank sync is a Pro feature — enforce server-side, never trust the UI.
+    if ((await getPlan(getServiceClient(), userId)) !== 'pro') {
+      return paywallResponse(corsHeaders, 'Syncing transactions')
+    }
 
     // `full: true` re-pulls the entire history and re-classifies existing rows.
     // Used once after upgrading (so transfers that were previously imported as
