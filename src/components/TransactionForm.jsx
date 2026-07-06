@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
-export default function TransactionForm({ categories, onSubmit, initial, onCancel }) {
+export default function TransactionForm({ categories, onSubmit, initial, onCancel, stacked = false }) {
   const [date, setDate] = useState(initial?.date ?? today())
   const [amount, setAmount] = useState(initial?.amount ?? '')
   const [kind, setKind] = useState(initial?.kind ?? 'expense')
@@ -31,6 +31,85 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Stacked layout: one full-width control per row with roomy (≥44px) touch
+  // targets. Used inside the mobile bottom sheets. The default grid layout is
+  // the compact inline desktop quick-add.
+  const field =
+    'w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
+
+  if (stacked) {
+    return (
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+          Type
+          <select
+            value={kind}
+            onChange={(e) => {
+              setKind(e.target.value)
+              setCategoryId('')
+            }}
+            className={field}
+          >
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+            <option value="transfer">Transfer</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+          Amount
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            inputMode="decimal"
+            placeholder="Amount"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            required
+            className={field}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+          Date
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className={field} />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+          Category
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={field}>
+            <option value="">Uncategorized</option>
+            {filteredCategories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+          Note (optional)
+          <input type="text" value={note} onChange={(e) => setNote(e.target.value)} className={field} />
+        </label>
+        <div className="flex gap-2 pt-1">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm min-h-11 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          >
+            {initial ? 'Save' : 'Add transaction'}
+          </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-4 min-h-11"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </form>
+    )
   }
 
   return (

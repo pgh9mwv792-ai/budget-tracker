@@ -349,7 +349,8 @@ export async function createFoodLog({ date, meal, foodId, name, servings, calori
       user_id: user.id,
       food_id: foodId || null,
       date,
-      meal,
+      // null meal = uncategorized (see migration 0017).
+      meal: meal ?? null,
       name,
       servings: servings || 1,
       calories: calories || 0,

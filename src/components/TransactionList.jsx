@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import TransactionForm from './TransactionForm'
+import BottomSheet from './BottomSheet'
+import { useIsMobile } from '../lib/useMediaQuery'
 import { downloadTransactionsCsv } from '../lib/csv'
 
 export default function TransactionList({
@@ -10,12 +12,16 @@ export default function TransactionList({
   onUpdate,
   onDelete,
 }) {
+  const isMobile = useIsMobile()
   const [editingId, setEditingId] = useState(null)
   const [search, setSearch] = useState('')
   const [kindFilter, setKindFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   // Which transaction's receipt itemization is currently expanded (read-only).
   const [openReceiptFor, setOpenReceiptFor] = useState(null)
+  // Mobile-only: the bottom sheet for quick-add, and the tapped row's detail/edit.
+  const [addOpen, setAddOpen] = useState(false)
+  const [detailId, setDetailId] = useState(null)
   const receiptFor = (id) => receiptsByTransaction?.get?.(id) ?? null
 
   const filtered = useMemo(() => {
@@ -33,9 +39,32 @@ export default function TransactionList({
     })
   }, [transactions, search, kindFilter, categoryFilter])
 
+  const detailTx = detailId ? transactions.find((t) => t.id === detailId) : null
+
+  const submitUpdate = async (id, updates) => {
+    await onUpdate(id, {
+      date: updates.date,
+      amount: updates.amount,
+      kind: updates.kind,
+      category_id: updates.categoryId,
+      note: updates.note,
+    })
+  }
+
   return (
     <div className="space-y-4">
-      <TransactionForm categories={categories} onSubmit={onCreate} />
+      {/* Quick-add: an inline form on desktop; a "+ Add transaction" button that
+          opens a stacked bottom sheet on mobile. */}
+      {isMobile ? (
+        <button
+          onClick={() => setAddOpen(true)}
+          className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-medium text-sm min-h-12 flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+        >
+          <span className="text-lg leading-none">+</span> Add transaction
+        </button>
+      ) : (
+        <TransactionForm categories={categories} onSubmit={onCreate} />
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -43,12 +72,12 @@ export default function TransactionList({
           placeholder="Search transactions…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-40 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="w-full sm:flex-1 sm:w-auto sm:min-w-40 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
         />
         <select
           value={kindFilter}
           onChange={(e) => setKindFilter(e.target.value)}
-          className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="flex-1 sm:flex-none rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
         >
           <option value="all">All types</option>
           <option value="income">Income</option>
@@ -58,7 +87,7 @@ export default function TransactionList({
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="flex-1 sm:flex-none rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
         >
           <option value="all">All categories</option>
           <option value="uncategorized">Uncategorized</option>
@@ -72,7 +101,7 @@ export default function TransactionList({
           onClick={() => downloadTransactionsCsv(filtered)}
           disabled={filtered.length === 0}
           title="Download the currently shown transactions as a CSV file"
-          className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-3 py-1.5 disabled:opacity-50"
+          className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-3 py-2 sm:py-1.5 disabled:opacity-50"
         >
           Export CSV
         </button>
@@ -97,20 +126,16 @@ export default function TransactionList({
         )}
 
         {filtered.map((t) =>
-          editingId === t.id ? (
+          isMobile ? (
+            <MobileRow key={t.id} t={t} hasReceipt={!!receiptFor(t.id)} onOpen={() => setDetailId(t.id)} />
+          ) : editingId === t.id ? (
             <div key={t.id} className="p-2">
               <TransactionForm
                 categories={categories}
                 initial={{ ...t, category_id: t.category_id }}
                 onCancel={() => setEditingId(null)}
                 onSubmit={async (updates) => {
-                  await onUpdate(t.id, {
-                    date: updates.date,
-                    amount: updates.amount,
-                    kind: updates.kind,
-                    category_id: updates.categoryId,
-                    note: updates.note,
-                  })
+                  await submitUpdate(t.id, updates)
                   setEditingId(null)
                 }}
               />
@@ -160,7 +185,85 @@ export default function TransactionList({
           )
         )}
       </div>
+
+      {/* Mobile quick-add sheet. */}
+      <BottomSheet open={isMobile && addOpen} onClose={() => setAddOpen(false)} title="Add transaction">
+        <TransactionForm
+          categories={categories}
+          stacked
+          onCancel={() => setAddOpen(false)}
+          onSubmit={async (values) => {
+            await onCreate(values)
+            setAddOpen(false)
+          }}
+        />
+      </BottomSheet>
+
+      {/* Mobile row detail / edit sheet. */}
+      <BottomSheet open={isMobile && !!detailTx} onClose={() => setDetailId(null)} title="Transaction">
+        {detailTx && (
+          <div className="space-y-4">
+            <TransactionForm
+              categories={categories}
+              stacked
+              initial={{ ...detailTx, category_id: detailTx.category_id }}
+              onCancel={() => setDetailId(null)}
+              onSubmit={async (updates) => {
+                await submitUpdate(detailTx.id, updates)
+                setDetailId(null)
+              }}
+            />
+            {receiptFor(detailTx.id) && <ReceiptDetail receipt={receiptFor(detailTx.id)} />}
+            <button
+              onClick={async () => {
+                await onDelete(detailTx.id)
+                setDetailId(null)
+              }}
+              className="w-full rounded-md border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 text-sm font-medium min-h-11 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+            >
+              Delete transaction
+            </button>
+          </div>
+        )}
+      </BottomSheet>
     </div>
+  )
+}
+
+// Mobile transaction row: two lines. Primary — date, amount, category. Secondary
+// — the truncated note plus source/receipt indicators. The whole row is a tap
+// target that opens the detail/edit sheet.
+function MobileRow({ t, hasReceipt, onOpen }) {
+  const amountCls =
+    t.kind === 'income'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : t.kind === 'transfer'
+        ? 'text-slate-500 dark:text-slate-400'
+        : 'text-red-600 dark:text-red-400'
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full text-left px-4 py-3 min-h-16 flex flex-col justify-center gap-0.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-slate-500 dark:text-slate-400">{t.date}</span>
+        <span className={`text-sm font-semibold tabular-nums ${amountCls}`}>
+          {t.kind === 'income' ? '+' : t.kind === 'transfer' ? '⇄ ' : '-'}${Number(t.amount).toFixed(2)}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm truncate text-slate-700 dark:text-slate-200">
+          {t.category?.name ?? <span className="text-amber-600 dark:text-amber-400 italic">Uncategorized</span>}
+        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {t.source === 'plaid' && (
+            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5">plaid</span>
+          )}
+          {hasReceipt && <span className="text-xs">🧾</span>}
+        </div>
+      </div>
+      {t.note && <span className="text-xs text-slate-400 dark:text-slate-500 truncate">{t.note}</span>}
+    </button>
   )
 }
 
@@ -169,7 +272,7 @@ export default function TransactionList({
 function ReceiptDetail({ receipt }) {
   const items = receipt.items ?? []
   return (
-    <div className="px-4 pb-3 pt-1 bg-slate-50/60 dark:bg-slate-800/30">
+    <div className="px-4 pb-3 pt-1 bg-slate-50/60 dark:bg-slate-800/30 rounded-lg">
       <div className="rounded-lg border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 text-sm">
         {items.length === 0 && (
           <p className="px-3 py-2 text-slate-400 dark:text-slate-500">No line items recorded.</p>

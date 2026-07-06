@@ -1,8 +1,10 @@
 import { supabase } from './supabaseClient'
 import { monthKey } from './dateHelpers'
 import { computeFoodCost } from './foodCost'
+import { searchFoods, getFoodDetails } from './api'
 
 const today = () => new Date().toISOString().slice(0, 10)
+const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
 
 // ---------------------------------------------------------------------------
 // Tool definitions (Anthropic tool-use format). These are the concrete actions
@@ -102,21 +104,55 @@ export const CHAT_TOOLS = [
   {
     name: 'log_food',
     description:
-      'Log a food eaten on a day. If the food already exists in the library, its macros are used automatically; otherwise provide the macros directly.',
+      'Log a food eaten on a day. Two ways to specify the amount:\n' +
+      '• By weight (preferred for foods resolved via search_food_database): pass `grams` plus PER-100g macros (calories/protein/carbs/fat) taken verbatim from the database. The tool scales them to the eaten weight. Pass `fdc_id` (and `nutrients` if you have them) so the food is created in the library first as a reusable per-100g row — future logs reuse it and its cost.\n' +
+      '• By servings: pass `servings` (no `grams`). If the food already exists in the library its macros are used automatically; otherwise provide per-serving macros directly.\n' +
+      'NEVER invent macro numbers from your own knowledge — they must come from the library or search_food_database.',
     input_schema: {
       type: 'object',
       properties: {
         food_name: { type: 'string', description: 'Name of the food (existing library item, or a new one-off).' },
-        meal: { type: 'string', enum: ['breakfast', 'lunch', 'dinner', 'snack'] },
-        servings: { type: 'number', description: 'Number of servings. Defaults to 1.' },
+        meal: {
+          type: 'string',
+          enum: ['breakfast', 'lunch', 'dinner', 'snack'],
+          description: 'Which meal to log under. Omit if unknown — the food is filed as Uncategorized.',
+        },
+        grams: {
+          type: 'number',
+          description:
+            'Total grams eaten. When provided, calories/protein/carbs/fat are interpreted as PER 100 g and scaled to this weight.',
+        },
+        fdc_id: {
+          type: 'string',
+          description: 'USDA fdcId of the food (from search_food_database). Include when logging by grams so a per-100g library row is created/reused.',
+        },
+        nutrients: {
+          description: 'Optional full per-100g nutrient array from search_food_database detail mode, stored on the created library food.',
+        },
+        servings: { type: 'number', description: 'Number of servings. Defaults to 1. Ignored when `grams` is given.' },
         date: { type: 'string', description: 'Date as YYYY-MM-DD. Defaults to today.' },
-        calories: { type: 'number', description: 'Per-serving calories. Only needed if the food is not in the library.' },
+        calories: {
+          type: 'number',
+          description: 'Per-serving calories, OR per-100g calories when `grams` is given. Needed unless the food is an existing library item logged by servings.',
+        },
         protein: { type: 'number' },
         carbs: { type: 'number' },
         fat: { type: 'number' },
-        cost: { type: 'number', description: 'Optional per-serving cost.' },
+        cost: { type: 'number', description: 'Optional cost (per-serving, or per-100g when `grams` is given).' },
       },
-      required: ['food_name', 'meal'],
+      required: ['food_name'],
+    },
+  },
+  {
+    name: 'search_food_database',
+    description:
+      "Look up a food in the USDA food database to get real per-100g macros and portion conversions — use this to resolve foods the user describes in words before logging them. Without `fdcId`: text search returning the top ~5 matches (name, brand, per-100g calories/protein/carbs/fat, fdcId, and whether it's already in the user's library). With `fdcId`: the detail record for one food, including `portions` (household-measure → gram conversions like \"1 cup = 158 g\") and the full nutrient list. Prefer foods already in the user's library (they carry the user's costs). NEVER use macro numbers from your own knowledge — get them here.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to search for, e.g. "cooked white rice" or "ground beef 85 15".' },
+        fdcId: { type: 'string', description: 'A specific food id from a prior search, to fetch its detail + portion conversions.' },
+      },
     },
   },
   {
@@ -238,7 +274,30 @@ export function summarizeAppData({ categories = [], transactions = [], budgets =
   const targetLine = nutritionTargets
     ? `Targets: ${nutritionTargets.calories} kcal, ${nutritionTargets.protein}g protein, ${nutritionTargets.carbs}g carbs, ${nutritionTargets.fat}g fat`
     : 'Targets: not set'
-  const foodNames = foods.map((f) => f.name).slice(0, 40).join(', ') || '(empty)'
+  // Each item logged today, so the assistant always reflects the live list —
+  // if the user removes one from the Meals tab it disappears here on the next turn.
+  const todaysLogLines =
+    todaysLogs
+      .map((l) => {
+        const s = Number(l.servings) || 0
+        const meal = l.meal ? ` [${l.meal}]` : ''
+        return `- ${l.name}${meal}: ${Math.round((Number(l.calories) || 0) * s)} kcal, ${round1(
+          (Number(l.protein) || 0) * s
+        )}g P`
+      })
+      .join('\n') || '(nothing logged today)'
+  // Per-food detail (serving + per-serving macros + whether it has a USDA id)
+  // so the assistant can convert a stated weight into the right number of
+  // servings instead of blindly passing the user's number through.
+  const foodLibraryLines =
+    foods
+      .slice(0, 40)
+      .map((f) => {
+        const serving = f.serving_desc ? `serving ${f.serving_desc}` : 'serving unknown'
+        const usda = f.fdc_id ? ', USDA' : ''
+        return `- ${f.name} (${serving}: ${Math.round(Number(f.calories) || 0)} kcal, ${round1(f.protein)}g P per serving${usda})`
+      })
+      .join('\n') || '(empty)'
 
   const memoryLines = memories.map((m) => `- ${m.content}`).join('\n') || '(nothing remembered yet)'
 
@@ -307,7 +366,10 @@ RECENT TRANSACTIONS (up to 12 most recent):
 ${recent}
 
 MEAL TRACKER — today logged: ${Math.round(nut.calories)} kcal, ${Math.round(nut.protein)}g protein, ${Math.round(nut.carbs)}g carbs, ${Math.round(nut.fat)}g fat. ${targetLine}.
-Food library: ${foodNames}
+Today's logged items (this is the live list — reflects removals):
+${todaysLogLines}
+Food library:
+${foodLibraryLines}
 
 FOOD & MONEY (computed — use these for cost-per-protein and food-spending questions):
 ${foodCostLines}`
@@ -327,6 +389,31 @@ You can take actions using the provided tools (adding transactions, categories, 
 - You cannot delete financial or food data — if the user wants something deleted, tell them to use the relevant tab's Delete/Remove button.
 - Memory: when the user shares a durable fact or preference that would help you help them later (payday timing, dietary preferences, saving priorities, budgeting style), use the remember tool. Keep memories short. NEVER store sensitive information such as passwords, PINs, or full account/card numbers. Use forget when a remembered fact is no longer true or the user asks you to. What you already remember is listed in the data below.
 - For analysis questions, use the data snapshot below. It only includes recent transactions and monthly rollups, so if the user asks about something outside that window, say you can see recent activity but they may want to check the full list on the Transactions tab.
+
+LOGGING FOOD BY DESCRIPTION (e.g. "log 2 cups white rice and 8oz ground beef for lunch"):
+- FIRST decide which kind of item the user named, because they log differently:
+  • A WHOLE prepared or restaurant/fast-food/branded item ordered as one unit — e.g. "a number 1 combo from In-N-Out", "a Big Mac", "a Chipotle burrito", "a slice of pizza". Its natural unit is the item itself, NOT a weight, so keep this simple and fast: do NOT search the USDA food database (it won't have a fast-food combo and only returns misleading component parts), do NOT ask for grams or ounces, and do NOT interrogate the user about portions. Get the macros this way:
+    (1) PREFER web search: use the web_search tool to look up the item's OFFICIAL published calories/protein/carbs/fat — ideally from the restaurant's or brand's own nutrition page, otherwise a reliable nutrition source. Then briefly cite where the numbers came from in your confirmation (e.g. "per In-N-Out's official nutrition info"). This is the most accurate path, so use it for any named restaurant/fast-food/branded item.
+    (2) FALLBACK, only if web search is unavailable or turns up nothing usable: estimate by DECOMPOSING the item into its standard named components — e.g. an In-N-Out #1 = Double-Double + fries + a medium drink — recall each component's published macros separately, add them up, and show the per-component breakdown in your confirmation. Decomposing into named parts lands closer than one lump guess. Say plainly that these are estimates.
+    Either way, log the item as ONE whole unit with log_food (servings = how many the user said, default 1) — do NOT split it into separate ingredient logs and do NOT convert it to grams. Keep the confirmation to a short breakdown plus the totals; don't interrogate the user. This is the one case where estimating macros from your own knowledge is expected.
+  • A raw INGREDIENT or portion given by an amount — e.g. "8oz ground beef", "2 cups white rice", "200g chicken". Use the amount rules below.
+- For an INGREDIENT by amount: the number the user says is an AMOUNT, not a servings count. NEVER pass a weight like "8oz" or "200g" straight into log_food's servings field — that would multiply the serving by 8. Always resolve the amount to grams (or to the correct number of servings) first.
+- If the user gives NO amount for an INGREDIENT ("log some chicken", "log rice"), ask how much (grams/oz, or a household measure) before logging. Don't assume 1 serving or any default. (A whole item like "a combo" already has its amount — one — so don't ask.)
+- Resolve each INGREDIENT's macros in this order: (1) an existing library food (see the food library below — it carries the user's own costs), else (2) search_food_database. For raw ingredients, NEVER take macro numbers from your own knowledge — they come only from the library or the database. (The whole-restaurant-item exception above is the only time estimating is allowed.)
+- If a described food has no exact match (a specific brand, "grass fed", etc. that USDA doesn't carry), pick the closest generic match and say so plainly in the confirmation, e.g. "closest match: ground beef 85/15 — USDA doesn't distinguish grass-fed".
+- Convert the stated amount to grams using this hierarchy:
+  (a) Exact weight units (g, oz, lb) are always fine — 1 oz = 28.35 g, 1 lb = 453.6 g.
+  (b) Household measures (cups, tbsp, "1 medium", "1 slice") ONLY via that food's portion conversions from search_food_database detail mode (call it with the fdcId). Never guess a cup-to-gram number.
+  (c) If the unit can't be resolved by (a) or (b) — e.g. "1 bowl", "a handful", "some" — ASK the user for the weight in grams or ounces instead of estimating. Do not log a guessed conversion.
+- Logging a MATCHED LIBRARY food (from the food library below):
+  • If it has a USDA id, prefer grams mode: convert the amount to grams and log with grams + the food's per-100g macros from search_food_database (reuses the same library row and its cost).
+  • If it has NO USDA id but its serving is a plain weight (e.g. serving "8 oz" or "100 g"): convert both the stated amount and the serving to grams and log servings = stated_grams ÷ serving_grams (so "8oz" of a food whose serving is "8 oz" = 1 serving, and "16oz" = 2 servings). Do NOT log the raw stated number as servings.
+  • If it has no USDA id and its serving is a household unit (e.g. "1 cup") and the user used that same unit, servings = the user's count. If the units differ or you can't line them up, ask for grams/oz.
+- Resolve ALL items first, then show ONE confirmation for the whole batch: a compact line per item (food name as matched, computed grams, kcal + protein), and ask a single yes/no to log them. Don't confirm foods one at a time.
+- Every log_food call MUST include a meal. Respect a named meal ("log to lunch" → meal "lunch"). If the user did NOT say which meal, ask this exact question before logging: "Which meal should I log this to - breakfast, lunch, dinner, or snack?" and wait for their answer. Never call log_food with an empty or missing meal.
+- On approval (and once the meal is known), log each item with log_food. For USDA/database foods use grams mode (pass grams + the per-100g macros and fdc_id, so the library row gets created/reused); for a plain-weight library food with no USDA id, log the computed servings count.
+- After logging, reply with the day's updated totals vs targets using the meal-tracker numbers in the data snapshot.
+- Keep within the tool-call budget: one search per unresolved item (plus a detail call only when you need portion conversions). For long lists, issue the searches together rather than one round-trip each.
 
 Here is the user's current data:
 
@@ -402,10 +489,101 @@ export async function executeTool(name, input, ctx) {
         })
         return `Added "${input.name}" to the food library.`
       }
+      case 'search_food_database': {
+        if (input.fdcId != null && String(input.fdcId).trim()) {
+          const detail = await getFoodDetails(String(input.fdcId).trim())
+          if (!detail) return `No detail record for fdcId ${input.fdcId} — log it by weight (grams/oz) instead.`
+          const lib = foods.find((f) => f.fdc_id && String(f.fdc_id) === String(detail.fdcId))
+          const portionLines = (detail.portions ?? []).length
+            ? (detail.portions ?? []).map((p) => `${p.label} = ${round1(p.grams)} g`).join('; ')
+            : '(no household portions — use grams or oz)'
+          return (
+            `Detail for fdcId ${detail.fdcId} — ${detail.name}${detail.brand ? ` (${detail.brand})` : ''}. ` +
+            `Per 100 g: ${round1(detail.calories)} kcal, ${round1(detail.protein)}g protein, ${round1(detail.carbs)}g carbs, ${round1(detail.fat)}g fat. ` +
+            `Portions: ${portionLines}. ` +
+            (lib ? `In library (food_id ${lib.id}${lib.cost != null ? `, cost $${Number(lib.cost).toFixed(2)}` : ''}).` : 'Not in library yet.')
+          )
+        }
+        const q = String(input.query || '').trim()
+        if (q.length < 2) return 'Give me at least two characters to search the food database.'
+        const results = await searchFoods(q)
+        if (!results.length) return `No matches in the food database for "${q}".`
+        const lines = results.slice(0, 5).map((r, i) => {
+          const lib = foods.find((f) => f.fdc_id && String(f.fdc_id) === String(r.fdcId))
+          return (
+            `${i + 1}. ${r.name}${r.brand ? ` (${r.brand})` : ''} [fdcId ${r.fdcId}] — per 100 g: ` +
+            `${round1(r.calories)} kcal, ${round1(r.protein)}g protein, ${round1(r.carbs)}g carbs, ${round1(r.fat)}g fat` +
+            (lib ? ` — already in library (food_id ${lib.id})` : '')
+          )
+        })
+        return `Top matches for "${q}":\n${lines.join('\n')}`
+      }
       case 'log_food': {
         const existing = foods.find(
           (f) => f.name.toLowerCase() === String(input.food_name || '').trim().toLowerCase()
         )
+
+        // Gram / per-100g path (foods resolved via search_food_database). The
+        // supplied macros are per 100 g; we scale them to the eaten weight. USDA
+        // foods are created in the library first as a canonical per-100g row so
+        // later logs reuse the same row (and its cost), matching the meal
+        // tracker's "create then log" pattern.
+        if (input.grams != null) {
+          const grams = Number(input.grams)
+          if (!(grams > 0)) return `I need a positive gram amount to log "${input.food_name}".`
+          if (input.calories == null) {
+            return `To log "${input.food_name}" by weight I need its per-100g macros from search_food_database first.`
+          }
+          const per100 = {
+            calories: Number(input.calories) || 0,
+            protein: Number(input.protein) || 0,
+            carbs: Number(input.carbs) || 0,
+            fat: Number(input.fat) || 0,
+          }
+          // Reuse a library row matched by fdcId (carries the user's cost); else,
+          // for a USDA food create a per-100g row first.
+          let food = input.fdc_id
+            ? foods.find((f) => f.fdc_id && String(f.fdc_id) === String(input.fdc_id))
+            : existing
+          if (!food && input.fdc_id) {
+            food = await actions.addFood({
+              name: input.food_name,
+              servingDesc: '100 g',
+              calories: Math.round(per100.calories),
+              protein: round1(per100.protein),
+              carbs: round1(per100.carbs),
+              fat: round1(per100.fat),
+              cost: input.cost == null ? '' : input.cost,
+              fdcId: String(input.fdc_id),
+              nutrients: input.nutrients ?? null,
+              source: 'usda',
+            })
+          }
+          const servings = Math.round((grams / 100) * 100) / 100
+          // Only trust a reused food's cost when it's stored per-100g; a row on a
+          // different serving basis would scale wrong, so fall back to null.
+          const per100Cost =
+            food && /^100\s*g$/i.test(food.serving_desc || '')
+              ? food.cost
+              : input.cost == null
+                ? null
+                : Number(input.cost)
+          await actions.logFood({
+            date: input.date || today(),
+            meal: input.meal ?? null,
+            foodId: food?.id || null,
+            name: food?.name || input.food_name,
+            servings,
+            calories: per100.calories,
+            protein: per100.protein,
+            carbs: per100.carbs,
+            fat: per100.fat,
+            cost: per100Cost == null ? null : per100Cost,
+          })
+          const factor = grams / 100
+          return `Logged ${round1(grams)} g of "${food?.name || input.food_name}" to ${input.meal || 'Uncategorized'} (${Math.round(per100.calories * factor)} kcal, ${round1(per100.protein * factor)}g protein).`
+        }
+
         const macros = existing
           ? { calories: existing.calories, protein: existing.protein, carbs: existing.carbs, fat: existing.fat, cost: existing.cost }
           : {
@@ -420,7 +598,8 @@ export async function executeTool(name, input, ctx) {
         }
         await actions.logFood({
           date: input.date || today(),
-          meal: input.meal,
+          // No meal → filed as Uncategorized (null).
+          meal: input.meal ?? null,
           foodId: existing?.id || null,
           name: existing?.name || input.food_name,
           servings: input.servings || 1,
@@ -430,7 +609,7 @@ export async function executeTool(name, input, ctx) {
           fat: macros.fat || 0,
           cost: macros.cost == null ? null : macros.cost,
         })
-        return `Logged ${input.servings || 1} serving(s) of "${input.food_name}" to ${input.meal}.`
+        return `Logged ${input.servings || 1} serving(s) of "${input.food_name}" to ${input.meal || 'Uncategorized'}.`
       }
       case 'set_nutrition_targets': {
         await actions.setTargets({

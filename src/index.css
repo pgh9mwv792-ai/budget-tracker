@@ -13,3 +13,25 @@ body {
   background: #0b1120;
   color: #e2e8f0;
 }
+
+/* On mobile widths, force form controls to a ≥16px font size. Below 16px, iOS
+   Safari auto-zooms the viewport when an input is focused — the classic
+   "the page jumps in when I tap a field" bug. This overrides Tailwind's
+   text-sm (14px) on inputs only, without touching desktop typography. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Bottom-sheet entrance. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}

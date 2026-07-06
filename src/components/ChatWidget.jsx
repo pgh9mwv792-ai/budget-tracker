@@ -9,6 +9,27 @@ const SUGGESTIONS = [
   'Log 1 serving of oatmeal for breakfast',
 ]
 
+// Tools whose result is plumbing for the model, not something worth showing the
+// user as a green "✓ ..." line (e.g. the verbose food-database search dump).
+const SILENT_TOOLS = new Set(['search_food_database'])
+
+// True when the assistant is asking which meal to log to, so we can offer
+// Breakfast/Lunch/Dinner/Snack buttons instead of making the user type.
+const MEAL_CHOICES = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+function isMealQuestion(text) {
+  if (!text) return false
+  const t = text.toLowerCase()
+  return t.trimEnd().endsWith('?') && /\bmeal\b/.test(t) && /breakfast|lunch|dinner|snack/.test(t)
+}
+
+// True when the assistant's latest message looks like a "shall I log these?"
+// confirmation, so we can offer Yes / No buttons instead of making the user type.
+function isLogConfirmation(text) {
+  if (!text) return false
+  const t = text.toLowerCase()
+  return t.trimEnd().endsWith('?') && /\blog\b|\blogging\b/.test(t)
+}
+
 export default function ChatWidget({ plan, context, actions, setActiveTab, openWith, onConsumeOpenWith }) {
   const isPro = plan === 'pro'
   const [open, setOpen] = useState(false)
@@ -33,6 +54,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
   // "make a Travel category and budget it $200") can see what it just created.
   const live = useRef({ categories: [], goals: [], foods: [] })
   const scrollRef = useRef(null)
+  const inputRef = useRef(null)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -185,22 +207,43 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
           .map((b) => b.text)
           .join('\n')
           .trim()
-        if (text) setMessages((prev) => [...prev, { role: 'assistant', text }])
 
         const toolUses = resp.content.filter((b) => b.type === 'tool_use')
-        if (resp.stop_reason === 'tool_use' && toolUses.length > 0) {
+        const isToolTurn = resp.stop_reason === 'tool_use' && toolUses.length > 0
+        // A server-side web search can pause a long-running turn. Anthropic runs
+        // the search itself, so there's nothing to execute here — we just send
+        // the (unchanged) assistant content back on the next loop to resume.
+        const isPauseTurn = resp.stop_reason === 'pause_turn'
+        // Only surface the model's final message, not the "let me look that
+        // up…" narration it emits alongside a tool call or mid-search pause —
+        // that's what made it send two bubbles per request.
+        if (text && !isToolTurn && !isPauseTurn)
+          setMessages((prev) => [...prev, { role: 'assistant', text }])
+
+        if (isToolTurn) {
           const results = []
           const labels = []
           for (const tu of toolUses) {
             if (stoppedRef.current) return
             const result = await executeTool(tu.name, tu.input, toolCtx)
-            labels.push(result)
+            // The model still gets every result; we just don't clutter the chat
+            // with noisy ones (the raw food-search dump) or scary raw errors —
+            // the assistant explains a failure in plain language on its next turn.
+            if (!SILENT_TOOLS.has(tu.name) && !result.startsWith('Error running')) labels.push(result)
             results.push({ type: 'tool_result', tool_use_id: tu.id, content: result })
           }
           if (stoppedRef.current) return
-          setMessages((prev) => [...prev, { role: 'action', items: labels }])
+          if (labels.length) setMessages((prev) => [...prev, { role: 'action', items: labels }])
           convo = [...convo, { role: 'user', content: results }]
           safeConvo = convo
+          continue
+        }
+        if (isPauseTurn) {
+          // Loop again to let Anthropic finish the search. Don't advance
+          // safeConvo: this assistant turn ends on a server tool_use still
+          // awaiting its result, so a Stop here rewinds to the last clean point.
+          // convo already carries resp.content unchanged (encrypted_content and
+          // all), which is exactly what the resume request needs to send back.
           continue
         }
         safeConvo = convo
@@ -222,7 +265,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
       <button
         onClick={() => setOpen(true)}
         aria-label="Open assistant"
-        className="fixed bottom-5 right-5 z-20 h-14 w-14 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg grid place-items-center text-2xl transition"
+        className="fixed right-4 md:right-5 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-5 z-30 h-14 w-14 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg grid place-items-center text-2xl transition"
       >
         💬
       </button>
@@ -233,8 +276,8 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
   // Pro feature, and the backend enforces this too — this is just the front door.
   if (!isPro) {
     return (
-      <div className="fixed bottom-5 right-5 z-20 w-[min(24rem,calc(100vw-2.5rem))] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+      <div className="fixed z-50 flex flex-col bg-white dark:bg-slate-900 shadow-2xl inset-0 w-full h-full md:inset-auto md:bottom-5 md:right-5 md:w-[min(24rem,calc(100vw-2.5rem))] md:h-auto md:rounded-2xl md:border md:border-slate-200 md:dark:border-slate-700">
+        <div className="flex items-center justify-between px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3 border-b border-slate-200 dark:border-slate-800">
           <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
             Assistant
@@ -259,8 +302,8 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-20 w-[min(24rem,calc(100vw-2.5rem))] h-[min(32rem,calc(100vh-2.5rem))] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+    <div className="fixed z-50 flex flex-col bg-white dark:bg-slate-900 shadow-2xl inset-0 w-full h-full md:inset-auto md:bottom-5 md:right-5 md:w-[min(24rem,calc(100vw-2.5rem))] md:h-[min(32rem,calc(100vh-2.5rem))] md:rounded-2xl md:border md:border-slate-200 md:dark:border-slate-700">
+      <div className="flex items-center justify-between px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3 border-b border-slate-200 dark:border-slate-800">
         <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
           Assistant
@@ -270,7 +313,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
             onClick={() => setShowMemory((v) => !v)}
             title="What the assistant remembers"
             aria-label="View saved memory"
-            className={`text-lg leading-none ${
+            className={`h-11 w-11 grid place-items-center text-lg leading-none ${
               showMemory ? 'opacity-100' : 'opacity-60 hover:opacity-100'
             } transition`}
           >
@@ -279,7 +322,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
           <button
             onClick={() => setOpen(false)}
             aria-label="Close assistant"
-            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg leading-none"
+            className="h-11 w-11 grid place-items-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg leading-none"
           >
             ✕
           </button>
@@ -430,19 +473,63 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
         )}
       </div>
 
+      {!busy &&
+        editingIndex === null &&
+        !input.trim() &&
+        messages.length > 0 &&
+        messages[messages.length - 1].role === 'assistant' &&
+        (() => {
+          const last = messages[messages.length - 1].text
+          if (isMealQuestion(last)) {
+            return (
+              <div className="px-3 pt-2 grid grid-cols-2 gap-2">
+                {MEAL_CHOICES.map((meal) => (
+                  <button
+                    key={meal}
+                    onClick={() => send(meal.toLowerCase())}
+                    className="rounded-full border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm py-2 font-medium transition"
+                  >
+                    {meal}
+                  </button>
+                ))}
+              </div>
+            )
+          }
+          if (isLogConfirmation(last)) {
+            return (
+              <div className="px-3 pt-2 flex gap-2">
+                <button
+                  onClick={() => send('yes')}
+                  className="flex-1 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm py-2 font-medium transition"
+                >
+                  Yes, log it
+                </button>
+                <button
+                  onClick={() => inputRef.current?.focus()}
+                  className="flex-1 rounded-full border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm py-2 font-medium transition"
+                >
+                  No, make changes
+                </button>
+              </div>
+            )
+          }
+          return null
+        })()}
+
       <form
         onSubmit={(e) => {
           e.preventDefault()
           send(input)
         }}
-        className="p-3 border-t border-slate-200 dark:border-slate-800 flex gap-2"
+        className="p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-3 border-t border-slate-200 dark:border-slate-800 flex gap-2"
       >
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask or tell me to do something…"
           disabled={busy}
-          className="flex-1 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
+          className="flex-1 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
         />
         {busy ? (
           <button

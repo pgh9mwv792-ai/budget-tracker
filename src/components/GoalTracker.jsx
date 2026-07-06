@@ -21,27 +21,28 @@ export default function GoalTracker({ goals, displayName = '', onCreate, onUpdat
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleSubmit} className="flex gap-2 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <input
           type="text"
           placeholder="Goal name (e.g. Emergency Fund)"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="flex-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="flex-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
         />
         <input
           type="number"
           step="0.01"
           min="0.01"
+          inputMode="decimal"
           placeholder="Target amount"
           value={target}
           onChange={(e) => setTarget(e.target.value)}
-          className="w-40 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="w-full sm:w-40 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
         />
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
         >
           Add goal
         </button>

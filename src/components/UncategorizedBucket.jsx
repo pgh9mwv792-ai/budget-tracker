@@ -22,7 +22,7 @@ export default function UncategorizedBucket({ transactions, categories, onAssign
       </div>
       <div className="space-y-2">
         {uncategorized.map((t) => (
-          <div key={t.id} className="flex items-center justify-between bg-white dark:bg-slate-900 rounded-md px-3 py-2 text-sm">
+          <div key={t.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-slate-900 rounded-md px-3 py-2 text-sm">
             <div className="flex items-center gap-4 min-w-0">
               <span className="text-slate-500 dark:text-slate-400 w-24 shrink-0">{t.date}</span>
               <span className={`w-20 shrink-0 font-medium ${t.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -33,7 +33,7 @@ export default function UncategorizedBucket({ transactions, categories, onAssign
             <select
               defaultValue=""
               onChange={(e) => e.target.value && onAssign(t.id, e.target.value)}
-              className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1 text-sm shrink-0 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              className="w-full sm:w-auto rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-2 sm:py-1 text-sm shrink-0 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
             >
               <option value="" disabled>
                 Assign category…

@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
+import { useIsMobile } from '../lib/useMediaQuery'
 
 // Common places people can see their score for free — used to prefill the
 // "where did this come from" dropdown so entry is one tap.
@@ -45,6 +46,7 @@ export default function CreditTab({ scores = [], accounts = [], onAdd, onDelete 
 }
 
 function ScoreLog({ scores, onAdd, onDelete }) {
+  const isMobile = useIsMobile()
   const today = new Date().toISOString().slice(0, 10)
   const [score, setScore] = useState('')
   const [source, setSource] = useState(SOURCES[0])
@@ -149,12 +151,17 @@ function ScoreLog({ scores, onAdd, onDelete }) {
 
       {/* Trend chart */}
       {chartData.length >= 2 && (
-        <div className="h-56">
+        <div className="h-48 md:h-56">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" strokeOpacity={0.4} />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis domain={['dataMin - 20', 'dataMax + 20']} tick={{ fontSize: 11 }} />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11 }}
+                interval={isMobile ? 'preserveStartEnd' : 0}
+                minTickGap={isMobile ? 24 : 5}
+              />
+              <YAxis domain={['dataMin - 20', 'dataMax + 20']} tick={{ fontSize: 11 }} tickCount={isMobile ? 4 : 6} width={isMobile ? 40 : 60} />
               <Tooltip />
               <Line
                 type="monotone"

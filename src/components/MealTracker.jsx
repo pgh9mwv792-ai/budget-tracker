@@ -1,20 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
-import { monthKey, addDays } from '../lib/dateHelpers'
+import { useMemo, useState } from 'react'
+import { addDays } from '../lib/dateHelpers'
 import { costPerDay, costPerProtein } from '../lib/foodCost'
-import SupplementScanner from './SupplementScanner'
+import { MACRO_KEYS, MACRO_META, OVER_BAR } from '../lib/macros'
+import FoodSearchSheet from './FoodSearchSheet'
 
 const MEALS = [
   { key: 'breakfast', label: 'Breakfast' },
   { key: 'lunch', label: 'Lunch' },
   { key: 'dinner', label: 'Dinner' },
-  { key: 'snack', label: 'Snack' },
+  { key: 'snack', label: 'Snacks' },
 ]
+const MEAL_KEYS = new Set(MEALS.map((m) => m.key))
+const UNCATEGORIZED = { key: null, label: 'Uncategorized' }
 
 const today = () => new Date().toISOString().slice(0, 10)
-
-// Heuristic: which of the user's expense categories look food-related, so we can
-// compare logged food cost against actual food spending from transactions.
-const FOOD_CATEGORY_RE = /grocer|food|dining|restaurant|meal|snack|eat|smoothie|coffee|supplement/i
 
 function totalsFor(logs) {
   return logs.reduce(
@@ -29,6 +28,18 @@ function totalsFor(logs) {
     },
     { calories: 0, protein: 0, carbs: 0, fat: 0, cost: 0 }
   )
+}
+
+// Friendly label for the date-nav center button.
+function dateLabel(date) {
+  if (date === today()) return 'Today'
+  if (date === addDays(today(), -1)) return 'Yesterday'
+  if (date === addDays(today(), 1)) return 'Tomorrow'
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 export default function MealTracker({
@@ -47,55 +58,456 @@ export default function MealTracker({
   onFoodDetails,
 }) {
   const [date, setDate] = useState(today())
+  // Which meal's search sheet is open ({ key, label }), or null.
+  const [sheetMeal, setSheetMeal] = useState(null)
+  // Expanded/collapsed per section — session-only (component state, no storage).
+  const [collapsed, setCollapsed] = useState({})
+  const [editingTargets, setEditingTargets] = useState(false)
 
   const dayLogs = useMemo(() => logs.filter((l) => l.date === date), [logs, date])
   const totals = useMemo(() => totalsFor(dayLogs), [dayLogs])
+  const uncategorized = useMemo(() => dayLogs.filter((l) => !MEAL_KEYS.has(l.meal)), [dayLogs])
+
+  const toggle = (key) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))
+  const sectionKey = (meal) => meal.key ?? 'uncategorized'
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Meals</h2>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+      <TargetsHeader
+        date={date}
+        setDate={setDate}
+        totals={totals}
+        targets={targets}
+        editingTargets={editingTargets}
+        onToggleTargets={() => setEditingTargets((v) => !v)}
+      />
+
+      {editingTargets && (
+        <TargetsEditor
+          targets={targets}
+          onSetTargets={async (values) => {
+            await onSetTargets(values)
+            setEditingTargets(false)
+          }}
         />
-      </div>
+      )}
 
       <WeeklyStrip transactions={transactions} logs={logs} />
 
-      <DailySummary totals={totals} targets={targets} transactions={transactions} logs={logs} date={date} />
-
-      {MEALS.map((m) => (
-        <MealGroup
-          key={m.key}
-          meal={m}
-          logs={dayLogs.filter((l) => l.meal === m.key)}
-          foods={foods}
-          onLogFood={(payload) => onLogFood({ ...payload, date, meal: m.key })}
-          onUpdateFood={onUpdateFood}
+      {MEALS.map((meal) => (
+        <MealSection
+          key={meal.key}
+          meal={meal}
+          logs={dayLogs.filter((l) => l.meal === meal.key)}
+          collapsed={!!collapsed[sectionKey(meal)]}
+          onToggle={() => toggle(sectionKey(meal))}
+          onAdd={() => setSheetMeal(meal)}
           onUpdateLog={onUpdateLog}
           onDeleteLog={onDeleteLog}
         />
       ))}
 
-      <FoodLibrary
-        foods={foods}
-        onAddFood={onAddFood}
-        onDeleteFood={onDeleteFood}
-        onSearchFoods={onSearchFoods}
-        onFoodDetails={onFoodDetails}
-      />
-      <TargetsEditor targets={targets} onSetTargets={onSetTargets} />
+      {uncategorized.length > 0 && (
+        <MealSection
+          meal={UNCATEGORIZED}
+          logs={uncategorized}
+          collapsed={!!collapsed.uncategorized}
+          onToggle={() => toggle('uncategorized')}
+          onAdd={() => setSheetMeal(UNCATEGORIZED)}
+          onUpdateLog={onUpdateLog}
+          onDeleteLog={onDeleteLog}
+        />
+      )}
+
+      <LibraryManager foods={foods} onDeleteFood={onDeleteFood} />
+
+      {sheetMeal && (
+        <FoodSearchSheet
+          meal={sheetMeal}
+          foods={foods}
+          logs={logs}
+          onLog={(payload) => onLogFood({ ...payload, date, meal: sheetMeal.key })}
+          onAddFood={onAddFood}
+          onUpdateFood={onUpdateFood}
+          onSearchFoods={onSearchFoods}
+          onFoodDetails={onFoodDetails}
+          onClose={() => setSheetMeal(null)}
+        />
+      )}
     </div>
   )
 }
 
-// This-week-vs-last-week strip at the top of the Meals tab: food spend (from
-// transactions), protein logged, and cost per 100g protein — the money+food
-// health check in one line. Uses the shared foodCost lib so the numbers match
-// the dashboard. Always relative to the real "today", not the viewed day.
+// Sticky summary for the selected day: date nav, one bar per macro (stable
+// color, warning color past 100%), and the "food cost today" differentiator.
+function TargetsHeader({ date, setDate, totals, targets, editingTargets, onToggleTargets }) {
+  const hasTargets = targets != null
+
+  // When no targets are set there's no denominator for a true progress bar, so
+  // each macro bar instead shows its share of the day's macro-derived calories
+  // (protein/carbs 4 kcal/g, fat 9 kcal/g). Energy is the whole, so it fills.
+  const macroCal = {
+    protein: (Number(totals.protein) || 0) * 4,
+    carbs: (Number(totals.carbs) || 0) * 4,
+    fat: (Number(totals.fat) || 0) * 9,
+  }
+  const macroCalTotal = macroCal.protein + macroCal.carbs + macroCal.fat
+  const splitPct = {
+    calories: macroCalTotal > 0 ? 100 : 0,
+    protein: macroCalTotal > 0 ? (macroCal.protein / macroCalTotal) * 100 : 0,
+    carbs: macroCalTotal > 0 ? (macroCal.carbs / macroCalTotal) * 100 : 0,
+    fat: macroCalTotal > 0 ? (macroCal.fat / macroCalTotal) * 100 : 0,
+  }
+
+  return (
+    <div className="sticky top-14 z-10 -mx-4 px-4 py-2 bg-[#f8fafc] dark:bg-[#0b1120]">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Meals</h2>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setDate(addDays(date, -1))}
+              aria-label="Previous day"
+              className="w-8 h-8 grid place-items-center rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            >
+              ‹
+            </button>
+            <button
+              onClick={() => setDate(today())}
+              className="min-w-[6rem] text-center text-sm font-medium text-slate-700 dark:text-slate-200 rounded-md px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            >
+              {dateLabel(date)}
+            </button>
+            <button
+              onClick={() => setDate(addDays(date, 1))}
+              aria-label="Next day"
+              className="w-8 h-8 grid place-items-center rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2.5">
+          {MACRO_KEYS.map((k) => (
+            <MacroRow key={k} macroKey={k} value={totals[k]} target={targets?.[k]} fallbackPct={splitPct[k]} />
+          ))}
+        </div>
+        {!hasTargets && (
+          <p className="text-xs text-slate-400 dark:text-slate-500">
+            Bars show today’s macro split. Set targets to track progress toward a goal.
+          </p>
+        )}
+
+        {/* Food cost today — our differentiator, weighted like a macro row. */}
+        <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3">
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Food cost today</span>
+          <span className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            ${totals.cost.toFixed(2)}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between">
+          {hasTargets ? (
+            <button
+              onClick={onToggleTargets}
+              className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              {editingTargets ? 'Close' : 'Edit targets'}
+            </button>
+          ) : (
+            <button
+              onClick={onToggleTargets}
+              className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+            >
+              {editingTargets ? 'Close' : '＋ Set targets'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MacroRow({ macroKey, value, target, fallbackPct = 0 }) {
+  const meta = MACRO_META[macroKey]
+  const hasTarget = target != null && Number(target) > 0
+  const isEnergy = macroKey === 'calories'
+  // With a target the bar is true progress (consumed/target); without one it
+  // falls back to the macro's share of today's calories.
+  const pct = hasTarget ? (value / Number(target)) * 100 : fallbackPct
+  const over = hasTarget && pct > 100
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-sm">
+        <span className="text-slate-600 dark:text-slate-300">{meta.label}</span>
+        <span className="text-slate-500 dark:text-slate-400 tabular-nums">
+          <span className="font-semibold text-slate-900 dark:text-slate-100">{Math.round(value)}</span>
+          {hasTarget && ` / ${Math.round(Number(target))}`} {meta.unit}
+          {hasTarget ? (
+            <span className={`ml-1 ${over ? 'text-red-500 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
+              {Math.round(pct)}%
+            </span>
+          ) : (
+            !isEnergy && <span className="ml-1 text-slate-400 dark:text-slate-500">{Math.round(fallbackPct)}%</span>
+          )}
+        </span>
+      </div>
+      <div className="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+        <div
+          className={`h-full ${over ? OVER_BAR : meta.bar} transition-all`}
+          style={{ width: `${Math.min(100, pct)}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDeleteLog }) {
+  const t = totalsFor(logs)
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex items-center gap-2 px-4 py-2.5">
+        <button
+          onClick={onToggle}
+          className="flex-1 flex items-center gap-2 min-w-0 text-left"
+          aria-expanded={!collapsed}
+        >
+          <span
+            className={`text-slate-400 dark:text-slate-500 transition-transform ${collapsed ? '' : 'rotate-90'}`}
+            aria-hidden
+          >
+            ›
+          </span>
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{meal.label}</span>
+          <span className="text-xs text-slate-400 dark:text-slate-500 truncate">
+            {logs.length > 0
+              ? `${Math.round(t.calories)} cal${t.cost > 0 ? ` · $${t.cost.toFixed(2)}` : ''}`
+              : 'Empty'}
+          </span>
+        </button>
+        <button
+          onClick={onAdd}
+          aria-label={`Add food to ${meal.label}`}
+          className="w-7 h-7 shrink-0 grid place-items-center rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-lg leading-none hover:bg-slate-800 dark:hover:bg-emerald-500 transition"
+        >
+          +
+        </button>
+      </div>
+
+      {!collapsed && (
+        <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
+          {logs.map((l) => (
+            <LogRow key={l.id} log={l} onUpdateLog={onUpdateLog} onDeleteLog={onDeleteLog} />
+          ))}
+          {logs.length === 0 && (
+            <p className="px-4 py-2 text-xs text-slate-400 dark:text-slate-500">
+              Nothing logged. Tap + to add a food.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LogRow({ log, onUpdateLog, onDeleteLog }) {
+  const [editing, setEditing] = useState(false)
+  const s = Number(log.servings) || 0
+
+  if (editing) {
+    return (
+      <LogEditor
+        log={log}
+        onSave={async (updates) => {
+          await onUpdateLog(log.id, updates)
+          setEditing(false)
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    )
+  }
+
+  return (
+    <div className="flex items-center justify-between px-4 py-2 text-sm">
+      <div className="min-w-0">
+        <p className="truncate text-slate-700 dark:text-slate-200">
+          {log.name}
+          {s !== 1 && <span className="text-slate-400 dark:text-slate-500"> ×{s}</span>}
+        </p>
+        <p className="text-xs text-slate-400 dark:text-slate-500">
+          {Math.round(Number(log.calories) * s)} cal · {Math.round(Number(log.protein) * s)}g P
+          {log.cost != null && ` · $${(Number(log.cost) * s).toFixed(2)}`}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0 ml-3">
+        <button
+          onClick={() => setEditing(true)}
+          className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 text-xs px-1 py-1.5 sm:py-0"
+        >
+          Edit
+        </button>
+        <button
+          onClick={() => onDeleteLog(log.id)}
+          className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs px-1 py-1.5 sm:py-0"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Inline editor for one logged item: change how much (servings), which meal it
+// belongs to, and the per-serving macros/cost if they were logged wrong.
+function LogEditor({ log, onSave, onCancel }) {
+  const [servings, setServings] = useState(String(log.servings ?? 1))
+  const [meal, setMeal] = useState(log.meal ?? '')
+  const [calories, setCalories] = useState(String(log.calories ?? 0))
+  const [protein, setProtein] = useState(String(log.protein ?? 0))
+  const [carbs, setCarbs] = useState(String(log.carbs ?? 0))
+  const [fat, setFat] = useState(String(log.fat ?? 0))
+  const [cost, setCost] = useState(log.cost == null ? '' : String(log.cost))
+  const [saving, setSaving] = useState(false)
+
+  const num = (v) => {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const save = async () => {
+    const sv = num(servings)
+    if (sv <= 0) return
+    setSaving(true)
+    await onSave({
+      servings: sv,
+      meal: meal || null,
+      calories: num(calories),
+      protein: num(protein),
+      carbs: num(carbs),
+      fat: num(fat),
+      cost: cost.trim() === '' ? null : num(cost),
+    })
+    setSaving(false)
+  }
+
+  const field = 'w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
+  const labelCls = 'block text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-0.5'
+
+  return (
+    <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50">
+      <p className="truncate text-sm text-slate-700 dark:text-slate-200 mb-2">{log.name}</p>
+      <div className="grid grid-cols-3 gap-2">
+        <label>
+          <span className={labelCls}>Servings</span>
+          <input type="number" step="0.25" min="0.25" value={servings} onChange={(e) => setServings(e.target.value)} className={field} />
+        </label>
+        <label className="col-span-2">
+          <span className={labelCls}>Meal</span>
+          <select value={meal} onChange={(e) => setMeal(e.target.value)} className={field}>
+            <option value="">Uncategorized</option>
+            {MEALS.map((m) => (
+              <option key={m.key} value={m.key}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className={labelCls}>Cal / serving</span>
+          <input type="number" min="0" value={calories} onChange={(e) => setCalories(e.target.value)} className={field} />
+        </label>
+        <label>
+          <span className={labelCls}>Protein g</span>
+          <input type="number" min="0" value={protein} onChange={(e) => setProtein(e.target.value)} className={field} />
+        </label>
+        <label>
+          <span className={labelCls}>Cost $</span>
+          <input type="number" min="0" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="—" className={field} />
+        </label>
+        <label>
+          <span className={labelCls}>Carbs g</span>
+          <input type="number" min="0" value={carbs} onChange={(e) => setCarbs(e.target.value)} className={field} />
+        </label>
+        <label>
+          <span className={labelCls}>Fat g</span>
+          <input type="number" min="0" value={fat} onChange={(e) => setFat(e.target.value)} className={field} />
+        </label>
+      </div>
+      <div className="flex justify-end gap-2 mt-3">
+        <button onClick={onCancel} className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 px-3 py-1.5">
+          Cancel
+        </button>
+        <button
+          onClick={save}
+          disabled={saving || num(servings) <= 0}
+          className="text-xs rounded-full bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 font-medium transition disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Collapsed-by-default library manager: browse saved foods and delete them.
+// Adding foods now happens in the meal search sheet; this keeps delete/browse
+// reachable without cluttering the day view.
+function LibraryManager({ foods, onDeleteFood }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-4 py-2.5 text-left"
+        aria-expanded={open}
+      >
+        <span className={`text-slate-400 dark:text-slate-500 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
+          ›
+        </span>
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Food library</span>
+        <span className="text-xs text-slate-400 dark:text-slate-500">
+          {foods.length} {foods.length === 1 ? 'food' : 'foods'}
+        </span>
+      </button>
+
+      {open && (
+        <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
+          {foods.length === 0 && (
+            <p className="px-4 py-2 text-xs text-slate-400 dark:text-slate-500">
+              No foods yet. Add one from a meal’s + button.
+            </p>
+          )}
+          {foods.map((f) => (
+            <div key={f.id} className="flex items-center justify-between px-4 py-2 text-sm">
+              <div className="min-w-0">
+                <p className="truncate text-slate-700 dark:text-slate-200">
+                  {f.name}
+                  {f.serving_desc && <span className="text-slate-400 dark:text-slate-500"> · {f.serving_desc}</span>}
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {Math.round(Number(f.calories))} cal · {Math.round(Number(f.protein))}g P · {Math.round(Number(f.carbs))}g C ·{' '}
+                  {Math.round(Number(f.fat))}g F
+                  {f.cost != null && ` · $${Number(f.cost).toFixed(2)}`}
+                </p>
+              </div>
+              <button
+                onClick={() => onDeleteFood(f.id)}
+                className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs shrink-0 ml-3"
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// This-week-vs-last-week strip: food spend (from transactions), protein logged,
+// and cost per 100g protein — the money+food health check in one line. Always
+// relative to the real "today", not the viewed day.
 function WeeklyStrip({ transactions, logs }) {
   const strip = useMemo(() => {
     const t = today()
@@ -178,710 +590,6 @@ function WeekStat({ label, value, delta, lowerIsBetter = false, hint = null }) {
   )
 }
 
-function DailySummary({ totals, targets, transactions, logs, date }) {
-  const currentMonth = monthKey(date)
-
-  const loggedMonthCost = useMemo(
-    () =>
-      logs
-        .filter((l) => monthKey(l.date) === currentMonth)
-        .reduce((acc, l) => acc + (l.cost == null ? 0 : Number(l.cost)) * (Number(l.servings) || 0), 0),
-    [logs, currentMonth]
-  )
-
-  const foodSpendMonth = useMemo(
-    () =>
-      transactions
-        .filter(
-          (t) =>
-            t.kind === 'expense' &&
-            monthKey(t.date) === currentMonth &&
-            FOOD_CATEGORY_RE.test(t.category?.name ?? '')
-        )
-        .reduce((acc, t) => acc + Number(t.amount), 0),
-    [transactions, currentMonth]
-  )
-
-  const costPer1000 = totals.calories > 0 && totals.cost > 0 ? (totals.cost / totals.calories) * 1000 : null
-  const costPer100Protein = totals.protein > 0 && totals.cost > 0 ? (totals.cost / totals.protein) * 100 : null
-
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MacroStat label="Calories" value={totals.calories} target={targets?.calories} unit="" />
-        <MacroStat label="Protein" value={totals.protein} target={targets?.protein} unit="g" />
-        <MacroStat label="Carbs" value={totals.carbs} target={targets?.carbs} unit="g" />
-        <MacroStat label="Fat" value={totals.fat} target={targets?.fat} unit="g" />
-      </div>
-
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm border-t border-slate-100 dark:border-slate-800 pt-3">
-        <span className="text-slate-700 dark:text-slate-200">
-          Est. food cost today: <span className="font-semibold">${totals.cost.toFixed(2)}</span>
-        </span>
-        {costPer1000 != null && (
-          <span className="text-slate-500 dark:text-slate-400">${costPer1000.toFixed(2)} / 1,000 kcal</span>
-        )}
-        {costPer100Protein != null && (
-          <span className="text-slate-500 dark:text-slate-400">${costPer100Protein.toFixed(2)} / 100g protein</span>
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-3">
-        <span>
-          Logged food cost this month: <span className="font-medium text-slate-700 dark:text-slate-200">${loggedMonthCost.toFixed(2)}</span>
-        </span>
-        <span>
-          Food-category spending this month:{' '}
-          <span className="font-medium text-slate-700 dark:text-slate-200">${foodSpendMonth.toFixed(2)}</span>{' '}
-          (from your transactions)
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function MacroStat({ label, value, target, unit }) {
-  const hasTarget = target != null && Number(target) > 0
-  const pct = hasTarget ? Math.min(100, (value / Number(target)) * 100) : 0
-  const over = hasTarget && value > Number(target)
-  const color = over ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'
-  return (
-    <div>
-      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-        {Math.round(value)}
-        {unit}
-        {hasTarget && (
-          <span className="text-xs font-normal text-slate-400 dark:text-slate-500">
-            {' '}
-            / {Math.round(Number(target))}
-            {unit}
-          </span>
-        )}
-      </p>
-      {hasTarget && (
-        <div className="mt-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-          <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function MealGroup({ meal, logs, foods, onLogFood, onUpdateFood, onUpdateLog, onDeleteLog }) {
-  const [foodId, setFoodId] = useState('')
-  const [servings, setServings] = useState('1')
-  // Per-serving cost for this log. Pre-filled from the selected food's saved
-  // default cost; editing it here also updates that default (see add()).
-  const [cost, setCost] = useState('')
-
-  const groupTotals = totalsFor(logs)
-
-  const selectFood = (id) => {
-    setFoodId(id)
-    const f = foods.find((x) => x.id === id)
-    setCost(f && f.cost != null ? String(f.cost) : '')
-  }
-
-  async function add() {
-    const food = foods.find((f) => f.id === foodId)
-    if (!food) return
-    const enteredCost = cost === '' ? null : Number(cost)
-    await onLogFood({
-      foodId: food.id,
-      name: food.name,
-      servings: Number(servings) || 1,
-      calories: food.calories,
-      protein: food.protein,
-      carbs: food.carbs,
-      fat: food.fat,
-      cost: enteredCost,
-    })
-    // Remember the cost as this food's new default when it changed, so next
-    // time it pre-fills correctly (per-food default cost on the foods row).
-    const prev = food.cost == null ? null : Number(food.cost)
-    if (onUpdateFood && enteredCost != null && enteredCost !== prev) {
-      await onUpdateFood(food.id, { cost: enteredCost })
-    }
-    setServings('1')
-  }
-
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 dark:border-slate-800">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{meal.label}</h3>
-        <span className="text-xs text-slate-400 dark:text-slate-500">
-          {Math.round(groupTotals.calories)} cal · {Math.round(groupTotals.protein)}g P
-        </span>
-      </div>
-
-      <div className="divide-y divide-slate-100 dark:divide-slate-800">
-        {logs.map((l) => (
-          <LogRow key={l.id} log={l} onUpdateLog={onUpdateLog} onDeleteLog={onDeleteLog} />
-        ))}
-        {logs.length === 0 && (
-          <p className="px-4 py-2 text-xs text-slate-400 dark:text-slate-500">Nothing logged.</p>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 px-4 py-2 border-t border-slate-100 dark:border-slate-800">
-        <select
-          value={foodId}
-          onChange={(e) => selectFood(e.target.value)}
-          className="flex-1 min-w-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-        >
-          <option value="">{foods.length ? 'Add a food…' : 'Add foods in the library below first'}</option>
-          {foods.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-              {f.serving_desc ? ` (${f.serving_desc})` : ''}
-            </option>
-          ))}
-        </select>
-        <input
-          type="number"
-          step="0.25"
-          min="0.25"
-          value={servings}
-          onChange={(e) => setServings(e.target.value)}
-          title="Servings"
-          className="w-16 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-        />
-        <div className="relative w-24 shrink-0">
-          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm" aria-hidden>$</span>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={cost}
-            onChange={(e) => setCost(e.target.value)}
-            placeholder="cost"
-            title="Cost per serving"
-            className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-5 pr-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-          />
-        </div>
-        <button
-          onClick={add}
-          disabled={!foodId}
-          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-xs font-medium px-3 py-1.5 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
-        >
-          Add
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function LogRow({ log, onUpdateLog, onDeleteLog }) {
-  const s = Number(log.servings) || 0
-  return (
-    <div className="flex items-center justify-between px-4 py-2 text-sm">
-      <div className="min-w-0">
-        <p className="truncate text-slate-700 dark:text-slate-200">
-          {log.name}
-          {s !== 1 && <span className="text-slate-400 dark:text-slate-500"> ×{s}</span>}
-        </p>
-        <p className="text-xs text-slate-400 dark:text-slate-500">
-          {Math.round(Number(log.calories) * s)} cal · {Math.round(Number(log.protein) * s)}g P ·{' '}
-          {Math.round(Number(log.carbs) * s)}g C · {Math.round(Number(log.fat) * s)}g F
-          {log.cost != null && ` · $${(Number(log.cost) * s).toFixed(2)}`}
-        </p>
-      </div>
-      <div className="flex items-center gap-2 shrink-0 ml-3">
-        <input
-          type="number"
-          step="0.25"
-          min="0.25"
-          defaultValue={log.servings}
-          onBlur={(e) => {
-            const v = Number(e.target.value)
-            if (v > 0 && v !== Number(log.servings)) onUpdateLog(log.id, { servings: v })
-          }}
-          title="Servings"
-          className="w-14 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-1.5 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-        />
-        <button
-          onClick={() => onDeleteLog(log.id)}
-          className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs"
-        >
-          Remove
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// Rounds to one decimal for tidy pre-filled macro fields (protein/carbs/fat).
-const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
-
-// Weight units offered for every USDA food (macros are per-100g, so scaling by
-// weight is always valid). Named portions like "1 large" get merged in front of
-// these when USDA has them for the specific food.
-const WEIGHT_UNITS = [
-  { label: 'g', grams: 1 },
-  { label: 'oz', grams: 28.3495 },
-  { label: '100 g', grams: 100 },
-]
-
-function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDetails }) {
-  const empty = { name: '', servingDesc: '', calories: '', protein: '', carbs: '', fat: '', cost: '', fdcId: '' }
-  const [form, setForm] = useState(empty)
-  const [submitting, setSubmitting] = useState(false)
-
-  // USDA FoodData Central search-as-you-type. Optional (only when onSearchFoods
-  // is wired) — the manual form below always works as a fallback.
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
-  const [searching, setSearching] = useState(false)
-  const [searchError, setSearchError] = useState(null)
-
-  // Third way to add a food (alongside USDA search and the manual form): scan a
-  // supplement label. Collapsed by default so the library stays uncluttered.
-  const [scanning, setScanning] = useState(false)
-
-  // Cronometer-style "add a USDA food" card. When `picked` is set we show the
-  // Amount + Serving Size controls and a live, read-only macro summary instead
-  // of the manual grid. `base` is the per-100g macros; `portions` are the food's
-  // real-world units (e.g. "1 large" egg = 50 g); `grams` is the selected unit's
-  // gram weight; `amount` is how many of that unit.
-  const [picked, setPicked] = useState(null) // { fdcId, name, brand }
-  const [base, setBase] = useState(null)
-  const [portions, setPortions] = useState([])
-  const [grams, setGrams] = useState(100)
-  const [amount, setAmount] = useState('1')
-  const [pName, setPName] = useState('')
-  const [pCost, setPCost] = useState('')
-  const [loadingPortions, setLoadingPortions] = useState(false)
-  // Full per-100g micronutrient profile for the picked USDA food, captured on
-  // the detail lookup and saved alongside the food for a future micros feature.
-  const [nutrients, setNutrients] = useState(null)
-
-  // foods already imported from USDA, keyed by fdc_id, so we can flag "already
-  // in your library" and avoid creating duplicates.
-  const existingByFdc = useMemo(() => {
-    const m = new Map()
-    for (const f of foods) if (f.fdc_id) m.set(String(f.fdc_id), f)
-    return m
-  }, [foods])
-
-  // Debounced search: wait 300ms after the last keystroke before hitting USDA.
-  useEffect(() => {
-    const q = query.trim()
-    if (!onSearchFoods || q.length < 2) {
-      setResults([])
-      setSearching(false)
-      setSearchError(null)
-      return
-    }
-    setSearching(true)
-    setSearchError(null)
-    const handle = setTimeout(async () => {
-      try {
-        const res = await onSearchFoods(q)
-        setResults(res)
-      } catch (err) {
-        setSearchError(err.message || 'Search failed')
-        setResults([])
-      } finally {
-        setSearching(false)
-      }
-    }, 300)
-    return () => clearTimeout(handle)
-  }, [query, onSearchFoods])
-
-  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
-
-  // The gram weight of the currently-selected unit, and its label.
-  const selectedPortion = portions.find((p) => p.grams === grams) ?? portions[0] ?? { label: '100 g', grams: 100 }
-
-  // Live macro summary for the picked food = per-100g base × (grams/100) × amount.
-  // Read-only display, so it never gets wiped by typing in the name/cost fields.
-  const qty = Number(amount) || 0
-  const factor = base ? (grams / 100) * qty : 0
-  const liveMacros = base
-    ? {
-        calories: base.calories * factor,
-        protein: base.protein * factor,
-        carbs: base.carbs * factor,
-        fat: base.fat * factor,
-      }
-    : null
-
-  // Human-readable description of "amount × unit", used for both the live
-  // preview and the serving label saved on the food. E.g. "6 large (300 g)",
-  // "170 g", "6 oz (170 g)".
-  function amountLabel() {
-    const p = selectedPortion
-    const totalG = round1(grams * qty)
-    if (p.label === 'g' || p.label === '100 g') return `${totalG} g`
-    if (p.label === 'oz') return `${round1(qty)} oz (${totalG} g)`
-    const unit = p.label.replace(/^1\s+/, '') // "1 large" -> "large"
-    return `${round1(qty)} ${unit} (${totalG} g)`
-  }
-
-  function cancelPick() {
-    setPicked(null)
-    setBase(null)
-    setPortions([])
-    setGrams(100)
-    setAmount('1')
-    setPName('')
-    setPCost('')
-    setLoadingPortions(false)
-    setNutrients(null)
-  }
-
-  // Picking a USDA result opens the Cronometer-style card: name + amount +
-  // serving-size dropdown with a live macro summary. Starts at 100 g, then
-  // fetches the food's real-world portions (e.g. "1 large" egg) in the
-  // background so the user can switch units and have the macros rescale.
-  async function pickResult(r) {
-    setQuery('')
-    setResults([])
-    const existing = existingByFdc.get(String(r.fdcId))
-    setPicked({ fdcId: String(r.fdcId), name: r.name, brand: r.brand })
-    setPName(r.brand ? `${r.name} (${r.brand})` : r.name)
-    setPCost(existing?.cost != null ? String(existing.cost) : '')
-    setBase({ calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat })
-    // Start with weight units (always valid); named portions get merged in
-    // front once/if the detail lookup returns them. Default to 100 g for now.
-    setPortions([...WEIGHT_UNITS])
-    setGrams(100)
-    setAmount('1')
-    setNutrients(null)
-
-    // Fetch the food's real-world portions (e.g. "1 large" egg) in the
-    // background. Not every USDA food has them — if the lookup fails or returns
-    // none, the weight units above still let the user log by grams/oz.
-    if (!onFoodDetails) return
-    setLoadingPortions(true)
-    try {
-      const detail = await onFoodDetails(r.fdcId)
-      if (detail) {
-        setBase({ calories: detail.calories, protein: detail.protein, carbs: detail.carbs, fat: detail.fat })
-        setNutrients(detail.nutrients ?? null)
-        const named = detail.portions ?? []
-        setPortions([...named, ...WEIGHT_UNITS])
-        // Default to the first named portion (e.g. "1 large") when there is one,
-        // since that's usually what people mean — otherwise stay on 100 g.
-        if (named.length) {
-          setGrams(named[0].grams)
-          setAmount('1')
-        }
-      }
-    } catch {
-      // keep the weight-unit fallback already shown
-    } finally {
-      setLoadingPortions(false)
-    }
-  }
-
-  // Saves the picked USDA food into the library at the chosen amount + unit.
-  async function addPicked() {
-    if (!liveMacros || !pName.trim() || !(qty > 0)) return
-    // Don't create a second copy of a food already imported from USDA.
-    if (picked?.fdcId && existingByFdc.has(String(picked.fdcId))) {
-      cancelPick()
-      return
-    }
-    setSubmitting(true)
-    try {
-      await onAddFood({
-        name: pName.trim(),
-        servingDesc: amountLabel(),
-        calories: Math.round(liveMacros.calories),
-        protein: round1(liveMacros.protein),
-        carbs: round1(liveMacros.carbs),
-        fat: round1(liveMacros.fat),
-        cost: pCost === '' ? null : Number(pCost),
-        fdcId: picked?.fdcId || null,
-        // Full per-100g micronutrient profile, kept for a future micros feature.
-        nutrients,
-        source: 'usda',
-      })
-      cancelPick()
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function submit(e) {
-    e.preventDefault()
-    if (!form.name.trim()) return
-    setSubmitting(true)
-    try {
-      await onAddFood({
-        name: form.name.trim(),
-        servingDesc: form.servingDesc.trim(),
-        calories: Number(form.calories) || 0,
-        protein: Number(form.protein) || 0,
-        carbs: Number(form.carbs) || 0,
-        fat: Number(form.fat) || 0,
-        cost: form.cost === '' ? null : Number(form.cost),
-        fdcId: form.fdcId || null,
-        source: 'manual',
-      })
-      setForm(empty)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  // Dropdown text: weight units read plainly; named USDA portions like
-  // "1 large" (50 g) render as "large — 50 g".
-  function portionOptionLabel(p) {
-    if (p.label === 'g') return 'gram (g)'
-    if (p.label === 'oz') return 'ounce (28 g)'
-    if (p.label === '100 g') return '100 g'
-    const unit = p.label.replace(/^1\s+/, '')
-    return `${unit} — ${round1(p.grams)} g`
-  }
-
-  const inputCls =
-    'rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
-
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-      <h3 className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800">
-        Food library
-      </h3>
-
-      {onSearchFoods && (
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-            Search the USDA food database
-          </label>
-          <div className="relative">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g. chicken breast"
-              className={`w-full ${inputCls}`}
-            />
-            {searching && (
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 dark:text-slate-500">
-                searching…
-              </span>
-            )}
-          </div>
-
-          {searchError && (
-            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{searchError}</p>
-          )}
-
-          {results.length > 0 && (
-            <ul className="mt-2 max-h-56 overflow-y-auto rounded-md border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
-              {results.map((r) => {
-                const inLibrary = existingByFdc.has(String(r.fdcId))
-                return (
-                  <li key={r.fdcId}>
-                    <button
-                      type="button"
-                      onClick={() => pickResult(r)}
-                      className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-                    >
-                      <p className="text-sm text-slate-700 dark:text-slate-200">
-                        {r.name}
-                        {r.brand && <span className="text-slate-400 dark:text-slate-500"> · {r.brand}</span>}
-                        {inLibrary && (
-                          <span className="ml-2 text-xs text-emerald-600 dark:text-emerald-400">in library</span>
-                        )}
-                      </p>
-                      <p className="text-xs text-slate-400 dark:text-slate-500">
-                        per 100g: {Math.round(r.calories)} cal · {round1(r.protein)}g P · {round1(r.carbs)}g C ·{' '}
-                        {round1(r.fat)}g F
-                      </p>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-            Pick a result to choose an amount + serving size (e.g. 1 large egg) — macros update automatically. Or enter a food by hand below.
-          </p>
-        </div>
-      )}
-
-      {!picked && (
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-          {scanning ? (
-            <div className="space-y-2">
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setScanning(false)}
-                  className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
-                >
-                  Close scanner
-                </button>
-              </div>
-              <SupplementScanner onSave={onAddFood} />
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setScanning(true)}
-              className="w-full rounded-md border border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-            >
-              📋 Scan a supplement label
-            </button>
-          )}
-        </div>
-      )}
-
-      {picked ? (
-        // Cronometer-style add card: Amount + Serving Size drive a live,
-        // read-only macro summary that never disappears while you type.
-        <div className="p-4 space-y-3 border-b border-slate-100 dark:border-slate-800">
-          <input
-            value={pName}
-            onChange={(e) => setPName(e.target.value)}
-            placeholder="Food name"
-            className={`w-full font-medium ${inputCls}`}
-          />
-
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Amount</span>
-              <input
-                type="number"
-                step="0.25"
-                min="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className={`w-full ${inputCls}`}
-              />
-            </label>
-            <label className="block">
-              <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-                Serving size {loadingPortions && <span className="text-slate-400">· loading…</span>}
-              </span>
-              <select
-                value={String(grams)}
-                onChange={(e) => setGrams(Number(e.target.value))}
-                className={`w-full ${inputCls}`}
-              >
-                {portions.map((p) => (
-                  <option key={`${p.label}-${p.grams}`} value={String(p.grams)}>
-                    {portionOptionLabel(p)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {!loadingPortions && !portions.some((p) => !['g', 'oz', '100 g'].includes(p.label)) && (
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              USDA has no preset portions for this food — log it by weight (grams or ounces).
-            </p>
-          )}
-
-          {liveMacros && (
-            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Per {amountLabel()}</p>
-              <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
-                <span className="font-semibold text-slate-900 dark:text-slate-100">
-                  {Math.round(liveMacros.calories)} kcal
-                </span>
-                <span className="text-emerald-600 dark:text-emerald-400">P {round1(liveMacros.protein)}g</span>
-                <span className="text-sky-600 dark:text-sky-400">C {round1(liveMacros.carbs)}g</span>
-                <span className="text-fuchsia-600 dark:text-fuchsia-400">F {round1(liveMacros.fat)}g</span>
-              </div>
-            </div>
-          )}
-
-          <div className="relative">
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm" aria-hidden>$</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={pCost}
-              onChange={(e) => setPCost(e.target.value)}
-              placeholder="cost per serving (optional)"
-              className={`w-full pl-5 ${inputCls}`}
-            />
-          </div>
-
-          {picked.fdcId && existingByFdc.has(String(picked.fdcId)) && (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400">
-              This food is already in your library — adding again is blocked.
-            </p>
-          )}
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={addPicked}
-              disabled={submitting || !pName.trim() || !(qty > 0)}
-              className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-2 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
-            >
-              Add to library
-            </button>
-            <button
-              type="button"
-              onClick={cancelPick}
-              className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <form onSubmit={submit} className="p-4 grid grid-cols-2 sm:grid-cols-8 gap-2">
-          <input placeholder="Food name" value={form.name} onChange={set('name')} className={`col-span-2 sm:col-span-2 ${inputCls}`} />
-          <input placeholder="Serving" value={form.servingDesc} onChange={set('servingDesc')} className={`col-span-2 sm:col-span-1 ${inputCls}`} />
-          <input type="number" step="0.1" min="0" placeholder="Cal" value={form.calories} onChange={set('calories')} className={inputCls} />
-          <input type="number" step="0.1" min="0" placeholder="Protein" value={form.protein} onChange={set('protein')} className={inputCls} />
-          <input type="number" step="0.1" min="0" placeholder="Carbs" value={form.carbs} onChange={set('carbs')} className={inputCls} />
-          <input type="number" step="0.1" min="0" placeholder="Fat" value={form.fat} onChange={set('fat')} className={inputCls} />
-          <div className="flex gap-2 col-span-2 sm:col-span-1">
-            <input type="number" step="0.01" min="0" placeholder="$ cost" value={form.cost} onChange={set('cost')} className={`flex-1 min-w-0 ${inputCls}`} />
-          </div>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="col-span-2 sm:col-span-8 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-1.5 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
-          >
-            Add to library
-          </button>
-        </form>
-      )}
-
-      <div className="divide-y divide-slate-100 dark:divide-slate-800">
-        {foods.length === 0 && (
-          <p className="px-4 py-2 text-xs text-slate-400 dark:text-slate-500">
-            No foods yet. Add one above (macros are per serving), then log it in a meal.
-          </p>
-        )}
-        {foods.map((f) => (
-          <div key={f.id} className="flex items-center justify-between px-4 py-2 text-sm">
-            <div className="min-w-0">
-              <p className="truncate text-slate-700 dark:text-slate-200">
-                {f.name}
-                {f.serving_desc && <span className="text-slate-400 dark:text-slate-500"> · {f.serving_desc}</span>}
-              </p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
-                {Math.round(Number(f.calories))} cal · {Math.round(Number(f.protein))}g P · {Math.round(Number(f.carbs))}g C ·{' '}
-                {Math.round(Number(f.fat))}g F
-                {f.cost != null && ` · $${Number(f.cost).toFixed(2)}`}
-              </p>
-            </div>
-            <button
-              onClick={() => onDeleteFood(f.id)}
-              className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs shrink-0 ml-3"
-            >
-              Delete
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function TargetsEditor({ targets, onSetTargets }) {
   const [form, setForm] = useState({
     calories: targets?.calories ?? '',
@@ -889,12 +597,8 @@ function TargetsEditor({ targets, onSetTargets }) {
     carbs: targets?.carbs ?? '',
     fat: targets?.fat ?? '',
   })
-  const [saved, setSaved] = useState(false)
 
-  const set = (field) => (e) => {
-    setForm((f) => ({ ...f, [field]: e.target.value }))
-    setSaved(false)
-  }
+  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
   async function submit(e) {
     e.preventDefault()
@@ -904,7 +608,6 @@ function TargetsEditor({ targets, onSetTargets }) {
       carbs: Number(form.carbs) || 0,
       fat: Number(form.fat) || 0,
     })
-    setSaved(true)
   }
 
   const inputCls =
@@ -924,7 +627,7 @@ function TargetsEditor({ targets, onSetTargets }) {
           type="submit"
           className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-1.5 hover:bg-slate-800 dark:hover:bg-emerald-500 transition"
         >
-          {saved ? 'Saved ✓' : 'Save targets'}
+          Save targets
         </button>
       </form>
     </div>

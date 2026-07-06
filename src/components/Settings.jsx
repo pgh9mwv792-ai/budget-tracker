@@ -213,19 +213,19 @@ function NotificationsSection({ plan }) {
               e.preventDefault()
               save(enabled, emailOverride)
             }}
-            className="flex flex-wrap gap-2 items-center"
+            className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center"
           >
             <input
               type="email"
               placeholder="Send to a different email (optional)"
               value={emailOverride}
               onChange={(e) => setEmailOverride(e.target.value)}
-              className="flex-1 min-w-[14rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              className="w-full sm:flex-1 sm:min-w-[14rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
             />
             <button
               type="submit"
               disabled={busy}
-              className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+              className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
             >
               Save
             </button>
@@ -339,18 +339,18 @@ function ProfileSection() {
         </div>
       </div>
 
-      <form onSubmit={saveName} className="flex flex-wrap gap-2 items-center">
+      <form onSubmit={saveName} className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center">
         <input
           type="text"
           placeholder="Display name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="flex-1 min-w-[12rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="w-full sm:flex-1 sm:min-w-[12rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
         />
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
         >
           Save
         </button>
@@ -390,19 +390,19 @@ function EmailSection() {
 
   return (
     <Card title="Email" description={`Current: ${user?.email}. Changing it requires confirming via a link sent to the new address.`}>
-      <form onSubmit={submit} className="flex flex-wrap gap-2 items-center">
+      <form onSubmit={submit} className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-center">
         <input
           type="email"
           required
           placeholder="new@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="flex-1 min-w-[12rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="w-full sm:flex-1 sm:min-w-[12rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
         />
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
         >
           Update email
         </button>
@@ -466,7 +466,7 @@ function PasswordSection() {
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="w-full sm:w-auto rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
         >
           Update password
         </button>
@@ -586,22 +586,22 @@ function TwoFactorSection() {
             </div>
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300">2. Enter the 6-digit code it shows:</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             <input
               inputMode="numeric"
               placeholder="123456"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              className="flex-1 sm:flex-none rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
             />
             <button
               type="submit"
               disabled={busy || code.length < 6}
-              className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+              className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 sm:py-0 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
             >
               {busy ? 'Verifying…' : 'Confirm'}
             </button>
-            <button type="button" onClick={cancelEnroll} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 px-2">
+            <button type="button" onClick={cancelEnroll} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 px-2 py-2 sm:py-0">
               Cancel
             </button>
           </div>
@@ -794,17 +794,17 @@ function DangerZone() {
           meals, and assistant memory. This cannot be undone. Consider exporting your data first.
         </p>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
         <input
           placeholder='Type "delete" to confirm'
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          className="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
+          className="w-full sm:w-auto rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
         />
         <button
           onClick={deleteAccount}
           disabled={!canDelete || busy}
-          className="rounded-md bg-red-600 text-white text-sm px-4 py-2 font-medium hover:bg-red-500 transition disabled:opacity-50"
+          className="w-full sm:w-auto rounded-md bg-red-600 text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-red-500 transition disabled:opacity-50"
         >
           {busy ? 'Deleting…' : 'Delete my account'}
         </button>

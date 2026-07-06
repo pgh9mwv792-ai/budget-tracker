@@ -13,6 +13,14 @@ const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-4-5-20250929'
 // note a single chat message can trigger several when tools are used.
 // Override with:  supabase secrets set AI_DAILY_LIMIT=200
 const DAILY_LIMIT = Number(Deno.env.get('AI_DAILY_LIMIT') ?? '100')
+// Anthropic server-side web search. Lets the assistant look up official
+// nutrition numbers (and other current facts) instead of guessing from memory.
+// Anthropic runs the search itself and returns the results inline — the browser
+// never executes it. Billed per search (about $0.01 each, i.e. $10 per 1,000)
+// ON TOP OF token costs, and a search-driven message can make several model
+// calls that each count against AI_DAILY_LIMIT. On by default; turn it off with:
+//   supabase secrets set WEB_SEARCH_ENABLED=false
+const WEB_SEARCH_ENABLED = (Deno.env.get('WEB_SEARCH_ENABLED') ?? 'true') !== 'false'
 
 // Thin proxy to the Anthropic Messages API. The frontend sends the system
 // prompt, the running conversation, and the tool definitions; we just add the
@@ -72,6 +80,16 @@ Deno.serve(async (req) => {
     // Honor a caller-supplied value, clamped so no single request can balloon.
     const maxTokens = Math.min(Math.max(Number(max_tokens) || 1024, 1), 4096)
 
+    // Append Anthropic's server-side web search tool, but only when the caller
+    // already sent client tools (the interactive assistant). The receipt-vision
+    // path sends no tools, so it stays untouched. web_search is generally
+    // available on anthropic-version 2023-06-01 — no beta header needed.
+    // max_uses caps searches per request to bound cost.
+    const outboundTools =
+      WEB_SEARCH_ENABLED && Array.isArray(tools) && tools.length > 0
+        ? [...tools, { type: 'web_search_20250305', name: 'web_search', max_uses: 5 }]
+        : tools
+
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -84,7 +102,7 @@ Deno.serve(async (req) => {
         max_tokens: maxTokens,
         system,
         messages,
-        tools,
+        tools: outboundTools,
       }),
     })
 

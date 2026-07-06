@@ -16,6 +16,7 @@ import { monthKey, monthLabel, trailingMonthKeys } from '../lib/dateHelpers'
 import { detectRecurring } from '../lib/analysis'
 import { computeMonthOutlook, computeInsights, computeWeeklySummary } from '../lib/forecast'
 import { computeFoodCost } from '../lib/foodCost'
+import { useIsMobile } from '../lib/useMediaQuery'
 import ShareCard from './ShareCard'
 
 const COLORS = ['#0f172a', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#84cc16', '#06b6d4']
@@ -36,6 +37,7 @@ export default function Dashboard({
   onLogFood,
 }) {
   const currentMonth = monthKey(new Date().toISOString())
+  const isMobile = useIsMobile()
 
   const outlook = useMemo(() => computeMonthOutlook(transactions, budgets), [transactions, budgets])
   const insights = useMemo(
@@ -116,15 +118,23 @@ export default function Dashboard({
           {categoryBreakdown.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">No expenses recorded this month yet.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={isMobile ? 280 : 260}>
               <PieChart>
-                <Pie data={categoryBreakdown} dataKey="value" nameKey="name" outerRadius={90} label>
+                {/* On mobile, drop the slice labels (they overlap at 375px) and
+                    rely on the legend below the chart instead. */}
+                <Pie
+                  data={categoryBreakdown}
+                  dataKey="value"
+                  nameKey="name"
+                  outerRadius={isMobile ? 70 : 90}
+                  label={!isMobile}
+                >
                   {categoryBreakdown.map((entry, i) => (
                     <Cell key={entry.name} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v) => `$${Number(v).toFixed(2)}`} />
-                <Legend />
+                <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: isMobile ? 11 : 12 }} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -133,11 +143,11 @@ export default function Dashboard({
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Trailing 3-month average income</h3>
           <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-3">${rollingAverage.toFixed(2)}</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={rollingIncome}>
+          <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
+            <BarChart data={rollingIncome} margin={isMobile ? { top: 8, right: 4, bottom: 0, left: -12 } : undefined}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-slate-200 dark:text-slate-700" />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: 'currentColor' }} className="text-slate-500 dark:text-slate-400" />
-              <YAxis tick={{ fontSize: 12, fill: 'currentColor' }} className="text-slate-500 dark:text-slate-400" />
+              <XAxis dataKey="month" tick={{ fontSize: isMobile ? 11 : 12, fill: 'currentColor' }} className="text-slate-500 dark:text-slate-400" />
+              <YAxis tick={{ fontSize: isMobile ? 11 : 12, fill: 'currentColor' }} tickCount={isMobile ? 4 : 6} width={isMobile ? 44 : 60} className="text-slate-500 dark:text-slate-400" />
               <Tooltip formatter={(v) => `$${Number(v).toFixed(2)}`} />
               <Bar dataKey="income" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
             </BarChart>

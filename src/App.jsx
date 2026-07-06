@@ -518,7 +518,7 @@ function AppShell() {
         onSignOut={signOut}
       />
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6 pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] md:pb-6">
         <Suspense fallback={<TabSkeleton />}>
         {activeTab === 'Dashboard' && (
           <Dashboard
@@ -630,6 +630,7 @@ function AppShell() {
             onAddFood={async (values) => {
               const created = await api.createFood(values)
               setFoods((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+              return created
             }}
             onUpdateFood={async (id, updates) => {
               const updated = await api.updateFood(id, updates)
