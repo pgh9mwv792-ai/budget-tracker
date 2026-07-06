@@ -467,6 +467,110 @@ export async function deleteCreditScore(id) {
   if (error) throw error
 }
 
+// ---------- receipts (itemized receipt scanning) ----------
+
+// Fetches the user's itemized receipts with their line items nested (and each
+// item's linked food name, when mapped). Ordered newest first. RLS scopes this
+// to the current user. Lives in migration 0016 — callers degrade to [] until run.
+export async function fetchReceipts() {
+  const { data, error } = await supabase
+    .from('receipts')
+    .select('*, items:receipt_items(*, food:foods(id, name))')
+    .order('purchase_date', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createReceipt({ storeName, purchaseDate, total, matchedTransactionId }) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('receipts')
+    .insert({
+      user_id: user.id,
+      store_name: storeName || null,
+      purchase_date: purchaseDate || null,
+      total: total === '' || total == null ? null : total,
+      matched_transaction_id: matchedTransactionId || null,
+    })
+    .select('*, items:receipt_items(*, food:foods(id, name))')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateReceipt(id, updates) {
+  const { data, error } = await supabase
+    .from('receipts')
+    .update(updates)
+    .eq('id', id)
+    .select('*, items:receipt_items(*, food:foods(id, name))')
+    .single()
+  if (error) throw error
+  return data
+}
+
+// Batch-inserts a receipt's line items. `items` are the normalized drafts from
+// parseReceiptItemized (plus the user's is_food decision). Returns the saved
+// rows (with ids) so the mapping step can update food_id per item.
+export async function createReceiptItems(receiptId, items) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const rows = items.map((it) => ({
+    receipt_id: receiptId,
+    user_id: user.id,
+    raw_name: it.raw_name,
+    price: it.price == null || it.price === '' ? null : it.price,
+    quantity: it.quantity == null || it.quantity === '' ? null : it.quantity,
+    unit: it.unit || null,
+    is_food: it.is_food !== false,
+    food_id: it.food_id || null,
+  }))
+  const { data, error } = await supabase
+    .from('receipt_items')
+    .insert(rows)
+    .select('*, food:foods(id, name)')
+  if (error) throw error
+  return data
+}
+
+export async function updateReceiptItem(id, updates) {
+  const { data, error } = await supabase
+    .from('receipt_items')
+    .update(updates)
+    .eq('id', id)
+    .select('*, food:foods(id, name)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ---------- receipt item rules (raw item text -> food memory) ----------
+
+export async function fetchReceiptItemRules() {
+  const { data, error } = await supabase.from('receipt_item_rules').select('*')
+  if (error) throw error
+  return data
+}
+
+export async function upsertReceiptItemRule(itemKey, foodId) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('receipt_item_rules')
+    .upsert(
+      { user_id: user.id, item_key: itemKey, food_id: foodId },
+      { onConflict: 'user_id,item_key' }
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
 // ---------- plaid ----------
 
 export async function fetchPlaidConnections() {

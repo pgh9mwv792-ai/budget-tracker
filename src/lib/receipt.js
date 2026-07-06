@@ -127,6 +127,109 @@ Choose the single best category for the whole receipt based on the merchant and 
   }
 }
 
+// A receipt can list dozens of line items, so the itemized mode needs a larger
+// token budget than the single-total simple mode (the chat function clamps it).
+const ITEMIZED_MAX_TOKENS = 4096
+
+// Sends a receipt file to Claude in ITEMIZED mode and returns a normalized draft:
+//   { store_name, purchase_date, total, items: [{ raw_name, price, quantity,
+//     unit, looks_like_food }] }
+// The heavier sibling of parseReceipt(): one Claude call, same secure proxy and
+// daily cap, but the model transcribes each line rather than just the total.
+//
+// Contract with the extraction prompt (enforced below):
+//   • raw_name stays VERBATIM as printed — the receipt_item_rules table keys off
+//     it, so the model must NOT "clean up" or expand names.
+//   • total is the FINAL charged amount incl. tax (that's what matches the bank).
+//   • looks_like_food is the model's guess; the UI only uses it to pre-check a
+//     box — the user decides is_food.
+//   • an unreadable image returns { error } and NO invented items.
+export async function parseReceiptItemized({ file, today = new Date().toISOString().slice(0, 10) }) {
+  const block = await fileToContentBlock(file)
+
+  const system = `You transcribe a store purchase receipt into structured, itemized data.
+Respond with ONLY a JSON object — no prose, no markdown code fences. Use exactly this schema:
+{
+  "store_name": string,        // the store/business name as printed, or "" if unreadable
+  "purchase_date": "YYYY-MM-DD",// the purchase date; if not visible, use "${today}"
+  "total": number,             // the FINAL amount charged INCLUDING tax, positive
+  "items": [                   // one object per printed line item, in order
+    {
+      "raw_name": string,      // the item text EXACTLY as printed (do not clean, expand, or fix spelling)
+      "price": number,         // the line's price; negative for a discount/coupon line
+      "quantity": number|null, // the printed quantity/weight if shown (e.g. 1.2 for "1.2 lb"), else null
+      "unit": string|null,     // the unit if shown: "lb", "oz", or "each"; else null
+      "looks_like_food": boolean // your best guess whether this is a grocery FOOD item
+    }
+  ],
+  "error": string|null         // set a short human message if this is NOT a readable receipt; otherwise null
+}
+
+Rules — follow exactly:
+1. raw_name is VERBATIM. "365 ORG CHKN BRST" stays "365 ORG CHKN BRST" — never expand abbreviations, fix casing, or invent a cleaner name. The app keys a memory off this exact text.
+2. total is the final charged amount AFTER tax — the number the bank actually charged. Not the subtotal.
+3. Coupons/discounts: if a discount is clearly attached to one item, fold it into that item's price (show the net price). Otherwise include the discount as its own line with a NEGATIVE price and looks_like_food:false, so the items still sum to total.
+4. Whole Foods and similar stores sell non-food too (soap, supplements, household). Set looks_like_food honestly per line — it only pre-checks a box for the user.
+5. If the image is not a readable receipt (blurry, wrong photo, cut off), set "error" to a short message and return an empty items array. NEVER invent items or prices.`
+
+  const messages = [
+    {
+      role: 'user',
+      content: [block, { type: 'text', text: 'Transcribe this receipt into itemized JSON following the schema exactly.' }],
+    },
+  ]
+
+  const resp = await callVision(system, messages, ITEMIZED_MAX_TOKENS)
+  const text = (resp.content || [])
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
+    .trim()
+
+  const parsed = parseJson(text)
+  if (!parsed) throw new Error('Could not read that receipt. Try a clearer, well-lit photo.')
+  if (parsed.error) throw new Error(String(parsed.error))
+
+  const items = Array.isArray(parsed.items)
+    ? parsed.items
+        .map((it) => ({
+          raw_name: String(it?.raw_name ?? '').trim(),
+          price: finiteOrNull(it?.price),
+          quantity: finiteOrNull(it?.quantity),
+          unit: normalizeUnit(it?.unit),
+          looks_like_food: it?.looks_like_food === true,
+        }))
+        .filter((it) => it.raw_name)
+    : []
+
+  if (!items.length) {
+    throw new Error('No line items found. Make sure the whole receipt is in frame and readable.')
+  }
+
+  const total = Number(parsed.total)
+  return {
+    store_name: String(parsed.store_name ?? '').trim(),
+    purchase_date: /^\d{4}-\d{2}-\d{2}$/.test(parsed.purchase_date) ? parsed.purchase_date : today,
+    total: Number.isFinite(total) && total > 0 ? Math.round(total * 100) / 100 : '',
+    items,
+  }
+}
+
+function finiteOrNull(v) {
+  if (v === '' || v == null) return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+// Constrain the unit to the three the schema allows; anything else → null.
+function normalizeUnit(v) {
+  const u = String(v ?? '').trim().toLowerCase()
+  if (u === 'lb' || u === 'lbs') return 'lb'
+  if (u === 'oz') return 'oz'
+  if (u === 'each' || u === 'ea') return 'each'
+  return null
+}
+
 // Best-effort JSON extraction — tolerates stray prose or ```json fences.
 export function parseJson(text) {
   if (!text) return null

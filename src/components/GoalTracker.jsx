@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import ShareCard from './ShareCard'
 
-export default function GoalTracker({ goals, onCreate, onUpdate, onDelete }) {
+export default function GoalTracker({ goals, displayName = '', onCreate, onUpdate, onDelete }) {
   const [name, setName] = useState('')
   const [target, setTarget] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -48,7 +49,7 @@ export default function GoalTracker({ goals, onCreate, onUpdate, onDelete }) {
 
       <div className="grid sm:grid-cols-2 gap-4">
         {goals.map((g) => (
-          <GoalCard key={g.id} goal={g} onUpdate={onUpdate} onDelete={onDelete} />
+          <GoalCard key={g.id} goal={g} displayName={displayName} onUpdate={onUpdate} onDelete={onDelete} />
         ))}
         {goals.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No savings goals yet.</p>}
       </div>
@@ -56,20 +57,52 @@ export default function GoalTracker({ goals, onCreate, onUpdate, onDelete }) {
   )
 }
 
-function GoalCard({ goal, onUpdate, onDelete }) {
+function GoalCard({ goal, displayName = '', onUpdate, onDelete }) {
   const [editingAmount, setEditingAmount] = useState(false)
   const [draft, setDraft] = useState(goal.current_amount)
+  const [sharing, setSharing] = useState(false)
 
   const pct = Math.min(100, (Number(goal.current_amount) / Number(goal.target_amount)) * 100)
+  const complete = Number(goal.current_amount) >= Number(goal.target_amount)
+  const firstName = displayName.trim().split(/\s+/)[0] || ''
+  const shareCard = {
+    id: 'goal',
+    label: 'Goal',
+    eyebrow: 'Goal reached',
+    stat: `$${Math.round(Number(goal.target_amount)).toLocaleString('en-US')}`,
+    caption: goal.name,
+  }
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+      {sharing && (
+        <ShareCard cards={[shareCard]} firstName={firstName} onClose={() => setSharing(false)} />
+      )}
       <div className="flex justify-between items-start">
         <h3 className="font-medium text-slate-900 dark:text-slate-100">{goal.name}</h3>
         <button onClick={() => onDelete(goal.id)} className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm">
           Delete
         </button>
       </div>
+
+      {complete && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 px-3 py-2">
+          <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">🎉 Goal reached!</span>
+          <button
+            onClick={() => setSharing(true)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+              <line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
+            </svg>
+            Share
+          </button>
+        </div>
+      )}
 
       <div className="mt-3 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
         <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />

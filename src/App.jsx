@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import Login from './components/Login'
+import Landing from './components/Landing'
 import MfaChallenge from './components/MfaChallenge'
 import NavBar from './components/NavBar'
 import UncategorizedBucket from './components/UncategorizedBucket'
@@ -28,6 +29,7 @@ const Onboarding = lazy(() => import('./components/Onboarding'))
 import * as api from './lib/api'
 import { supabase } from './lib/supabaseClient'
 import { merchantKey, matchRules } from './lib/analysis'
+import { perUnitCost } from './lib/receiptMatch'
 import { addDays } from './lib/dateHelpers'
 
 function AppShell() {
@@ -44,6 +46,9 @@ function AppShell() {
   const [memories, setMemories] = useState([])
   const [plaidAccounts, setPlaidAccounts] = useState([])
   const [creditScores, setCreditScores] = useState([])
+  // Itemized receipts (migration 0016) and the remembered raw-item→food rules.
+  const [receipts, setReceipts] = useState([])
+  const [receiptItemRules, setReceiptItemRules] = useState([])
   // The latest weekly digest the user hasn't dismissed (migration 0015),
   // surfaced as a card at the top of the Dashboard. null when there's none.
   const [latestDigest, setLatestDigest] = useState(null)
@@ -68,7 +73,7 @@ function AppShell() {
   const loadAll = useCallback(async () => {
     if (!user) return
     if (!hasLoadedOnce.current) setDataLoading(true)
-    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts, cscores, digest, ents] = await Promise.all([
+    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules] = await Promise.all([
       api.ensureDefaultCategories(user.id),
       api.fetchTransactions(),
       api.fetchGoals(),
@@ -91,6 +96,9 @@ function AppShell() {
       api.fetchLatestDigest().catch(() => null),
       // Plan/entitlements live in migration 0012; default to free if unavailable.
       api.fetchEntitlements().catch(() => ({ plan: 'free', status: null, period_end: null })),
+      // Itemized receipts + item rules live in migration 0016; degrade gracefully.
+      api.fetchReceipts().catch(() => []),
+      api.fetchReceiptItemRules().catch(() => []),
     ])
 
     // Auto-categorize: apply saved merchant rules to any uncategorized
@@ -121,6 +129,8 @@ function AppShell() {
     setCreditScores(cscores ?? [])
     setLatestDigest(digest ?? null)
     setEntitlements(ents ?? { plan: 'free', status: null, period_end: null })
+    setReceipts(rcpts ?? [])
+    setReceiptItemRules(ritemrules ?? [])
     hasLoadedOnce.current = true
     setDataLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,13 +177,22 @@ function AppShell() {
   }, [user, refreshEntitlements])
 
   if (loading) return <FullScreenMessage text="Loading…" />
-  if (!user) return <Login />
+  if (!user) return <SignedOut />
   if (needsMfa) return <MfaChallenge />
   if (dataLoading) return <FullScreenMessage text="Loading your data…" />
 
   const rulesByKey = new Map(rules.map((r) => [r.merchant_key, r.category_id]))
   const savedMatchCount = matchRules(transactions, rulesByKey).length
   const plan = entitlements?.plan ?? 'free'
+
+  // Which Plaid/manual transactions already carry a receipt, and a lookup for
+  // the transaction-list receipt indicator. A transaction can hold one receipt.
+  const matchedTransactionIds = new Set(
+    receipts.map((r) => r.matched_transaction_id).filter(Boolean)
+  )
+  const receiptsByTransaction = new Map(
+    receipts.filter((r) => r.matched_transaction_id).map((r) => [r.matched_transaction_id, r])
+  )
 
   // Dismiss the in-app digest card (persists via the digests.dismissed flag,
   // then clears it locally so it disappears immediately).
@@ -422,6 +441,72 @@ function AppShell() {
     return created
   }
 
+  // Persists a scanned itemized receipt. If it matched a Plaid charge, that row
+  // stays the money record — no duplicate transaction. If not, we fall back to
+  // creating a manual transaction from the total and link the receipt to it.
+  // Returns { receipt (with items), transaction } for the mapping step.
+  const saveScannedReceipt = async ({ receipt, items, matchedTransaction }) => {
+    let transaction = matchedTransaction || null
+    let matchedTransactionId = matchedTransaction?.id || null
+
+    if (!transaction) {
+      transaction = await api.createTransaction({
+        date: receipt.purchase_date,
+        amount: receipt.total,
+        kind: 'expense',
+        categoryId: null,
+        note: receipt.store_name || null,
+      })
+      setTransactions((prev) => [transaction, ...prev])
+      matchedTransactionId = transaction.id
+    }
+
+    const savedReceipt = await api.createReceipt({
+      storeName: receipt.store_name,
+      purchaseDate: receipt.purchase_date,
+      total: receipt.total,
+      matchedTransactionId,
+    })
+    const savedItems = await api.createReceiptItems(savedReceipt.id, items)
+    const full = { ...savedReceipt, items: savedItems }
+    setReceipts((prev) => [full, ...prev])
+    return { receipt: full, transaction }
+  }
+
+  // Maps one receipt line to a library food: links receipt_items.food_id, saves
+  // the raw-item→food rule for next time, and flows the receipt price into the
+  // food's remembered default cost (per-unit when a weight/qty is present).
+  const mapReceiptItem = async ({ item, food, itemKey }) => {
+    const updatedItem = await api.updateReceiptItem(item.id, { food_id: food.id })
+
+    let rule = null
+    try {
+      rule = await api.upsertReceiptItemRule(itemKey, food.id)
+    } catch {
+      // receipt_item_rules may not exist yet (migration 0016) — mapping still works.
+    }
+
+    const newCost = perUnitCost(item.price, item.quantity)
+    if (newCost != null) {
+      try {
+        await api.updateFood(food.id, { cost: newCost })
+        setFoods((prev) => prev.map((f) => (f.id === food.id ? { ...f, cost: newCost } : f)))
+      } catch {
+        // Non-fatal: the mapping is saved even if the cost write fails.
+      }
+    }
+
+    setReceipts((prev) =>
+      prev.map((r) =>
+        r.id === item.receipt_id
+          ? { ...r, items: r.items.map((it) => (it.id === item.id ? updatedItem : it)) }
+          : r
+      )
+    )
+    if (rule) setReceiptItemRules((prev) => [...prev.filter((x) => x.item_key !== itemKey), rule])
+    return updatedItem
+  }
+
   return (
     <div className="min-h-screen">
       <NavBar
@@ -445,6 +530,7 @@ function AppShell() {
             nutritionTargets={nutritionTargets}
             accounts={plaidAccounts}
             digest={latestDigest}
+            displayName={user.user_metadata?.display_name}
             onDismissDigest={dismissLatestDigest}
             onNavigate={setActiveTab}
             onAsk={setAssistantPrompt}
@@ -461,7 +547,21 @@ function AppShell() {
             >
               <PlaidLinkButton onLinked={loadAll} onSync={loadAll} />
             </UpgradeGate>
-            <ReceiptScanner categories={categories} onAdd={addScannedTransaction} />
+            <ReceiptScanner
+              categories={categories}
+              onAdd={addScannedTransaction}
+              itemize={{
+                transactions,
+                foods,
+                receiptItemRules,
+                matchedTransactionIds,
+                onSearchFoods: api.searchFoods,
+                onSaveReceipt: saveScannedReceipt,
+                onMapItem: mapReceiptItem,
+                onCreateFood: actions.addFood,
+                onApplyCategory: assignCategory,
+              }}
+            />
             <UncategorizedBucket
               transactions={transactions}
               categories={categories}
@@ -472,6 +572,7 @@ function AppShell() {
             <TransactionList
               transactions={transactions}
               categories={categories}
+              receiptsByTransaction={receiptsByTransaction}
               onCreate={async (values) => {
                 const created = await api.createTransaction(values)
                 setTransactions((prev) => [created, ...prev])
@@ -562,6 +663,7 @@ function AppShell() {
         {activeTab === 'Goals' && (
           <GoalTracker
             goals={goals}
+            displayName={user.user_metadata?.display_name}
             onCreate={async (values) => {
               const created = await api.createGoal(values)
               setGoals((prev) => [...prev, created])
@@ -636,6 +738,43 @@ function AppShell() {
         </Suspense>
       )}
     </div>
+  )
+}
+
+// True when the URL carries Supabase auth params — an OAuth/magic-link return
+// (`?code=…`), an implicit-flow token or password-recovery (`#access_token…&type=recovery`),
+// or an auth error. In those cases we skip the marketing page and land on Login
+// so existing sign-in flows (and any error message) surface directly.
+function hasAuthParams() {
+  if (typeof window === 'undefined') return false
+  const hash = window.location.hash || ''
+  const search = window.location.search || ''
+  return /(?:access_token|refresh_token|provider_token|[?&#]code=|[?&#]type=|[?&#]error=|error_description)/.test(
+    hash + search
+  )
+}
+
+// Signed-out experience: the landing page by default, swapping to Login when the
+// visitor chooses to sign in / get started — or immediately when an auth return
+// URL is detected. Simple useState, the same pattern the app uses elsewhere.
+function SignedOut() {
+  const [view, setView] = useState(hasAuthParams() ? 'login' : 'landing')
+  const [loginMode, setLoginMode] = useState('signin')
+
+  if (view === 'login') {
+    return <Login initialMode={loginMode} onBack={() => setView('landing')} />
+  }
+  return (
+    <Landing
+      onGetStarted={() => {
+        setLoginMode('signup')
+        setView('login')
+      }}
+      onSignIn={() => {
+        setLoginMode('signin')
+        setView('login')
+      }}
+    />
   )
 }
 

@@ -25,8 +25,8 @@ function generatePassword(length = 16) {
   return chars.join('')
 }
 
-export default function Login() {
-  const [mode, setMode] = useState('signin') // 'signin' | 'signup' | 'magic'
+export default function Login({ initialMode = 'signin', onBack }) {
+  const [mode, setMode] = useState(initialMode) // 'signin' | 'signup' | 'magic'
   const [email, setEmail] = useState(() => localStorage.getItem(LAST_EMAIL_KEY) || '')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -137,6 +137,15 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
       <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-6">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="mb-3 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          >
+            ← Back
+          </button>
+        )}
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
           Budget Tracker

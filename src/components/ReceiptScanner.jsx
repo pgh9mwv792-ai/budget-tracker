@@ -1,22 +1,35 @@
 import { useRef, useState } from 'react'
-import { parseReceipt } from '../lib/receipt'
+import { parseReceipt, parseReceiptItemized } from '../lib/receipt'
+import ReceiptItemizer from './ReceiptItemizer'
 
 // "Scan receipt" flow: pick/snap a photo → Claude reads it → an editable review
 // card → creates the transaction. The review step is deliberate: OCR is good,
 // not perfect, so a human confirm keeps bad data out of the budget.
 //
+// Two modes, chosen before scanning:
+//   • Quick total (default) — one editable transaction, as before.
+//   • Itemize — Claude transcribes every line, the receipt is matched to a Plaid
+//     charge, and food lines map into the library (see ReceiptItemizer). The
+//     `itemize` prop bundle carries the extra data/actions that flow needs; when
+//     it's absent the toggle is hidden and only the simple mode shows.
+//
 // Props:
 //   categories: all categories (expense ones are offered in the picker)
 //   onAdd(values): create a transaction { date, amount, kind, categoryId, note }
-export default function ReceiptScanner({ categories = [], onAdd }) {
+//   itemize: { transactions, foods, receiptItemRules, matchedTransactionIds,
+//     onSearchFoods, onSaveReceipt, onMapItem, onCreateFood, onApplyCategory }
+export default function ReceiptScanner({ categories = [], onAdd, itemize = null }) {
   const cameraRef = useRef(null)
   const uploadRef = useRef(null)
-  const [status, setStatus] = useState('idle') // idle | reading | review | saving
+  const [mode, setMode] = useState('simple') // simple | itemize
+  const [status, setStatus] = useState('idle') // idle | reading | review | saving | itemize
   const [error, setError] = useState(null)
   const [draft, setDraft] = useState(null) // { merchant, date, amount, categoryId, confidence }
+  const [itemDraft, setItemDraft] = useState(null) // parseReceiptItemized result
   const [savedNote, setSavedNote] = useState(null)
 
   const expenseCategories = categories.filter((c) => c.kind === 'expense')
+  const canItemize = Boolean(itemize)
 
   const openCamera = () => {
     setError(null)
@@ -37,6 +50,12 @@ export default function ReceiptScanner({ categories = [], onAdd }) {
     setSavedNote(null)
     setStatus('reading')
     try {
+      if (mode === 'itemize' && canItemize) {
+        const result = await parseReceiptItemized({ file })
+        setItemDraft(result)
+        setStatus('itemize')
+        return
+      }
       const result = await parseReceipt({ file, categories })
       const matched = expenseCategories.find((c) => c.name === result.category)
       setDraft({
@@ -51,6 +70,14 @@ export default function ReceiptScanner({ categories = [], onAdd }) {
       setError(err.message)
       setStatus('idle')
     }
+  }
+
+  // Leave the itemized flow (finished or cancelled). `summary` is a saved-note
+  // string when a receipt was persisted, or null on cancel.
+  const finishItemize = (summary) => {
+    setItemDraft(null)
+    setStatus('idle')
+    if (summary) setSavedNote(summary)
   }
 
   const save = async () => {
@@ -106,13 +133,31 @@ export default function ReceiptScanner({ categories = [], onAdd }) {
         className="hidden"
       />
 
-      {status !== 'review' && (
+      {status !== 'review' && status !== 'itemize' && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Add a receipt</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Take a photo, or upload a screenshot or PDF — I’ll read the total and category for you.
+              {mode === 'itemize'
+                ? 'I’ll transcribe every line, match it to your bank charge, and price your foods.'
+                : 'Take a photo, or upload a screenshot or PDF — I’ll read the total and category for you.'}
             </p>
+            {canItemize && (
+              <div className="mt-2 inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 text-xs">
+                <button
+                  onClick={() => setMode('simple')}
+                  className={`px-2.5 py-1 rounded-md transition ${mode === 'simple' ? 'bg-emerald-600 text-white' : 'text-slate-600 dark:text-slate-300'}`}
+                >
+                  Quick total
+                </button>
+                <button
+                  onClick={() => setMode('itemize')}
+                  className={`px-2.5 py-1 rounded-md transition ${mode === 'itemize' ? 'bg-emerald-600 text-white' : 'text-slate-600 dark:text-slate-300'}`}
+                >
+                  Itemize
+                </button>
+              </div>
+            )}
           </div>
           <div className="flex gap-2 shrink-0">
             <button
@@ -206,6 +251,25 @@ export default function ReceiptScanner({ categories = [], onAdd }) {
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {status === 'itemize' && itemDraft && canItemize && (
+        <div className="mt-2">
+          <ReceiptItemizer
+            draft={itemDraft}
+            transactions={itemize.transactions}
+            foods={itemize.foods}
+            categories={categories}
+            receiptItemRules={itemize.receiptItemRules}
+            matchedTransactionIds={itemize.matchedTransactionIds}
+            onSearchFoods={itemize.onSearchFoods}
+            onSaveReceipt={itemize.onSaveReceipt}
+            onMapItem={itemize.onMapItem}
+            onCreateFood={itemize.onCreateFood}
+            onApplyCategory={itemize.onApplyCategory}
+            onDone={finishItemize}
+          />
         </div>
       )}
 

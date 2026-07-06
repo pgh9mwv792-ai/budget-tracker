@@ -16,6 +16,7 @@ import { monthKey, monthLabel, trailingMonthKeys } from '../lib/dateHelpers'
 import { detectRecurring } from '../lib/analysis'
 import { computeMonthOutlook, computeInsights, computeWeeklySummary } from '../lib/forecast'
 import { computeFoodCost } from '../lib/foodCost'
+import ShareCard from './ShareCard'
 
 const COLORS = ['#0f172a', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#84cc16', '#06b6d4']
 
@@ -28,6 +29,7 @@ export default function Dashboard({
   nutritionTargets = null,
   accounts = [],
   digest = null,
+  displayName = '',
   onDismissDigest,
   onNavigate,
   onAsk,
@@ -84,7 +86,7 @@ export default function Dashboard({
 
       {onAsk && <QuickAsk onAsk={onAsk} />}
 
-      <FoodMoneyHero food={foodCost} onNavigate={onNavigate} />
+      <FoodMoneyHero food={foodCost} onNavigate={onNavigate} displayName={displayName} />
 
       {foodCost.efficiency.hasData && (
         <ProteinValueCard efficiency={foodCost.efficiency} onLogFood={onLogFood} onNavigate={onNavigate} />
@@ -400,9 +402,65 @@ function WeeklyCard({ weekly }) {
 // how cheaply you're buying protein, and where the money goes (grocery vs.
 // eating out). Renders a compact "unlock this" fallback when data is thin so
 // it's never a broken empty state.
-function FoodMoneyHero({ food, onNavigate }) {
+// Build the shareable card specs for the food/money moments, mirroring the
+// hero's own logic: cost per 100g protein, and either the "bulk" projection
+// (when nutrition targets exist) or plain monthly food spend. Every string here
+// is privacy-safe — a headline stat only, no balances/banks/transactions.
+function buildFoodShareCards(food) {
+  const { spend, protein, burn, bulk } = food
+  const money2 = (n) => `$${Number(n || 0).toFixed(2)}`
+  const moneyWhole = (n) => `$${Math.round(Number(n || 0)).toLocaleString('en-US')}`
+  const cards = []
+
+  if (protein?.hasData && protein.costPer100g != null) {
+    cards.push({
+      id: 'protein',
+      label: 'Protein cost',
+      eyebrow: 'Cost per 100g protein',
+      stat: money2(protein.costPer100g),
+      caption: 'from my logged meals this month',
+    })
+  }
+
+  if (bulk) {
+    cards.push({
+      id: 'bulk',
+      label: 'Protein / mo',
+      eyebrow: 'My daily protein goal',
+      stat: `${moneyWhole(bulk.monthlyCost)}/mo`,
+      caption: `Hitting ${Math.round(bulk.proteinTarget)}g of protein a day${
+        bulk.source === 'library' ? ' at my cheapest food' : ''
+      }`,
+    })
+  } else {
+    const monthly =
+      burn?.average != null && burn.average > 0
+        ? burn.average
+        : burn?.spentSoFar > 0
+        ? burn.projected
+        : spend?.hasData
+        ? spend.perDay * 30
+        : null
+    if (monthly != null && monthly > 0) {
+      cards.push({
+        id: 'food-cost',
+        label: 'Food / mo',
+        eyebrow: 'What I spend on food',
+        stat: `${moneyWhole(monthly)}/mo`,
+        caption: 'tracked automatically from real transactions',
+      })
+    }
+  }
+
+  return cards
+}
+
+function FoodMoneyHero({ food, onNavigate, displayName = '' }) {
   const { spend, protein, burn, bulk } = food
   const dollars = (n) => `$${Number(n || 0).toFixed(2)}`
+  const [sharing, setSharing] = useState(false)
+  const shareCards = food.hasData ? buildFoodShareCards(food) : []
+  const firstName = displayName.trim().split(/\s+/)[0] || ''
 
   // Grocery vs. restaurant split (of the two — "other" food sits in the total).
   const splitBase = spend.grocery + spend.restaurant
@@ -419,10 +477,33 @@ function FoodMoneyHero({ food, onNavigate }) {
 
   return (
     <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20 shadow-sm p-5 sm:p-6">
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-        Food &amp; money
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          Food &amp; money
+        </div>
+        {shareCards.length > 0 && (
+          <button
+            onClick={() => setSharing(true)}
+            title="Share this"
+            aria-label="Share this"
+            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.6" y1="13.5" x2="15.4" y2="17.5" />
+              <line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
+            </svg>
+            Share
+          </button>
+        )}
       </div>
+
+      {sharing && shareCards.length > 0 && (
+        <ShareCard cards={shareCards} firstName={firstName} onClose={() => setSharing(false)} />
+      )}
 
       {!food.hasData ? (
         <div className="mt-2">
