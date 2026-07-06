@@ -14,3 +14,10 @@ project_id = "flnppvzyevcuawqxiksu"
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+# The weekly-digest function is invoked by the scheduler (pg_cron -> pg_net),
+# not a browser, so it has no Supabase JWT. Like stripe-webhook, it turns JWT
+# verification off here (applied automatically by the CI's bulk deploy) and
+# instead requires the x-digest-secret header to match DIGEST_CRON_SECRET.
+[functions.weekly-digest]
+verify_jwt = false
