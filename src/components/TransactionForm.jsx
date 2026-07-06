@@ -45,6 +45,7 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
       >
         <option value="expense">Expense</option>
         <option value="income">Income</option>
+        <option value="transfer">Transfer</option>
       </select>
 
       <input
