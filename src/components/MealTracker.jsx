@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { monthKey, addDays } from '../lib/dateHelpers'
 import { costPerDay, costPerProtein } from '../lib/foodCost'
 
@@ -42,6 +42,7 @@ export default function MealTracker({
   onUpdateLog,
   onDeleteLog,
   onSetTargets,
+  onSearchFoods,
 }) {
   const [date, setDate] = useState(today())
 
@@ -77,7 +78,7 @@ export default function MealTracker({
         />
       ))}
 
-      <FoodLibrary foods={foods} onAddFood={onAddFood} onDeleteFood={onDeleteFood} />
+      <FoodLibrary foods={foods} onAddFood={onAddFood} onDeleteFood={onDeleteFood} onSearchFoods={onSearchFoods} />
       <TargetsEditor targets={targets} onSetTargets={onSetTargets} />
     </div>
   )
@@ -402,16 +403,96 @@ function LogRow({ log, onUpdateLog, onDeleteLog }) {
   )
 }
 
-function FoodLibrary({ foods, onAddFood, onDeleteFood }) {
-  const empty = { name: '', servingDesc: '', calories: '', protein: '', carbs: '', fat: '', cost: '' }
+// Rounds to one decimal for tidy pre-filled macro fields (protein/carbs/fat).
+const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
+
+function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods }) {
+  const empty = { name: '', servingDesc: '', calories: '', protein: '', carbs: '', fat: '', cost: '', fdcId: '' }
   const [form, setForm] = useState(empty)
   const [submitting, setSubmitting] = useState(false)
 
+  // USDA FoodData Central search-as-you-type. Optional (only when onSearchFoods
+  // is wired) — the manual form below always works as a fallback.
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState(null)
+
+  // foods already imported from USDA, keyed by fdc_id, so we can flag "already
+  // in your library" and avoid creating duplicates.
+  const existingByFdc = useMemo(() => {
+    const m = new Map()
+    for (const f of foods) if (f.fdc_id) m.set(String(f.fdc_id), f)
+    return m
+  }, [foods])
+
+  // Debounced search: wait 300ms after the last keystroke before hitting USDA.
+  useEffect(() => {
+    const q = query.trim()
+    if (!onSearchFoods || q.length < 2) {
+      setResults([])
+      setSearching(false)
+      setSearchError(null)
+      return
+    }
+    setSearching(true)
+    setSearchError(null)
+    const handle = setTimeout(async () => {
+      try {
+        const res = await onSearchFoods(q)
+        setResults(res)
+      } catch (err) {
+        setSearchError(err.message || 'Search failed')
+        setResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 300)
+    return () => clearTimeout(handle)
+  }, [query, onSearchFoods])
+
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
+
+  // Picking a USDA result pre-fills the manual form (per-100g macros, serving
+  // "100 g") and remembers its fdcId. If we already have this exact food, we
+  // pre-fill from the saved row instead (keeping the user's cost and any edits).
+  function pickResult(r) {
+    const existing = existingByFdc.get(String(r.fdcId))
+    if (existing) {
+      setForm({
+        name: existing.name,
+        servingDesc: existing.serving_desc ?? '',
+        calories: existing.calories == null ? '' : String(existing.calories),
+        protein: existing.protein == null ? '' : String(existing.protein),
+        carbs: existing.carbs == null ? '' : String(existing.carbs),
+        fat: existing.fat == null ? '' : String(existing.fat),
+        cost: existing.cost == null ? '' : String(existing.cost),
+        fdcId: String(r.fdcId),
+      })
+    } else {
+      setForm({
+        name: r.brand ? `${r.name} (${r.brand})` : r.name,
+        servingDesc: '100 g',
+        calories: String(Math.round(r.calories)),
+        protein: String(round1(r.protein)),
+        carbs: String(round1(r.carbs)),
+        fat: String(round1(r.fat)),
+        cost: '', // pricing stays user-entered — USDA has none
+        fdcId: String(r.fdcId),
+      })
+    }
+    setQuery('')
+    setResults([])
+  }
 
   async function submit(e) {
     e.preventDefault()
     if (!form.name.trim()) return
+    // Don't create a second copy of a USDA food that's already in the library.
+    if (form.fdcId && existingByFdc.has(form.fdcId)) {
+      setForm(empty)
+      return
+    }
     setSubmitting(true)
     try {
       await onAddFood({
@@ -422,6 +503,7 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood }) {
         carbs: Number(form.carbs) || 0,
         fat: Number(form.fat) || 0,
         cost: form.cost === '' ? null : Number(form.cost),
+        fdcId: form.fdcId || null,
       })
       setForm(empty)
     } finally {
@@ -437,6 +519,64 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood }) {
       <h3 className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800">
         Food library
       </h3>
+
+      {onSearchFoods && (
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+            Search the USDA food database
+          </label>
+          <div className="relative">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="e.g. chicken breast"
+              className={`w-full ${inputCls}`}
+            />
+            {searching && (
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 dark:text-slate-500">
+                searching…
+              </span>
+            )}
+          </div>
+
+          {searchError && (
+            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{searchError}</p>
+          )}
+
+          {results.length > 0 && (
+            <ul className="mt-2 max-h-56 overflow-y-auto rounded-md border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+              {results.map((r) => {
+                const inLibrary = existingByFdc.has(String(r.fdcId))
+                return (
+                  <li key={r.fdcId}>
+                    <button
+                      type="button"
+                      onClick={() => pickResult(r)}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                    >
+                      <p className="text-sm text-slate-700 dark:text-slate-200">
+                        {r.name}
+                        {r.brand && <span className="text-slate-400 dark:text-slate-500"> · {r.brand}</span>}
+                        {inLibrary && (
+                          <span className="ml-2 text-xs text-emerald-600 dark:text-emerald-400">in library</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        per 100g: {Math.round(r.calories)} cal · {round1(r.protein)}g P · {round1(r.carbs)}g C ·{' '}
+                        {round1(r.fat)}g F
+                      </p>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+            Pick a result to fill the fields below, then add your own cost. Or just enter a food by hand.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={submit} className="p-4 grid grid-cols-2 sm:grid-cols-8 gap-2">
         <input placeholder="Food name" value={form.name} onChange={set('name')} className={`col-span-2 sm:col-span-2 ${inputCls}`} />

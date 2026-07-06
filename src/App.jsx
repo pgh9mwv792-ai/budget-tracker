@@ -533,6 +533,7 @@ function AppShell() {
               const saved = await api.upsertNutritionTargets(values)
               setNutritionTargets(saved)
             }}
+            onSearchFoods={api.searchFoods}
           />
         )}
 

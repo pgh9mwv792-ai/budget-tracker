@@ -48,6 +48,7 @@ When a change needs more than a git push (e.g. a new edge-function *secret*),
 | `STRIPE_SECRET_KEY` | Stripe API key (`sk_...`) used by `stripe-create-checkout`, `stripe-portal`, `stripe-webhook`. |
 | `STRIPE_PRICE_ID` | The recurring Price ID (`price_...`) for the Pro subscription. |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_...`) for the `stripe-webhook` endpoint; the function verifies every event against it. |
+| `USDA_API_KEY` | USDA FoodData Central key used by the `food-search` edge function (meal-tracker food lookup). Free key at https://fdc.nal.usda.gov/api-key-signup. Real key = 1,000 req/hr; the `DEMO_KEY` fallback is only 30/hr. |
 
 **Stripe webhook deploy note:** `stripe-webhook` is called by Stripe *without* a
 Supabase JWT, so it must be deployed with JWT verification off. This is set once

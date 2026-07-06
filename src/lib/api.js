@@ -231,7 +231,7 @@ export async function fetchFoods() {
   return data
 }
 
-export async function createFood({ name, servingDesc, calories, protein, carbs, fat, cost }) {
+export async function createFood({ name, servingDesc, calories, protein, carbs, fat, cost, fdcId }) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -246,11 +246,38 @@ export async function createFood({ name, servingDesc, calories, protein, carbs, 
       carbs: carbs || 0,
       fat: fat || 0,
       cost: cost === '' || cost == null ? null : cost,
+      fdc_id: fdcId || null,
     })
     .select()
     .single()
   if (error) throw error
   return data
+}
+
+// Searches the USDA FoodData Central database via the `food-search` edge
+// function (which holds the API key). Returns a trimmed list of matches, each
+// with per-100g macros and an `fdcId`. Returns [] on empty/short queries.
+// Cost is deliberately not part of this — pricing stays user-entered.
+export async function searchFoods(query) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const { data, error } = await supabase.functions.invoke('food-search', {
+    body: { query },
+    headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+  })
+  if (error) {
+    // functions.invoke hides the real message on non-2xx — dig it out.
+    let message = error.message
+    try {
+      const body = await error.context.json()
+      if (body?.error) message = body.error
+    } catch {
+      // fall back to the generic message
+    }
+    throw new Error(message)
+  }
+  return data?.foods ?? []
 }
 
 export async function updateFood(id, updates) {
