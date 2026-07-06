@@ -425,13 +425,18 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState(null)
 
-  // Unit/portion picker for the currently-selected USDA food. `base` holds the
-  // per-100g macros; `portions` are real-world units (e.g. "1 large" egg = 50g)
-  // so we can rescale macros to whatever the user actually eats. `grams` is the
-  // currently-chosen amount.
+  // Cronometer-style "add a USDA food" card. When `picked` is set we show the
+  // Amount + Serving Size controls and a live, read-only macro summary instead
+  // of the manual grid. `base` is the per-100g macros; `portions` are the food's
+  // real-world units (e.g. "1 large" egg = 50 g); `grams` is the selected unit's
+  // gram weight; `amount` is how many of that unit.
+  const [picked, setPicked] = useState(null) // { fdcId, name, brand }
   const [base, setBase] = useState(null)
   const [portions, setPortions] = useState([])
   const [grams, setGrams] = useState(100)
+  const [amount, setAmount] = useState('1')
+  const [pName, setPName] = useState('')
+  const [pCost, setPCost] = useState('')
   const [loadingPortions, setLoadingPortions] = useState(false)
 
   // foods already imported from USDA, keyed by fdc_id, so we can flag "already
@@ -469,69 +474,56 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
-  // Clears the unit picker (used for manual/already-saved foods that don't
-  // rescale).
-  function clearPortions() {
+  // The gram weight of the currently-selected unit, and its label.
+  const selectedPortion = portions.find((p) => p.grams === grams) ?? portions[0] ?? { label: '100 g', grams: 100 }
+
+  // Live macro summary for the picked food = per-100g base × (grams/100) × amount.
+  // Read-only display, so it never gets wiped by typing in the name/cost fields.
+  const qty = Number(amount) || 0
+  const factor = base ? (grams / 100) * qty : 0
+  const liveMacros = base
+    ? {
+        calories: base.calories * factor,
+        protein: base.protein * factor,
+        carbs: base.carbs * factor,
+        fat: base.fat * factor,
+      }
+    : null
+
+  // Human-readable serving label saved on the food, e.g. "2 × large — 100 g".
+  function servingLabel() {
+    const unit = selectedPortion.label
+    const totalG = round1(grams * qty)
+    const prefix = qty === 1 ? unit : `${amount} × ${unit}`
+    return unit === `${grams} g` ? `${totalG} g` : `${prefix} — ${totalG} g`
+  }
+
+  function cancelPick() {
+    setPicked(null)
     setBase(null)
     setPortions([])
     setGrams(100)
+    setAmount('1')
+    setPName('')
+    setPCost('')
     setLoadingPortions(false)
   }
 
-  // Fills the macro fields for `g` grams of the current food, from the per-100g
-  // base, and labels the serving accordingly.
-  function applyPortion(g, label) {
-    if (!base) return
-    const f = g / 100
-    setGrams(g)
-    setForm((prev) => ({
-      ...prev,
-      servingDesc: label,
-      calories: String(Math.round(base.calories * f)),
-      protein: String(round1(base.protein * f)),
-      carbs: String(round1(base.carbs * f)),
-      fat: String(round1(base.fat * f)),
-    }))
-  }
-
-  // Picking a USDA result pre-fills the manual form (starting at 100 g) and
-  // remembers its fdcId, then fetches real-world portions so the user can switch
-  // the unit (e.g. to "1 large" egg) and have macros rescale. If we already have
-  // this exact food, we pre-fill from the saved row instead (keeping the user's
-  // cost and any edits) and skip the unit picker.
+  // Picking a USDA result opens the Cronometer-style card: name + amount +
+  // serving-size dropdown with a live macro summary. Starts at 100 g, then
+  // fetches the food's real-world portions (e.g. "1 large" egg) in the
+  // background so the user can switch units and have the macros rescale.
   async function pickResult(r) {
     setQuery('')
     setResults([])
     const existing = existingByFdc.get(String(r.fdcId))
-    if (existing) {
-      clearPortions()
-      setForm({
-        name: existing.name,
-        servingDesc: existing.serving_desc ?? '',
-        calories: existing.calories == null ? '' : String(existing.calories),
-        protein: existing.protein == null ? '' : String(existing.protein),
-        carbs: existing.carbs == null ? '' : String(existing.carbs),
-        fat: existing.fat == null ? '' : String(existing.fat),
-        cost: existing.cost == null ? '' : String(existing.cost),
-        fdcId: String(r.fdcId),
-      })
-      return
-    }
-
-    const per100 = { calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat }
-    setBase(per100)
+    setPicked({ fdcId: String(r.fdcId), name: r.name, brand: r.brand })
+    setPName(r.brand ? `${r.name} (${r.brand})` : r.name)
+    setPCost(existing?.cost != null ? String(existing.cost) : '')
+    setBase({ calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat })
     setPortions([{ label: '100 g', grams: 100 }])
     setGrams(100)
-    setForm({
-      name: r.brand ? `${r.name} (${r.brand})` : r.name,
-      servingDesc: '100 g',
-      calories: String(Math.round(r.calories)),
-      protein: String(round1(r.protein)),
-      carbs: String(round1(r.carbs)),
-      fat: String(round1(r.fat)),
-      cost: '', // pricing stays user-entered — USDA has none
-      fdcId: String(r.fdcId),
-    })
+    setAmount('1')
 
     // Fetch portions + authoritative macros in the background. Non-fatal: if it
     // fails, the user still has the per-100g entry.
@@ -540,27 +532,49 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
     try {
       const detail = await onFoodDetails(r.fdcId)
       if (detail) {
-        const dBase = { calories: detail.calories, protein: detail.protein, carbs: detail.carbs, fat: detail.fat }
-        setBase(dBase)
+        setBase({ calories: detail.calories, protein: detail.protein, carbs: detail.carbs, fat: detail.fat })
         const opts = [{ label: '100 g', grams: 100 }, ...(detail.portions ?? [])]
         setPortions(opts)
+        // Default to the first real-world portion (e.g. "1 large") when there is
+        // one, since that's usually what people mean — not 100 g.
+        if (detail.portions?.length) setGrams(detail.portions[0].grams)
       }
     } catch {
-      // keep the per-100g fallback already in the form
+      // keep the per-100g fallback already shown
     } finally {
       setLoadingPortions(false)
+    }
+  }
+
+  // Saves the picked USDA food into the library at the chosen amount + unit.
+  async function addPicked() {
+    if (!liveMacros || !pName.trim() || !(qty > 0)) return
+    // Don't create a second copy of a food already imported from USDA.
+    if (picked?.fdcId && existingByFdc.has(String(picked.fdcId))) {
+      cancelPick()
+      return
+    }
+    setSubmitting(true)
+    try {
+      await onAddFood({
+        name: pName.trim(),
+        servingDesc: servingLabel(),
+        calories: Math.round(liveMacros.calories),
+        protein: round1(liveMacros.protein),
+        carbs: round1(liveMacros.carbs),
+        fat: round1(liveMacros.fat),
+        cost: pCost === '' ? null : Number(pCost),
+        fdcId: picked?.fdcId || null,
+      })
+      cancelPick()
+    } finally {
+      setSubmitting(false)
     }
   }
 
   async function submit(e) {
     e.preventDefault()
     if (!form.name.trim()) return
-    // Don't create a second copy of a USDA food that's already in the library.
-    if (form.fdcId && existingByFdc.has(form.fdcId)) {
-      setForm(empty)
-      clearPortions()
-      return
-    }
     setSubmitting(true)
     try {
       await onAddFood({
@@ -574,10 +588,16 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
         fdcId: form.fdcId || null,
       })
       setForm(empty)
-      clearPortions()
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // "large — 50 g" from { label: "1 large", grams: 50 }; "100 g" stays "100 g".
+  function portionOptionLabel(p) {
+    if (p.label === `${p.grams} g`) return p.label
+    const unit = p.label.replace(/^1\s+/, '')
+    return `${unit} — ${round1(p.grams)} g`
   }
 
   const inputCls =
@@ -642,57 +662,127 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
           )}
 
           <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-            Pick a result to fill the fields below, then add your own cost. Or just enter a food by hand.
+            Pick a result to choose an amount + serving size (e.g. 1 large egg) — macros update automatically. Or enter a food by hand below.
           </p>
         </div>
       )}
 
-      {base && (
-        <div className="px-4 pt-4 flex flex-wrap items-center gap-2">
-          <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Unit / amount</label>
-          <select
-            value={String(grams)}
-            onChange={(e) => {
-              const g = Number(e.target.value)
-              const opt = portions.find((p) => p.grams === g)
-              applyPortion(g, opt ? opt.label : `${g} g`)
-            }}
-            className={inputCls}
-          >
-            {portions.map((p) => (
-              <option key={`${p.label}-${p.grams}`} value={String(p.grams)}>
-                {p.label}
-                {p.label !== `${p.grams} g` ? ` (${round1(p.grams)} g)` : ''}
-              </option>
-            ))}
-          </select>
-          {loadingPortions && (
-            <span className="text-xs text-slate-400 dark:text-slate-500">loading units…</span>
-          )}
-          <span className="text-xs text-slate-400 dark:text-slate-500 w-full sm:w-auto">
-            Macros below update to match. Log multiple (e.g. 6 eggs) by setting servings when you add it to a meal.
-          </span>
-        </div>
-      )}
+      {picked ? (
+        // Cronometer-style add card: Amount + Serving Size drive a live,
+        // read-only macro summary that never disappears while you type.
+        <div className="p-4 space-y-3 border-b border-slate-100 dark:border-slate-800">
+          <input
+            value={pName}
+            onChange={(e) => setPName(e.target.value)}
+            placeholder="Food name"
+            className={`w-full font-medium ${inputCls}`}
+          />
 
-      <form onSubmit={submit} className="p-4 grid grid-cols-2 sm:grid-cols-8 gap-2">
-        <input placeholder="Food name" value={form.name} onChange={set('name')} className={`col-span-2 sm:col-span-2 ${inputCls}`} />
-        <input placeholder="Serving" value={form.servingDesc} onChange={set('servingDesc')} className={`col-span-2 sm:col-span-1 ${inputCls}`} />
-        <input type="number" step="0.1" min="0" placeholder="Cal" value={form.calories} onChange={set('calories')} className={inputCls} />
-        <input type="number" step="0.1" min="0" placeholder="Protein" value={form.protein} onChange={set('protein')} className={inputCls} />
-        <input type="number" step="0.1" min="0" placeholder="Carbs" value={form.carbs} onChange={set('carbs')} className={inputCls} />
-        <input type="number" step="0.1" min="0" placeholder="Fat" value={form.fat} onChange={set('fat')} className={inputCls} />
-        <div className="flex gap-2 col-span-2 sm:col-span-1">
-          <input type="number" step="0.01" min="0" placeholder="$ cost" value={form.cost} onChange={set('cost')} className={`flex-1 min-w-0 ${inputCls}`} />
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Amount</span>
+              <input
+                type="number"
+                step="0.25"
+                min="0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className={`w-full ${inputCls}`}
+              />
+            </label>
+            <label className="block">
+              <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                Serving size {loadingPortions && <span className="text-slate-400">· loading…</span>}
+              </span>
+              <select
+                value={String(grams)}
+                onChange={(e) => setGrams(Number(e.target.value))}
+                className={`w-full ${inputCls}`}
+              >
+                {portions.map((p) => (
+                  <option key={`${p.label}-${p.grams}`} value={String(p.grams)}>
+                    {portionOptionLabel(p)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {liveMacros && (
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                Per {qty === 1 ? '' : `${amount} × `}
+                {selectedPortion.label}
+                {selectedPortion.label !== `${grams} g` ? ` (${round1(grams * qty)} g)` : ''}
+              </p>
+              <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  {Math.round(liveMacros.calories)} kcal
+                </span>
+                <span className="text-emerald-600 dark:text-emerald-400">P {round1(liveMacros.protein)}g</span>
+                <span className="text-sky-600 dark:text-sky-400">C {round1(liveMacros.carbs)}g</span>
+                <span className="text-fuchsia-600 dark:text-fuchsia-400">F {round1(liveMacros.fat)}g</span>
+              </div>
+            </div>
+          )}
+
+          <div className="relative">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm" aria-hidden>$</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={pCost}
+              onChange={(e) => setPCost(e.target.value)}
+              placeholder="cost per serving (optional)"
+              className={`w-full pl-5 ${inputCls}`}
+            />
+          </div>
+
+          {picked.fdcId && existingByFdc.has(String(picked.fdcId)) && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400">
+              This food is already in your library — adding again is blocked.
+            </p>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={addPicked}
+              disabled={submitting || !pName.trim() || !(qty > 0)}
+              className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-2 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+            >
+              Add to library
+            </button>
+            <button
+              type="button"
+              onClick={cancelPick}
+              className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="col-span-2 sm:col-span-8 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-1.5 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
-        >
-          Add to library
-        </button>
-      </form>
+      ) : (
+        <form onSubmit={submit} className="p-4 grid grid-cols-2 sm:grid-cols-8 gap-2">
+          <input placeholder="Food name" value={form.name} onChange={set('name')} className={`col-span-2 sm:col-span-2 ${inputCls}`} />
+          <input placeholder="Serving" value={form.servingDesc} onChange={set('servingDesc')} className={`col-span-2 sm:col-span-1 ${inputCls}`} />
+          <input type="number" step="0.1" min="0" placeholder="Cal" value={form.calories} onChange={set('calories')} className={inputCls} />
+          <input type="number" step="0.1" min="0" placeholder="Protein" value={form.protein} onChange={set('protein')} className={inputCls} />
+          <input type="number" step="0.1" min="0" placeholder="Carbs" value={form.carbs} onChange={set('carbs')} className={inputCls} />
+          <input type="number" step="0.1" min="0" placeholder="Fat" value={form.fat} onChange={set('fat')} className={inputCls} />
+          <div className="flex gap-2 col-span-2 sm:col-span-1">
+            <input type="number" step="0.01" min="0" placeholder="$ cost" value={form.cost} onChange={set('cost')} className={`flex-1 min-w-0 ${inputCls}`} />
+          </div>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="col-span-2 sm:col-span-8 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-1.5 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          >
+            Add to library
+          </button>
+        </form>
+      )}
 
       <div className="divide-y divide-slate-100 dark:divide-slate-800">
         {foods.length === 0 && (
