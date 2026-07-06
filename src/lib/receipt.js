@@ -131,11 +131,19 @@ Choose the single best category for the whole receipt based on the merchant and 
 // token budget than the single-total simple mode (the chat function clamps it).
 const ITEMIZED_MAX_TOKENS = 4096
 
-// Sends a receipt file to Claude in ITEMIZED mode and returns a normalized draft:
+// Sends one OR MORE receipt files to Claude in ITEMIZED mode and returns a
+// normalized draft:
 //   { store_name, purchase_date, total, items: [{ raw_name, price, quantity,
 //     unit, looks_like_food }] }
 // The heavier sibling of parseReceipt(): one Claude call, same secure proxy and
 // daily cap, but the model transcribes each line rather than just the total.
+//
+// Multiple images are treated as PAGES of a single receipt — stores like Whole
+// Foods print the item list and the totals block on separate slips, so the user
+// can add several photos and we transcribe them as one receipt (never double
+// counting an item that appears on more than one page).
+//
+// Accepts `{ files: [File, ...] }` (preferred) or a single `{ file }`.
 //
 // Contract with the extraction prompt (enforced below):
 //   • raw_name stays VERBATIM as printed — the receipt_item_rules table keys off
@@ -144,8 +152,11 @@ const ITEMIZED_MAX_TOKENS = 4096
 //   • looks_like_food is the model's guess; the UI only uses it to pre-check a
 //     box — the user decides is_food.
 //   • an unreadable image returns { error } and NO invented items.
-export async function parseReceiptItemized({ file, today = new Date().toISOString().slice(0, 10) }) {
-  const block = await fileToContentBlock(file)
+export async function parseReceiptItemized({ file, files, today = new Date().toISOString().slice(0, 10) }) {
+  const list = (files ?? (file ? [file] : [])).filter(Boolean)
+  if (!list.length) throw new Error('Add at least one photo of the receipt.')
+  const blocks = await Promise.all(list.map(fileToContentBlock))
+  const multi = blocks.length > 1
 
   const system = `You transcribe a store purchase receipt into structured, itemized data.
 Respond with ONLY a JSON object — no prose, no markdown code fences. Use exactly this schema:
@@ -170,12 +181,25 @@ Rules — follow exactly:
 2. total is the final charged amount AFTER tax — the number the bank actually charged. Not the subtotal.
 3. Coupons/discounts: if a discount is clearly attached to one item, fold it into that item's price (show the net price). Otherwise include the discount as its own line with a NEGATIVE price and looks_like_food:false, so the items still sum to total.
 4. Whole Foods and similar stores sell non-food too (soap, supplements, household). Set looks_like_food honestly per line — it only pre-checks a box for the user.
-5. If the image is not a readable receipt (blurry, wrong photo, cut off), set "error" to a short message and return an empty items array. NEVER invent items or prices.`
+5. If the image is not a readable receipt (blurry, wrong photo, cut off), set "error" to a short message and return an empty items array. NEVER invent items or prices.${
+    multi
+      ? `
+6. You were given ${blocks.length} images. They are PAGES OF THE SAME ONE receipt (e.g. the item list on one slip and the totals/tax on another) — NOT separate receipts. Combine them: merge all line items into a single "items" array in printed order, and read store_name/purchase_date/total from whichever page shows them. Do NOT list an item twice if it appears on more than one page.`
+      : ''
+  }`
 
   const messages = [
     {
       role: 'user',
-      content: [block, { type: 'text', text: 'Transcribe this receipt into itemized JSON following the schema exactly.' }],
+      content: [
+        ...blocks,
+        {
+          type: 'text',
+          text: multi
+            ? `These ${blocks.length} images are pages of ONE receipt. Transcribe them together into a single itemized JSON following the schema exactly.`
+            : 'Transcribe this receipt into itemized JSON following the schema exactly.',
+        },
+      ],
     },
   ]
 

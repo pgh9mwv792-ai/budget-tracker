@@ -26,6 +26,7 @@ export default function ReceiptScanner({ categories = [], onAdd, itemize = null 
   const [error, setError] = useState(null)
   const [draft, setDraft] = useState(null) // { merchant, date, amount, categoryId, confidence }
   const [itemDraft, setItemDraft] = useState(null) // parseReceiptItemized result
+  const [pages, setPages] = useState([]) // itemize mode: photos of one receipt (e.g. items page + totals page)
   const [savedNote, setSavedNote] = useState(null)
 
   const expenseCategories = categories.filter((c) => c.kind === 'expense')
@@ -43,20 +44,22 @@ export default function ReceiptScanner({ categories = [], onAdd, itemize = null 
   }
 
   const handleFile = async (e) => {
-    const file = e.target.files?.[0]
+    const selected = Array.from(e.target.files ?? [])
     e.target.value = '' // allow re-selecting the same file later
-    if (!file) return
+    if (!selected.length) return
     setError(null)
     setSavedNote(null)
+
+    // Itemize mode collects photos into a tray (Whole Foods splits items and
+    // totals onto separate slips) — the user reads them together, not on select.
+    if (mode === 'itemize' && canItemize) {
+      setPages((cur) => [...cur, ...selected])
+      return
+    }
+
     setStatus('reading')
     try {
-      if (mode === 'itemize' && canItemize) {
-        const result = await parseReceiptItemized({ file })
-        setItemDraft(result)
-        setStatus('itemize')
-        return
-      }
-      const result = await parseReceipt({ file, categories })
+      const result = await parseReceipt({ file: selected[0], categories })
       const matched = expenseCategories.find((c) => c.name === result.category)
       setDraft({
         merchant: result.merchant,
@@ -71,6 +74,25 @@ export default function ReceiptScanner({ categories = [], onAdd, itemize = null 
       setStatus('idle')
     }
   }
+
+  // Send every collected page to Claude as ONE receipt (a single AI call).
+  const readItemized = async () => {
+    if (!pages.length) return
+    setError(null)
+    setSavedNote(null)
+    setStatus('reading')
+    try {
+      const result = await parseReceiptItemized({ files: pages })
+      setItemDraft(result)
+      setPages([])
+      setStatus('itemize')
+    } catch (err) {
+      setError(err.message)
+      setStatus('idle')
+    }
+  }
+
+  const removePage = (idx) => setPages((cur) => cur.filter((_, i) => i !== idx))
 
   // Leave the itemized flow (finished or cancelled). `summary` is a saved-note
   // string when a receipt was persisted, or null on cancel.
@@ -129,6 +151,7 @@ export default function ReceiptScanner({ categories = [], onAdd, itemize = null 
         ref={uploadRef}
         type="file"
         accept="image/*,application/pdf"
+        multiple={mode === 'itemize'}
         onChange={handleFile}
         className="hidden"
       />
@@ -139,13 +162,17 @@ export default function ReceiptScanner({ categories = [], onAdd, itemize = null 
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Add a receipt</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {mode === 'itemize'
-                ? 'I’ll transcribe every line, match it to your bank charge, and price your foods.'
+                ? 'Add a photo of the items and another of the total — I’ll read them as one receipt, match your bank charge, and price your foods.'
                 : 'Take a photo, or upload a screenshot or PDF — I’ll read the total and category for you.'}
             </p>
             {canItemize && (
               <div className="mt-2 inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 text-xs">
                 <button
-                  onClick={() => setMode('simple')}
+                  onClick={() => {
+                    setMode('simple')
+                    setPages([])
+                    setError(null)
+                  }}
                   className={`px-2.5 py-1 rounded-md transition ${mode === 'simple' ? 'bg-emerald-600 text-white' : 'text-slate-600 dark:text-slate-300'}`}
                 >
                   Quick total
@@ -165,16 +192,49 @@ export default function ReceiptScanner({ categories = [], onAdd, itemize = null 
               disabled={status === 'reading'}
               className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition disabled:opacity-60"
             >
-              {status === 'reading' ? 'Reading…' : '📷 Take photo'}
+              {status === 'reading' ? 'Reading…' : mode === 'itemize' ? '📷 Add photo' : '📷 Take photo'}
             </button>
             <button
               onClick={openUpload}
               disabled={status === 'reading'}
               className="rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-60"
             >
-              📎 Upload
+              {mode === 'itemize' ? '📎 Add images' : '📎 Upload'}
             </button>
           </div>
+        </div>
+      )}
+
+      {status !== 'review' && status !== 'itemize' && mode === 'itemize' && pages.length > 0 && (
+        <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+          <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">
+            {pages.length} {pages.length === 1 ? 'photo' : 'photos'} added — add the total slip too, then read them together.
+          </p>
+          <ul className="flex flex-wrap gap-2 mb-3">
+            {pages.map((f, i) => (
+              <li
+                key={i}
+                className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs px-2 py-1"
+              >
+                <span className="max-w-[9rem] truncate">📄 {f.name || `Page ${i + 1}`}</span>
+                <button
+                  onClick={() => removePage(i)}
+                  disabled={status === 'reading'}
+                  title="Remove this photo"
+                  className="text-slate-400 hover:text-red-500 disabled:opacity-50"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={readItemized}
+            disabled={status === 'reading'}
+            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition disabled:opacity-60"
+          >
+            {status === 'reading' ? 'Reading…' : `Read receipt (${pages.length})`}
+          </button>
         </div>
       )}
 
