@@ -231,7 +231,18 @@ export async function fetchFoods() {
   return data
 }
 
-export async function createFood({ name, servingDesc, calories, protein, carbs, fat, cost, fdcId }) {
+export async function createFood({
+  name,
+  servingDesc,
+  calories,
+  protein,
+  carbs,
+  fat,
+  cost,
+  fdcId,
+  nutrients,
+  source,
+}) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -247,6 +258,11 @@ export async function createFood({ name, servingDesc, calories, protein, carbs, 
       fat: fat || 0,
       cost: cost === '' || cost == null ? null : cost,
       fdc_id: fdcId || null,
+      // Full micronutrient profile (USDA) or ingredient list (supplement scan),
+      // kept for a future micronutrient feature. Null for hand-entered foods.
+      nutrients: nutrients ?? null,
+      // Let the DB default ('manual') stand when the caller doesn't say.
+      ...(source ? { source } : {}),
     })
     .select()
     .single()

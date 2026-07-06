@@ -1,0 +1,271 @@
+import { useRef, useState } from 'react'
+import { parseSupplement } from '../lib/supplement'
+
+// "Scan a supplement label" flow: pick/snap a photo of a Supplement Facts panel
+// → Claude reads it → an editable review card of ingredients → saves a food into
+// the library (source 'supplement_scan') that logs like any other food. Mirrors
+// ReceiptScanner: the review step is deliberate, since OCR of a dense label is
+// good but not perfect and a human confirm keeps bad micros out.
+//
+// Props:
+//   onSave(values): create a foods row. Same shape createFood accepts.
+export default function SupplementScanner({ onSave }) {
+  const cameraRef = useRef(null)
+  const uploadRef = useRef(null)
+  const [status, setStatus] = useState('idle') // idle | reading | review | saving
+  const [error, setError] = useState(null)
+  const [draft, setDraft] = useState(null)
+  const [savedNote, setSavedNote] = useState(null)
+
+  const openCamera = () => {
+    setError(null)
+    setSavedNote(null)
+    cameraRef.current?.click()
+  }
+  const openUpload = () => {
+    setError(null)
+    setSavedNote(null)
+    uploadRef.current?.click()
+  }
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file later
+    if (!file) return
+    setError(null)
+    setSavedNote(null)
+    setStatus('reading')
+    try {
+      const result = await parseSupplement({ file })
+      setDraft(result)
+      setStatus('review')
+    } catch (err) {
+      setError(err.message)
+      setStatus('idle')
+    }
+  }
+
+  const setField = (field, value) => setDraft((d) => ({ ...d, [field]: value }))
+
+  const updateIngredient = (i, patch) =>
+    setDraft((d) => ({
+      ...d,
+      ingredients: d.ingredients.map((ing, idx) => (idx === i ? { ...ing, ...patch } : ing)),
+    }))
+
+  const removeIngredient = (i) =>
+    setDraft((d) => ({ ...d, ingredients: d.ingredients.filter((_, idx) => idx !== i) }))
+
+  const addIngredient = () =>
+    setDraft((d) => ({
+      ...d,
+      ingredients: [...d.ingredients, { name: '', amount: '', unit: '', amountNormalized: null, percentDv: null }],
+    }))
+
+  const save = async () => {
+    if (!draft) return
+    const product = draft.product.trim()
+    if (!product) {
+      setError('Give the supplement a name before saving.')
+      return
+    }
+    const ingredients = draft.ingredients.filter((ing) => ing.name.trim())
+    setStatus('saving')
+    setError(null)
+    try {
+      await onSave({
+        name: draft.brand.trim() ? `${product} (${draft.brand.trim()})` : product,
+        servingDesc: draft.servingSize.trim() || '1 serving',
+        calories: Number(draft.calories) || 0,
+        protein: Number(draft.protein) || 0,
+        carbs: Number(draft.carbs) || 0,
+        fat: Number(draft.fat) || 0,
+        cost: null,
+        fdcId: null,
+        source: 'supplement_scan',
+        // Ingredient list captured per serving into the shared nutrients jsonb.
+        nutrients: ingredients.map((ing) => ({
+          name: ing.name.trim(),
+          amount: ing.amount === '' ? null : Number(ing.amount),
+          unit: ing.unit.trim(),
+          per: 'serving',
+          amount_normalized_mcg_or_mg: ing.amountNormalized ?? null,
+          percent_dv: ing.percentDv ?? null,
+        })),
+      })
+      setSavedNote(`Saved ${product} — log it from any meal below.`)
+      setDraft(null)
+      setStatus('idle')
+    } catch (err) {
+      setError(err.message)
+      setStatus('review')
+    }
+  }
+
+  const cancel = () => {
+    setDraft(null)
+    setStatus('idle')
+    setError(null)
+  }
+
+  return (
+    <div>
+      {/* Camera: opens the camera directly on phones. */}
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
+      {/* Upload: pick an existing photo, screenshot, or PDF. */}
+      <input ref={uploadRef} type="file" accept="image/*,application/pdf" onChange={handleFile} className="hidden" />
+
+      {status !== 'review' && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Scan a supplement label</h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Photograph the Supplement Facts panel — I’ll read the serving size and ingredients for you to check.
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={openCamera}
+              disabled={status === 'reading'}
+              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition disabled:opacity-60"
+            >
+              {status === 'reading' ? 'Reading…' : '📷 Take photo'}
+            </button>
+            <button
+              onClick={openUpload}
+              disabled={status === 'reading'}
+              className="rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-60"
+            >
+              📎 Upload
+            </button>
+          </div>
+        </div>
+      )}
+
+      {status === 'reading' && (
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Reading the label — this takes a few seconds…</p>
+      )}
+
+      {status === 'review' && draft && (
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Check the label</h4>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Product">
+              <input value={draft.product} onChange={(e) => setField('product', e.target.value)} placeholder="e.g. Vitamin D3" className={inputCls} />
+            </Field>
+            <Field label="Brand">
+              <input value={draft.brand} onChange={(e) => setField('brand', e.target.value)} placeholder="e.g. Now Foods" className={inputCls} />
+            </Field>
+            <Field label="Serving size">
+              <input value={draft.servingSize} onChange={(e) => setField('servingSize', e.target.value)} placeholder="e.g. 2 capsules" className={inputCls} />
+            </Field>
+            <Field label="Calories (per serving)">
+              <input type="number" step="1" min="0" value={draft.calories} onChange={(e) => setField('calories', e.target.value)} className={inputCls} />
+            </Field>
+          </div>
+
+          {(Number(draft.calories) > 0 || Number(draft.protein) > 0 || Number(draft.carbs) > 0 || Number(draft.fat) > 0) && (
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Protein (g)">
+                <input type="number" step="0.1" min="0" value={draft.protein} onChange={(e) => setField('protein', e.target.value)} className={inputCls} />
+              </Field>
+              <Field label="Carbs (g)">
+                <input type="number" step="0.1" min="0" value={draft.carbs} onChange={(e) => setField('carbs', e.target.value)} className={inputCls} />
+              </Field>
+              <Field label="Fat (g)">
+                <input type="number" step="0.1" min="0" value={draft.fat} onChange={(e) => setField('fat', e.target.value)} className={inputCls} />
+              </Field>
+            </div>
+          )}
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Ingredients (per serving)</span>
+              <button onClick={addIngredient} className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline">
+                + Add row
+              </button>
+            </div>
+            {draft.ingredients.length === 0 && (
+              <p className="text-xs text-slate-400 dark:text-slate-500">No ingredients read — add rows by hand if needed.</p>
+            )}
+            <div className="space-y-2">
+              {draft.ingredients.map((ing, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={ing.name}
+                    onChange={(e) => updateIngredient(i, { name: e.target.value })}
+                    placeholder="Ingredient (keep the form, e.g. Zinc (as glycinate))"
+                    className={`flex-1 min-w-0 ${inputCls}`}
+                  />
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={ing.amount}
+                    onChange={(e) => updateIngredient(i, { amount: e.target.value })}
+                    placeholder="amt"
+                    title="Amount"
+                    className={`w-20 ${inputCls}`}
+                  />
+                  <input
+                    value={ing.unit}
+                    onChange={(e) => updateIngredient(i, { unit: e.target.value })}
+                    placeholder="unit"
+                    title="Unit"
+                    className={`w-16 ${inputCls}`}
+                  />
+                  <button
+                    onClick={() => removeIngredient(i)}
+                    title="Remove"
+                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+              IU units (vitamins A, D, E) keep their label value; a standard metric conversion is stored where one exists.
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={save}
+              disabled={status === 'saving'}
+              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition disabled:opacity-60"
+            >
+              {status === 'saving' ? 'Saving…' : 'Save to library'}
+            </button>
+            <button
+              onClick={cancel}
+              className="rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {savedNote && <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400">✓ {savedNote}</p>}
+      {error && (
+        <div className="mt-3 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-sm px-3 py-2">
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const inputCls =
+  'w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500'
+
+function Field({ label, children }) {
+  return (
+    <label className="block">
+      <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{label}</span>
+      {children}
+    </label>
+  )
+}

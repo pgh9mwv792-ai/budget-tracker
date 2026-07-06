@@ -65,6 +65,17 @@ Deno.serve(async (req) => {
         (f.foodNutrients ?? []).map((n) => [String(n.nutrient?.number), Number(n.amount) || 0])
       )
 
+      // Full per-100g nutrient profile (all of it, not just the four macros) so
+      // the caller can stash it for a future micronutrient feature. USDA reports
+      // every nutrient per 100 g. Skip entries with no name or no amount.
+      const nutrients = []
+      for (const n of f.foodNutrients ?? []) {
+        const name = n.nutrient?.name
+        const amount = Number(n.amount)
+        if (!name || !Number.isFinite(amount)) continue
+        nutrients.push({ name, amount, unit: n.nutrient?.unitName ?? '', per: '100g' })
+      }
+
       const portions = []
       for (const p of f.foodPortions ?? []) {
         const grams = Number(p.gramWeight) || 0
@@ -96,6 +107,7 @@ Deno.serve(async (req) => {
             carbs: byNumber.get(NUTRIENT.carbs) ?? 0,
             fat: byNumber.get(NUTRIENT.fat) ?? 0,
             portions: portions.slice(0, 10),
+            nutrients,
           },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

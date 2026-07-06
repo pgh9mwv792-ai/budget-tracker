@@ -84,3 +84,14 @@ signature check inside the function, not from a JWT.
 - Real credit scores **can't** be auto-pulled (FCRA-regulated, not in Plaid's
   individual access) — the Credit tab is intentionally manual entry + computed
   card utilization. Don't "fix" this by claiming to fetch a live score.
+
+## Deferred: micronutrient targets UI
+Not to be built until explicitly requested. The `foods.nutrients` jsonb column
+(migration 0014) already captures full micronutrient profiles — per-100g for
+USDA imports and per-serving for supplement scans — so the data foundation is in
+place. The future feature would add: RDA-based micronutrient targets (per user),
+a % coverage calculation from summing `nutrients` across a day's food logs, and a
+dashboard card showing which micros are short. Building it will require deciding
+how to snapshot/aggregate `nutrients` at log time (food_logs currently snapshots
+only the four macros) and reconciling per-100g vs per-serving units. Leave it
+alone until asked.

@@ -52,12 +52,15 @@ export async function fileToContentBlock(file) {
 // Invokes the existing `chat` Edge Function WITHOUT tools — we just want Claude
 // to read the image and return JSON, not call any app tools. Reuses the same
 // secure proxy (API key stays server-side) and daily rate limit as the chat.
-async function callVision(system, messages) {
+// `maxTokens` is optional — bump it when the model must return a long JSON
+// payload (e.g. a supplement label's full ingredient list). The chat function
+// clamps it server-side.
+export async function callVision(system, messages, maxTokens) {
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const { data, error } = await supabase.functions.invoke('chat', {
-    body: { system, messages },
+    body: { system, messages, ...(maxTokens ? { max_tokens: maxTokens } : {}) },
     headers: { Authorization: `Bearer ${session.access_token}` },
   })
   if (error) {
@@ -125,7 +128,7 @@ Choose the single best category for the whole receipt based on the merchant and 
 }
 
 // Best-effort JSON extraction — tolerates stray prose or ```json fences.
-function parseJson(text) {
+export function parseJson(text) {
   if (!text) return null
   const cleaned = text
     .replace(/^```(?:json)?/i, '')

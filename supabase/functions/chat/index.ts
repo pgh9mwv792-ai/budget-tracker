@@ -65,7 +65,12 @@ Deno.serve(async (req) => {
       console.warn('ai_usage check errored, allowing request:', e.message)
     }
 
-    const { system, messages, tools } = await req.json()
+    const { system, messages, tools, max_tokens } = await req.json()
+
+    // The chat UI is happy with 1024, but a vision extraction (e.g. a supplement
+    // label with 20+ ingredients) can need more room to return complete JSON.
+    // Honor a caller-supplied value, clamped so no single request can balloon.
+    const maxTokens = Math.min(Math.max(Number(max_tokens) || 1024, 1), 4096)
 
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -76,7 +81,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         system,
         messages,
         tools,

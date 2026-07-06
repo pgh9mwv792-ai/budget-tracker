@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { monthKey, addDays } from '../lib/dateHelpers'
 import { costPerDay, costPerProtein } from '../lib/foodCost'
+import SupplementScanner from './SupplementScanner'
 
 const MEALS = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -434,6 +435,10 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState(null)
 
+  // Third way to add a food (alongside USDA search and the manual form): scan a
+  // supplement label. Collapsed by default so the library stays uncluttered.
+  const [scanning, setScanning] = useState(false)
+
   // Cronometer-style "add a USDA food" card. When `picked` is set we show the
   // Amount + Serving Size controls and a live, read-only macro summary instead
   // of the manual grid. `base` is the per-100g macros; `portions` are the food's
@@ -447,6 +452,9 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
   const [pName, setPName] = useState('')
   const [pCost, setPCost] = useState('')
   const [loadingPortions, setLoadingPortions] = useState(false)
+  // Full per-100g micronutrient profile for the picked USDA food, captured on
+  // the detail lookup and saved alongside the food for a future micros feature.
+  const [nutrients, setNutrients] = useState(null)
 
   // foods already imported from USDA, keyed by fdc_id, so we can flag "already
   // in your library" and avoid creating duplicates.
@@ -520,6 +528,7 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
     setPName('')
     setPCost('')
     setLoadingPortions(false)
+    setNutrients(null)
   }
 
   // Picking a USDA result opens the Cronometer-style card: name + amount +
@@ -539,6 +548,7 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
     setPortions([...WEIGHT_UNITS])
     setGrams(100)
     setAmount('1')
+    setNutrients(null)
 
     // Fetch the food's real-world portions (e.g. "1 large" egg) in the
     // background. Not every USDA food has them — if the lookup fails or returns
@@ -549,6 +559,7 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
       const detail = await onFoodDetails(r.fdcId)
       if (detail) {
         setBase({ calories: detail.calories, protein: detail.protein, carbs: detail.carbs, fat: detail.fat })
+        setNutrients(detail.nutrients ?? null)
         const named = detail.portions ?? []
         setPortions([...named, ...WEIGHT_UNITS])
         // Default to the first named portion (e.g. "1 large") when there is one,
@@ -584,6 +595,9 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
         fat: round1(liveMacros.fat),
         cost: pCost === '' ? null : Number(pCost),
         fdcId: picked?.fdcId || null,
+        // Full per-100g micronutrient profile, kept for a future micros feature.
+        nutrients,
+        source: 'usda',
       })
       cancelPick()
     } finally {
@@ -605,6 +619,7 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
         fat: Number(form.fat) || 0,
         cost: form.cost === '' ? null : Number(form.cost),
         fdcId: form.fdcId || null,
+        source: 'manual',
       })
       setForm(empty)
     } finally {
@@ -686,6 +701,33 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
           <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
             Pick a result to choose an amount + serving size (e.g. 1 large egg) — macros update automatically. Or enter a food by hand below.
           </p>
+        </div>
+      )}
+
+      {!picked && (
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+          {scanning ? (
+            <div className="space-y-2">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setScanning(false)}
+                  className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                >
+                  Close scanner
+                </button>
+              </div>
+              <SupplementScanner onSave={onAddFood} />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setScanning(true)}
+              className="w-full rounded-md border border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            >
+              📋 Scan a supplement label
+            </button>
+          )}
         </div>
       )}
 
