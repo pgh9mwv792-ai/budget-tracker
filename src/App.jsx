@@ -534,6 +534,7 @@ function AppShell() {
               setNutritionTargets(saved)
             }}
             onSearchFoods={api.searchFoods}
+            onFoodDetails={api.getFoodDetails}
           />
         )}
 

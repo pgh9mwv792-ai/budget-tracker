@@ -43,6 +43,7 @@ export default function MealTracker({
   onDeleteLog,
   onSetTargets,
   onSearchFoods,
+  onFoodDetails,
 }) {
   const [date, setDate] = useState(today())
 
@@ -78,7 +79,13 @@ export default function MealTracker({
         />
       ))}
 
-      <FoodLibrary foods={foods} onAddFood={onAddFood} onDeleteFood={onDeleteFood} onSearchFoods={onSearchFoods} />
+      <FoodLibrary
+        foods={foods}
+        onAddFood={onAddFood}
+        onDeleteFood={onDeleteFood}
+        onSearchFoods={onSearchFoods}
+        onFoodDetails={onFoodDetails}
+      />
       <TargetsEditor targets={targets} onSetTargets={onSetTargets} />
     </div>
   )
@@ -406,7 +413,7 @@ function LogRow({ log, onUpdateLog, onDeleteLog }) {
 // Rounds to one decimal for tidy pre-filled macro fields (protein/carbs/fat).
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
 
-function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods }) {
+function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDetails }) {
   const empty = { name: '', servingDesc: '', calories: '', protein: '', carbs: '', fat: '', cost: '', fdcId: '' }
   const [form, setForm] = useState(empty)
   const [submitting, setSubmitting] = useState(false)
@@ -417,6 +424,15 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods }) {
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState(null)
+
+  // Unit/portion picker for the currently-selected USDA food. `base` holds the
+  // per-100g macros; `portions` are real-world units (e.g. "1 large" egg = 50g)
+  // so we can rescale macros to whatever the user actually eats. `grams` is the
+  // currently-chosen amount.
+  const [base, setBase] = useState(null)
+  const [portions, setPortions] = useState([])
+  const [grams, setGrams] = useState(100)
+  const [loadingPortions, setLoadingPortions] = useState(false)
 
   // foods already imported from USDA, keyed by fdc_id, so we can flag "already
   // in your library" and avoid creating duplicates.
@@ -453,12 +469,42 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods }) {
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
-  // Picking a USDA result pre-fills the manual form (per-100g macros, serving
-  // "100 g") and remembers its fdcId. If we already have this exact food, we
-  // pre-fill from the saved row instead (keeping the user's cost and any edits).
-  function pickResult(r) {
+  // Clears the unit picker (used for manual/already-saved foods that don't
+  // rescale).
+  function clearPortions() {
+    setBase(null)
+    setPortions([])
+    setGrams(100)
+    setLoadingPortions(false)
+  }
+
+  // Fills the macro fields for `g` grams of the current food, from the per-100g
+  // base, and labels the serving accordingly.
+  function applyPortion(g, label) {
+    if (!base) return
+    const f = g / 100
+    setGrams(g)
+    setForm((prev) => ({
+      ...prev,
+      servingDesc: label,
+      calories: String(Math.round(base.calories * f)),
+      protein: String(round1(base.protein * f)),
+      carbs: String(round1(base.carbs * f)),
+      fat: String(round1(base.fat * f)),
+    }))
+  }
+
+  // Picking a USDA result pre-fills the manual form (starting at 100 g) and
+  // remembers its fdcId, then fetches real-world portions so the user can switch
+  // the unit (e.g. to "1 large" egg) and have macros rescale. If we already have
+  // this exact food, we pre-fill from the saved row instead (keeping the user's
+  // cost and any edits) and skip the unit picker.
+  async function pickResult(r) {
+    setQuery('')
+    setResults([])
     const existing = existingByFdc.get(String(r.fdcId))
     if (existing) {
+      clearPortions()
       setForm({
         name: existing.name,
         servingDesc: existing.serving_desc ?? '',
@@ -469,20 +515,41 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods }) {
         cost: existing.cost == null ? '' : String(existing.cost),
         fdcId: String(r.fdcId),
       })
-    } else {
-      setForm({
-        name: r.brand ? `${r.name} (${r.brand})` : r.name,
-        servingDesc: '100 g',
-        calories: String(Math.round(r.calories)),
-        protein: String(round1(r.protein)),
-        carbs: String(round1(r.carbs)),
-        fat: String(round1(r.fat)),
-        cost: '', // pricing stays user-entered — USDA has none
-        fdcId: String(r.fdcId),
-      })
+      return
     }
-    setQuery('')
-    setResults([])
+
+    const per100 = { calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat }
+    setBase(per100)
+    setPortions([{ label: '100 g', grams: 100 }])
+    setGrams(100)
+    setForm({
+      name: r.brand ? `${r.name} (${r.brand})` : r.name,
+      servingDesc: '100 g',
+      calories: String(Math.round(r.calories)),
+      protein: String(round1(r.protein)),
+      carbs: String(round1(r.carbs)),
+      fat: String(round1(r.fat)),
+      cost: '', // pricing stays user-entered — USDA has none
+      fdcId: String(r.fdcId),
+    })
+
+    // Fetch portions + authoritative macros in the background. Non-fatal: if it
+    // fails, the user still has the per-100g entry.
+    if (!onFoodDetails) return
+    setLoadingPortions(true)
+    try {
+      const detail = await onFoodDetails(r.fdcId)
+      if (detail) {
+        const dBase = { calories: detail.calories, protein: detail.protein, carbs: detail.carbs, fat: detail.fat }
+        setBase(dBase)
+        const opts = [{ label: '100 g', grams: 100 }, ...(detail.portions ?? [])]
+        setPortions(opts)
+      }
+    } catch {
+      // keep the per-100g fallback already in the form
+    } finally {
+      setLoadingPortions(false)
+    }
   }
 
   async function submit(e) {
@@ -491,6 +558,7 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods }) {
     // Don't create a second copy of a USDA food that's already in the library.
     if (form.fdcId && existingByFdc.has(form.fdcId)) {
       setForm(empty)
+      clearPortions()
       return
     }
     setSubmitting(true)
@@ -506,6 +574,7 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods }) {
         fdcId: form.fdcId || null,
       })
       setForm(empty)
+      clearPortions()
     } finally {
       setSubmitting(false)
     }
@@ -575,6 +644,34 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods }) {
           <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
             Pick a result to fill the fields below, then add your own cost. Or just enter a food by hand.
           </p>
+        </div>
+      )}
+
+      {base && (
+        <div className="px-4 pt-4 flex flex-wrap items-center gap-2">
+          <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Unit / amount</label>
+          <select
+            value={String(grams)}
+            onChange={(e) => {
+              const g = Number(e.target.value)
+              const opt = portions.find((p) => p.grams === g)
+              applyPortion(g, opt ? opt.label : `${g} g`)
+            }}
+            className={inputCls}
+          >
+            {portions.map((p) => (
+              <option key={`${p.label}-${p.grams}`} value={String(p.grams)}>
+                {p.label}
+                {p.label !== `${p.grams} g` ? ` (${round1(p.grams)} g)` : ''}
+              </option>
+            ))}
+          </select>
+          {loadingPortions && (
+            <span className="text-xs text-slate-400 dark:text-slate-500">loading units…</span>
+          )}
+          <span className="text-xs text-slate-400 dark:text-slate-500 w-full sm:w-auto">
+            Macros below update to match. Log multiple (e.g. 6 eggs) by setting servings when you add it to a meal.
+          </span>
         </div>
       )}
 

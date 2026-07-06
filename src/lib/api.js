@@ -280,6 +280,30 @@ export async function searchFoods(query) {
   return data?.foods ?? []
 }
 
+// Fetches one USDA food's per-100g macros plus its real-world portions (e.g.
+// "1 large" egg = 50 g), so the meal tracker can let the user pick a unit and
+// rescale macros. Same `food-search` edge function, detail mode.
+export async function getFoodDetails(fdcId) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const { data, error } = await supabase.functions.invoke('food-search', {
+    body: { fdcId },
+    headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+  })
+  if (error) {
+    let message = error.message
+    try {
+      const body = await error.context.json()
+      if (body?.error) message = body.error
+    } catch {
+      // fall back to the generic message
+    }
+    throw new Error(message)
+  }
+  return data?.food ?? null
+}
+
 export async function updateFood(id, updates) {
   const { data, error } = await supabase.from('foods').update(updates).eq('id', id).select().single()
   if (error) throw error
