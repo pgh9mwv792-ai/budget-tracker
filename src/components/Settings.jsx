@@ -3,12 +3,15 @@ import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import { downloadBackup } from '../lib/backup'
 import { startCheckout, openBillingPortal } from '../lib/billing'
+import { fetchNotificationPrefs, upsertNotificationPrefs } from '../lib/api'
 
 export default function Settings({ data, entitlements }) {
+  const plan = entitlements?.plan ?? 'free'
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Settings</h2>
       <PlanBillingSection entitlements={entitlements} />
+      <NotificationsSection plan={plan} />
       <ProfileSection />
       <EmailSection />
       <PasswordSection />
@@ -116,6 +119,120 @@ function PlanBillingSection({ entitlements }) {
         </>
       )}
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Notifications: the weekly digest email toggle + an optional alternate
+// address. The digest itself is a Pro feature (only Pro users are emailed), so
+// free users see the controls with a gentle note.
+// ---------------------------------------------------------------------------
+function NotificationsSection({ plan }) {
+  const isPro = plan === 'pro'
+  const [enabled, setEnabled] = useState(true)
+  const [emailOverride, setEmailOverride] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState(null)
+
+  useEffect(() => {
+    let active = true
+    fetchNotificationPrefs()
+      .then((prefs) => {
+        if (!active) return
+        // No row yet = defaults (digest on).
+        setEnabled(prefs ? prefs.weekly_digest : true)
+        setEmailOverride(prefs?.email_override ?? '')
+      })
+      .catch(() => {})
+      .finally(() => active && setLoading(false))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  async function save(nextEnabled, nextEmail) {
+    setBusy(true)
+    setStatus(null)
+    try {
+      await upsertNotificationPrefs({ weeklyDigest: nextEnabled, emailOverride: nextEmail })
+      setStatus({ type: 'success', text: 'Saved.' })
+    } catch (e) {
+      setStatus({ type: 'error', text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Toggling saves immediately (and optimistically) so it feels instant.
+  async function toggle() {
+    const next = !enabled
+    setEnabled(next)
+    await save(next, emailOverride)
+  }
+
+  return (
+    <Card
+      title="Notifications"
+      description="A once-a-week email recap of your money and food — spending vs. your average, cost per protein, upcoming bills, and goal pace."
+    >
+      {loading ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
+      ) : (
+        <>
+          {!isPro && (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              The weekly digest is a Pro feature. Your preference is saved and takes effect when you upgrade.
+            </p>
+          )}
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={enabled}
+              onClick={toggle}
+              disabled={busy}
+              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition ${
+                enabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+              } disabled:opacity-50`}
+            >
+              <span
+                className={`inline-block h-5 w-5 mt-0.5 rounded-full bg-white shadow transform transition ${
+                  enabled ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+            <span className="text-sm text-slate-700 dark:text-slate-200">
+              Send me the weekly digest email
+            </span>
+          </label>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              save(enabled, emailOverride)
+            }}
+            className="flex flex-wrap gap-2 items-center"
+          >
+            <input
+              type="email"
+              placeholder="Send to a different email (optional)"
+              value={emailOverride}
+              onChange={(e) => setEmailOverride(e.target.value)}
+              className="flex-1 min-w-[14rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+            />
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+            >
+              Save
+            </button>
+          </form>
+          <Notice status={status} />
+        </>
+      )}
     </Card>
   )
 }

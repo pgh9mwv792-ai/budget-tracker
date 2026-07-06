@@ -27,6 +27,8 @@ export default function Dashboard({
   foodLogs = [],
   nutritionTargets = null,
   accounts = [],
+  digest = null,
+  onDismissDigest,
   onNavigate,
   onAsk,
   onLogFood,
@@ -78,6 +80,8 @@ export default function Dashboard({
 
   return (
     <div className="space-y-6">
+      {digest && <DigestCard digest={digest} onDismiss={onDismissDigest} />}
+
       {onAsk && <QuickAsk onAsk={onAsk} />}
 
       <FoodMoneyHero food={foodCost} onNavigate={onNavigate} />
@@ -314,6 +318,45 @@ function InsightsStrip({ insights, onAsk }) {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+// The proactive weekly digest, mirrored in-app as a dismissible card at the top
+// of the Dashboard. `summary` is the friendly recap the email uses; we split it
+// into paragraphs on blank lines. Dismissing persists via digests.dismissed.
+function DigestCard({ digest, onDismiss }) {
+  const paragraphs = (digest.summary || '')
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+  const weekOf = digest.week_start
+    ? new Date(`${digest.week_start}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : null
+
+  return (
+    <div className="relative rounded-2xl border border-sky-200 dark:border-sky-900/60 bg-sky-50/60 dark:bg-sky-950/20 shadow-sm p-5 sm:p-6">
+      {onDismiss && (
+        <button
+          onClick={onDismiss}
+          aria-label="Dismiss digest"
+          className="absolute top-3 right-3 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg leading-none px-1"
+        >
+          ×
+        </button>
+      )}
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <span className="inline-block w-2 h-2 rounded-full bg-sky-500" />
+        Weekly digest{weekOf ? ` · week of ${weekOf}` : ''}
+      </div>
+      <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100 pr-6">{digest.subject}</p>
+      <div className="mt-2 space-y-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+        {paragraphs.length > 0 ? (
+          paragraphs.map((p, i) => <p key={i}>{p}</p>)
+        ) : (
+          <p>{digest.summary}</p>
+        )}
+      </div>
     </div>
   )
 }

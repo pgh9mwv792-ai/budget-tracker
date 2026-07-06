@@ -49,6 +49,14 @@ When a change needs more than a git push (e.g. a new edge-function *secret*),
 | `STRIPE_PRICE_ID` | The recurring Price ID (`price_...`) for the Pro subscription. |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_...`) for the `stripe-webhook` endpoint; the function verifies every event against it. |
 | `USDA_API_KEY` | USDA FoodData Central key used by the `food-search` edge function (meal-tracker food lookup). Free key at https://fdc.nal.usda.gov/api-key-signup. Real key = 1,000 req/hr; the `DEMO_KEY` fallback is only 30/hr. |
+| `RESEND_API_KEY` | Resend API key (`re_...`) used by the `weekly-digest` edge function to send the Sunday email. |
+| `DIGEST_CRON_SECRET` | Shared secret the cron/pg_net caller must send as the `x-digest-secret` header to run `weekly-digest` (which has JWT verification off). The function fails closed if this isn't set. |
+| `DIGEST_FROM` (optional) | From address for the digest, e.g. `Budget Tracker <you@yourdomain.com>`. Defaults to `Budget Tracker <onboarding@resend.dev>` (Resend's test domain, which only delivers to the Resend account owner). |
+| `APP_URL` (optional) | Base app URL used in the digest email's "Manage email preferences" footer link. Defaults to the live Vercel URL. |
+
+The `weekly-digest` function also reuses `ANTHROPIC_API_KEY` (+ optional `ANTHROPIC_MODEL`) for its friendly rewrite. That rewrite is an **internal** call — it is *not* counted against the user's `ai_usage` daily cap, and any AI failure falls back to the deterministic text rather than skipping the email.
+
+**weekly-digest deploy note:** like `stripe-webhook`, this function is called *without* a Supabase JWT (by pg_cron → pg_net), so it's set to `verify_jwt = false` in `supabase/config.toml` — the CI's bulk deploy applies it automatically. Security is the `DIGEST_CRON_SECRET` shared secret, not a JWT.
 
 **Stripe webhook deploy note:** `stripe-webhook` is called by Stripe *without* a
 Supabase JWT, so it must be deployed with JWT verification off. This is set once

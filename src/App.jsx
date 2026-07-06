@@ -44,6 +44,9 @@ function AppShell() {
   const [memories, setMemories] = useState([])
   const [plaidAccounts, setPlaidAccounts] = useState([])
   const [creditScores, setCreditScores] = useState([])
+  // The latest weekly digest the user hasn't dismissed (migration 0015),
+  // surfaced as a card at the top of the Dashboard. null when there's none.
+  const [latestDigest, setLatestDigest] = useState(null)
   // Free vs. pro. Drives which features are gated behind an upgrade card.
   const [entitlements, setEntitlements] = useState({ plan: 'free', status: null, period_end: null })
   const [dataLoading, setDataLoading] = useState(true)
@@ -65,7 +68,7 @@ function AppShell() {
   const loadAll = useCallback(async () => {
     if (!user) return
     if (!hasLoadedOnce.current) setDataLoading(true)
-    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts, cscores, ents] = await Promise.all([
+    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts, cscores, digest, ents] = await Promise.all([
       api.ensureDefaultCategories(user.id),
       api.fetchTransactions(),
       api.fetchGoals(),
@@ -84,6 +87,8 @@ function AppShell() {
       api.fetchPlaidAccounts().catch(() => []),
       // Manual credit-score log lives in migration 0009; degrade gracefully.
       api.fetchCreditScores().catch(() => []),
+      // Latest weekly digest lives in migration 0015; null until that runs.
+      api.fetchLatestDigest().catch(() => null),
       // Plan/entitlements live in migration 0012; default to free if unavailable.
       api.fetchEntitlements().catch(() => ({ plan: 'free', status: null, period_end: null })),
     ])
@@ -114,6 +119,7 @@ function AppShell() {
     setMemories(mems)
     setPlaidAccounts(paccts ?? [])
     setCreditScores(cscores ?? [])
+    setLatestDigest(digest ?? null)
     setEntitlements(ents ?? { plan: 'free', status: null, period_end: null })
     hasLoadedOnce.current = true
     setDataLoading(false)
@@ -168,6 +174,19 @@ function AppShell() {
   const rulesByKey = new Map(rules.map((r) => [r.merchant_key, r.category_id]))
   const savedMatchCount = matchRules(transactions, rulesByKey).length
   const plan = entitlements?.plan ?? 'free'
+
+  // Dismiss the in-app digest card (persists via the digests.dismissed flag,
+  // then clears it locally so it disappears immediately).
+  const dismissLatestDigest = async () => {
+    if (!latestDigest) return
+    const id = latestDigest.id
+    setLatestDigest(null)
+    try {
+      await api.dismissDigest(id)
+    } catch {
+      // Non-fatal: the card is gone for this session even if the flag fails.
+    }
+  }
 
   // Applies existing saved rules to whatever is currently uncategorized.
   const applySavedRules = async () => {
@@ -425,6 +444,8 @@ function AppShell() {
             foodLogs={foodLogs}
             nutritionTargets={nutritionTargets}
             accounts={plaidAccounts}
+            digest={latestDigest}
+            onDismissDigest={dismissLatestDigest}
             onNavigate={setActiveTab}
             onAsk={setAssistantPrompt}
             onLogFood={actions.logFood}

@@ -483,6 +483,58 @@ export async function fetchPlaidAccounts() {
   return data
 }
 
+// ---------- notification preferences (weekly digest) ----------
+
+// One row per user (migration 0015). A missing row means defaults (digest on),
+// so callers treat null as "enabled" — matching the edge function's behavior.
+export async function fetchNotificationPrefs() {
+  const { data, error } = await supabase.from('notification_prefs').select('*').maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function upsertNotificationPrefs({ weeklyDigest, emailOverride }) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('notification_prefs')
+    .upsert(
+      {
+        user_id: user.id,
+        weekly_digest: weeklyDigest,
+        email_override: emailOverride === '' || emailOverride == null ? null : emailOverride,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ---------- weekly digest (in-app card) ----------
+
+// The most recent digest the user hasn't dismissed, shown as a Dashboard card.
+// Returns null when there's none (RLS scopes this to the current user).
+export async function fetchLatestDigest() {
+  const { data, error } = await supabase
+    .from('digests')
+    .select('id, week_start, subject, summary, sections, dismissed, created_at')
+    .eq('dismissed', false)
+    .order('week_start', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function dismissDigest(id) {
+  const { error } = await supabase.from('digests').update({ dismissed: true }).eq('id', id)
+  if (error) throw error
+}
+
 // ---------- entitlements (free vs. pro) ----------
 
 // The single source of truth for the current user's plan. get_entitlements
