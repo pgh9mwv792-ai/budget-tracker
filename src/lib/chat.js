@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient'
 import { monthKey } from './dateHelpers'
 import { computeFoodCost } from './foodCost'
 import { searchFoods, getFoodDetails } from './api'
+import { merchantSimilarity, descriptorPurchaseDate, txnDescriptorText } from './receiptMatch'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
@@ -130,6 +131,15 @@ export const CHAT_TOOLS = [
           description: 'Optional full per-100g nutrient array from search_food_database detail mode, stored on the created library food.',
         },
         servings: { type: 'number', description: 'Number of servings. Defaults to 1. Ignored when `grams` is given.' },
+        transaction_id: {
+          type: 'string',
+          description: 'The id of a transaction from search_transactions that paid for this meal. Links the log to the bank charge; pass the transaction amount as `cost` alongside it.',
+        },
+        source: {
+          type: 'string',
+          enum: ['estimate'],
+          description: "Pass 'estimate' when the macros are your best estimate of a named chain-restaurant item (published-nutrition knowledge, no database record). The created library food is flagged so the app marks its macros as approximate. Omit for library/USDA-resolved foods.",
+        },
         date: { type: 'string', description: 'Date as YYYY-MM-DD. Defaults to today.' },
         calories: {
           type: 'number',
@@ -152,6 +162,20 @@ export const CHAT_TOOLS = [
       properties: {
         query: { type: 'string', description: 'What to search for, e.g. "cooked white rice" or "ground beef 85 15".' },
         fdcId: { type: 'string', description: 'A specific food id from a prior search, to fetch its detail + portion conversions.' },
+      },
+    },
+  },
+  {
+    name: 'search_transactions',
+    description:
+      "Search the user's own bank/manual transactions to find the charge behind a meal — use this when they say they bought food somewhere (\"the number 1 combo I got from In-N-Out yesterday\") so you can log it with its real price. Filters the transactions already loaded in the app; matches the merchant by name (bank descriptors abbreviate, e.g. \"IN N OUT #123 CA\" still matches \"In-N-Out\"). Returns the top matches with each one's date (the real authorized purchase date when the descriptor carries it), amount, note, category, and id. Resolve relative dates like \"yesterday\" yourself from today's date and pass them as YYYY-MM-DD. Pass the winning transaction's id (and amount) to log_food so the meal's cost and bank charge get linked.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        merchant: { type: 'string', description: 'Merchant / store name to look for, e.g. "In-N-Out", "Chipotle".' },
+        date_from: { type: 'string', description: 'Earliest date to include, YYYY-MM-DD. Optional.' },
+        date_to: { type: 'string', description: 'Latest date to include, YYYY-MM-DD. Optional.' },
+        amount_near: { type: 'number', description: 'Approximate dollar amount to prioritize, if the user mentioned roughly what they paid. Optional.' },
       },
     },
   },
@@ -395,7 +419,7 @@ LOGGING FOOD BY DESCRIPTION (e.g. "log 2 cups white rice and 8oz ground beef for
   • A WHOLE prepared or restaurant/fast-food/branded item ordered as one unit — e.g. "a number 1 combo from In-N-Out", "a Big Mac", "a Chipotle burrito", "a slice of pizza". Its natural unit is the item itself, NOT a weight, so keep this simple and fast: do NOT search the USDA food database (it won't have a fast-food combo and only returns misleading component parts), do NOT ask for grams or ounces, and do NOT interrogate the user about portions. Get the macros this way:
     (1) PREFER web search: use the web_search tool to look up the item's OFFICIAL published calories/protein/carbs/fat — ideally from the restaurant's or brand's own nutrition page, otherwise a reliable nutrition source. Then briefly cite where the numbers came from in your confirmation (e.g. "per In-N-Out's official nutrition info"). This is the most accurate path, so use it for any named restaurant/fast-food/branded item.
     (2) FALLBACK, only if web search is unavailable or turns up nothing usable: estimate by DECOMPOSING the item into its standard named components — e.g. an In-N-Out #1 = Double-Double + fries + a medium drink — recall each component's published macros separately, add them up, and show the per-component breakdown in your confirmation. Decomposing into named parts lands closer than one lump guess. Say plainly that these are estimates.
-    Either way, log the item as ONE whole unit with log_food (servings = how many the user said, default 1) — do NOT split it into separate ingredient logs and do NOT convert it to grams. Keep the confirmation to a short breakdown plus the totals; don't interrogate the user. This is the one case where estimating macros from your own knowledge is expected.
+    Either way, log the item as ONE whole unit with log_food (servings = how many the user said, default 1) — do NOT split it into separate ingredient logs and do NOT convert it to grams. Keep the confirmation to a short breakdown plus the totals; don't interrogate the user. This is the one case where estimating macros from your own knowledge is expected. When you estimate a chain item's macros this way, pass source:"estimate" to log_food so the app flags the numbers as approximate. If the user BOUGHT this meal out (rather than made it), also follow "LOGGING A MEAL YOU BOUGHT OUT" below to attach its real price from their transactions.
   • A raw INGREDIENT or portion given by an amount — e.g. "8oz ground beef", "2 cups white rice", "200g chicken". Use the amount rules below.
 - For an INGREDIENT by amount: the number the user says is an AMOUNT, not a servings count. NEVER pass a weight like "8oz" or "200g" straight into log_food's servings field — that would multiply the serving by 8. Always resolve the amount to grams (or to the correct number of servings) first.
 - If the user gives NO amount for an INGREDIENT ("log some chicken", "log rice"), ask how much (grams/oz, or a household measure) before logging. Don't assume 1 serving or any default. (A whole item like "a combo" already has its amount — one — so don't ask.)
@@ -415,6 +439,21 @@ LOGGING FOOD BY DESCRIPTION (e.g. "log 2 cups white rice and 8oz ground beef for
 - After logging, reply with the day's updated totals vs targets using the meal-tracker numbers in the data snapshot.
 - Keep within the tool-call budget: one search per unresolved item (plus a detail call only when you need portion conversions). For long lists, issue the searches together rather than one round-trip each.
 
+LOGGING A MEAL YOU BOUGHT OUT (restaurant / fast-food / cafe) — cross-reference the charge:
+When the user says they BOUGHT a meal somewhere ("log the number 1 combo I got from In-N-Out yesterday"), tie it to the real bank charge and its price so the food-cost math is exact.
+1) FIND THE CHARGE: call search_transactions with the merchant and a tight date window — resolve "yesterday"/"last night"/etc. to YYYY-MM-DD yourself from today's date and allow about ±1 day. If the user hinted at a price, pass amount_near.
+2) RESOLVE THE ITEM'S MACROS in this order:
+   (a) The user's food library FIRST — if they've logged this exact item before (e.g. a "Number 1 combo"), reuse that library food and its stored macros. Nothing to estimate.
+   (b) Otherwise try search_food_database for the item (works for a single branded/packaged item; a multi-part combo won't be there — skip to (c)).
+   (c) For a NAMED CHAIN-restaurant item only (In-N-Out, Chipotle, McDonald's…) you MAY estimate the macros from published nutrition info, but you MUST call them estimates in your confirmation and pass source:"estimate" to log_food (the app then shows an "est." marker wherever those macros appear).
+   (d) If it's an unknown independent restaurant or the item is ambiguous, DON'T guess — ask the user for the approximate contents/macros first.
+3) ONE CONFIRMATION: show a single summary — the matched transaction (its date + amount), the item, its macros (marked as estimates when applicable), and the target meal — then ask one yes/no. NEVER log before this confirmation.
+4) ON APPROVAL: log with log_food as ONE whole unit (servings = how many), passing cost = the matched transaction's amount and transaction_id = its id, so the meal's price links to the charge and isn't counted twice. A new item becomes a reusable library food; a repeat order later reuses it.
+Edge cases:
+ • No matching transaction → still offer to log the food; ask for the approximate price (log with that cost, no transaction_id) or log it without a cost.
+ • Several plausible charges → list them briefly and ask which one, then log against that id.
+ • The meal rule still applies: if the user didn't say which meal, ask before logging.
+
 Here is the user's current data:
 
 ${dataSummary}`
@@ -427,9 +466,10 @@ ${dataSummary}`
 // gets sent back to the model as the tool_result.
 // ---------------------------------------------------------------------------
 export async function executeTool(name, input, ctx) {
-  const { categories, goals, foods, memories = [], actions, setActiveTab } = ctx
+  const { categories, goals, foods, transactions = [], memories = [], actions, setActiveTab } = ctx
   const findCat = (n) =>
     categories.find((c) => c.name.toLowerCase() === String(n || '').trim().toLowerCase())
+  const isIsoDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
 
   try {
     switch (name) {
@@ -579,13 +619,23 @@ export async function executeTool(name, input, ctx) {
             carbs: per100.carbs,
             fat: per100.fat,
             cost: per100Cost == null ? null : per100Cost,
+            transactionId: input.transaction_id || null,
           })
           const factor = grams / 100
           return `Logged ${round1(grams)} g of "${food?.name || input.food_name}" to ${input.meal || 'Uncategorized'} (${Math.round(per100.calories * factor)} kcal, ${round1(per100.protein * factor)}g protein).`
         }
 
         const macros = existing
-          ? { calories: existing.calories, protein: existing.protein, carbs: existing.carbs, fat: existing.fat, cost: existing.cost }
+          ? {
+              calories: existing.calories,
+              protein: existing.protein,
+              carbs: existing.carbs,
+              fat: existing.fat,
+              // Log-level cost wins over the library default: a repeat restaurant
+              // order that passes the new charge amount records that, not the
+              // stale stored cost. Falls back to the library default otherwise.
+              cost: input.cost != null ? input.cost : existing.cost,
+            }
           : {
               calories: input.calories,
               protein: input.protein,
@@ -596,20 +646,83 @@ export async function executeTool(name, input, ctx) {
         if (!existing && macros.calories == null) {
           return `"${input.food_name}" isn't in the library. Provide calories/protein/carbs/fat so I can log it, or add it first.`
         }
+        // For a matched restaurant purchase (transaction_id) or an estimated
+        // chain item (source), create a reusable library food so the same order
+        // next time reuses it. Estimated items are flagged source='estimate' so
+        // the app marks their macros as approximate. Plain one-off logs stay
+        // detached (no library row), unchanged.
+        let libFood = existing
+        if (!libFood && (input.source || input.transaction_id)) {
+          libFood = await actions.addFood({
+            name: input.food_name,
+            servingDesc: '1 serving',
+            calories: macros.calories,
+            protein: macros.protein,
+            carbs: macros.carbs,
+            fat: macros.fat,
+            cost: macros.cost == null ? '' : macros.cost,
+            ...(input.source === 'estimate' ? { source: 'estimate' } : {}),
+          })
+        }
         await actions.logFood({
           date: input.date || today(),
           // No meal → filed as Uncategorized (null).
           meal: input.meal ?? null,
-          foodId: existing?.id || null,
-          name: existing?.name || input.food_name,
+          foodId: libFood?.id || null,
+          name: libFood?.name || input.food_name,
           servings: input.servings || 1,
           calories: macros.calories || 0,
           protein: macros.protein || 0,
           carbs: macros.carbs || 0,
           fat: macros.fat || 0,
           cost: macros.cost == null ? null : macros.cost,
+          transactionId: input.transaction_id || null,
         })
-        return `Logged ${input.servings || 1} serving(s) of "${input.food_name}" to ${input.meal || 'Uncategorized'}.`
+        const estNote = libFood?.source === 'estimate' || input.source === 'estimate' ? ' (macros are estimates)' : ''
+        return `Logged ${input.servings || 1} serving(s) of "${input.food_name}" to ${input.meal || 'Uncategorized'}${estNote}.`
+      }
+      case 'search_transactions': {
+        const merchant = String(input.merchant || '').trim()
+        const from = isIsoDate(input.date_from) ? input.date_from : null
+        const to = isIsoDate(input.date_to) ? input.date_to : null
+        const near = input.amount_near == null ? null : Number(input.amount_near)
+
+        const scored = []
+        for (const t of transactions) {
+          // Transfers are internal moves, never a purchase behind a meal.
+          if (t.kind === 'transfer') continue
+          const descriptor = txnDescriptorText(t) || t.note || ''
+          // The real purchase date: the descriptor's AUTHORIZED date when it
+          // carries one (reused from receiptMatch), else the posted date.
+          const authIso = descriptorPurchaseDate(descriptor, t.date)
+          const effDate = authIso || t.date
+          if (from && effDate < from) continue
+          if (to && effDate > to) continue
+          // Merchant match reuses the normalized-token similarity. When no
+          // merchant was given, don't filter on it (date/amount-only search).
+          const sim = merchant ? merchantSimilarity(merchant, descriptor) : 0
+          if (merchant && sim < 0.3) continue
+          const amt = Number(t.amount) || 0
+          const amtGap = near == null ? 0 : Math.abs(amt - near)
+          scored.push({ t, sim, amtGap, effDate, authorized: !!authIso })
+        }
+
+        // Best merchant match first, then closest amount, then most recent.
+        scored.sort(
+          (a, b) => b.sim - a.sim || a.amtGap - b.amtGap || (a.effDate < b.effDate ? 1 : -1)
+        )
+        const top = scored.slice(0, 5)
+        if (!top.length) {
+          const where = merchant ? ` matching "${merchant}"` : ''
+          const when = from || to ? ' in that date range' : ''
+          return `No transactions found${where}${when}. You can still log the food — just tell me roughly what it cost, or log it without a price.`
+        }
+        const lines = top.map(({ t, effDate, authorized }) => {
+          const cat = t.category?.name ? ` [${t.category.name}]` : ''
+          const note = t.note ? ` "${t.note}"` : ''
+          return `- id ${t.id} · ${effDate}${authorized ? ' (authorized)' : ''} · $${Number(t.amount).toFixed(2)}${cat}${note}`
+        })
+        return `Top transaction matches (use the id + amount with log_food to link the charge):\n${lines.join('\n')}`
       }
       case 'set_nutrition_targets': {
         await actions.setTargets({

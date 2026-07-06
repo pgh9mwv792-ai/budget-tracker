@@ -339,7 +339,7 @@ export async function fetchFoodLogs() {
   return data
 }
 
-export async function createFoodLog({ date, meal, foodId, name, servings, calories, protein, carbs, fat, cost }) {
+export async function createFoodLog({ date, meal, foodId, name, servings, calories, protein, carbs, fat, cost, transactionId }) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -358,6 +358,9 @@ export async function createFoodLog({ date, meal, foodId, name, servings, calori
       carbs: carbs || 0,
       fat: fat || 0,
       cost: cost == null ? null : cost,
+      // The bank charge this meal was paid with (0018). Null for home meals or
+      // when no matching transaction was found.
+      transaction_id: transactionId || null,
     })
     .select()
     .single()

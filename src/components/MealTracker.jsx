@@ -67,6 +67,12 @@ export default function MealTracker({
   const dayLogs = useMemo(() => logs.filter((l) => l.date === date), [logs, date])
   const totals = useMemo(() => totalsFor(dayLogs), [dayLogs])
   const uncategorized = useMemo(() => dayLogs.filter((l) => !MEAL_KEYS.has(l.meal)), [dayLogs])
+  // Foods whose macros are the assistant's estimate of a named chain item — a
+  // log referencing one shows an "est." marker so approximate numbers are clear.
+  const estimateFoodIds = useMemo(
+    () => new Set(foods.filter((f) => f.source === 'estimate').map((f) => f.id)),
+    [foods]
+  )
 
   const toggle = (key) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))
   const sectionKey = (meal) => meal.key ?? 'uncategorized'
@@ -104,6 +110,7 @@ export default function MealTracker({
           onAdd={() => setSheetMeal(meal)}
           onUpdateLog={onUpdateLog}
           onDeleteLog={onDeleteLog}
+          estimateFoodIds={estimateFoodIds}
         />
       ))}
 
@@ -116,6 +123,7 @@ export default function MealTracker({
           onAdd={() => setSheetMeal(UNCATEGORIZED)}
           onUpdateLog={onUpdateLog}
           onDeleteLog={onDeleteLog}
+          estimateFoodIds={estimateFoodIds}
         />
       )}
 
@@ -263,7 +271,7 @@ function MacroRow({ macroKey, value, target, fallbackPct = 0 }) {
   )
 }
 
-function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDeleteLog }) {
+function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDeleteLog, estimateFoodIds }) {
   const t = totalsFor(logs)
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -298,7 +306,13 @@ function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDe
       {!collapsed && (
         <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
           {logs.map((l) => (
-            <LogRow key={l.id} log={l} onUpdateLog={onUpdateLog} onDeleteLog={onDeleteLog} />
+            <LogRow
+              key={l.id}
+              log={l}
+              isEstimate={!!(l.food_id && estimateFoodIds?.has(l.food_id))}
+              onUpdateLog={onUpdateLog}
+              onDeleteLog={onDeleteLog}
+            />
           ))}
           {logs.length === 0 && (
             <p className="px-4 py-2 text-xs text-slate-400 dark:text-slate-500">
@@ -311,7 +325,20 @@ function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDe
   )
 }
 
-function LogRow({ log, onUpdateLog, onDeleteLog }) {
+// Small inline marker on foods whose macros are the assistant's estimate of a
+// named chain item (source='estimate'), so approximate numbers read as such.
+function EstBadge() {
+  return (
+    <span
+      title="Macros are an estimate"
+      className="ml-1.5 align-middle rounded px-1 py-px text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+    >
+      est.
+    </span>
+  )
+}
+
+function LogRow({ log, isEstimate, onUpdateLog, onDeleteLog }) {
   const [editing, setEditing] = useState(false)
   const s = Number(log.servings) || 0
 
@@ -334,6 +361,7 @@ function LogRow({ log, onUpdateLog, onDeleteLog }) {
         <p className="truncate text-slate-700 dark:text-slate-200">
           {log.name}
           {s !== 1 && <span className="text-slate-400 dark:text-slate-500"> ×{s}</span>}
+          {isEstimate && <EstBadge />}
         </p>
         <p className="text-xs text-slate-400 dark:text-slate-500">
           {Math.round(Number(log.calories) * s)} cal · {Math.round(Number(log.protein) * s)}g P
@@ -484,6 +512,7 @@ function LibraryManager({ foods, onDeleteFood }) {
                 <p className="truncate text-slate-700 dark:text-slate-200">
                   {f.name}
                   {f.serving_desc && <span className="text-slate-400 dark:text-slate-500"> · {f.serving_desc}</span>}
+                  {f.source === 'estimate' && <EstBadge />}
                 </p>
                 <p className="text-xs text-slate-400 dark:text-slate-500">
                   {Math.round(Number(f.calories))} cal · {Math.round(Number(f.protein))}g P · {Math.round(Number(f.carbs))}g C ·{' '}

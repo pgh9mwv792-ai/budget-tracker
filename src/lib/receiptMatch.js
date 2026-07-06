@@ -117,7 +117,7 @@ function toCents(n) {
 }
 
 // Everything on a transaction we mine for the merchant name / descriptor.
-function txnDescriptorText(t) {
+export function txnDescriptorText(t) {
   return [t?.merchant_name, t?.note, t?.name].filter(Boolean).join(' ')
 }
 

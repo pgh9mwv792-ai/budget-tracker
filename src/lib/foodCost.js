@@ -117,6 +117,17 @@ export function costPerDay(transactions = [], { today = isoToday(), days = 30 } 
 // costPerProtein(range): dollars per gram of protein actually LOGGED over the
 // window. Uses only meals that carry a cost so the ratio is honest, and reports
 // coverage (% of logged meals that had a cost) so the UI can qualify it.
+//
+// This is the log-side food-cost total: it sums each log's own `cost` exactly
+// once — a restaurant meal (the assistant stamps it with the bank charge) and a
+// home meal (a library food's snapshot cost) sit side by side here. `l.cost` is
+// the per-log snapshot and is authoritative, so a food that also carries a
+// library default cost is NOT double-counted: the log's cost wins.
+//
+// A log linked to a transaction (l.transaction_id) is money ALSO present in the
+// transaction-spend total (costPerDay / monthlyFoodBurn). These two totals are
+// intentionally separate views — never sum a log's cost onto its own linked
+// transaction, or that dollar counts twice.
 // -----------------------------------------------------------------------------
 export function costPerProtein(foodLogs = [], { today = isoToday(), days = 30 } = {}) {
   const start = addDays(today, -(days - 1))

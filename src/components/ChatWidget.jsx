@@ -11,7 +11,7 @@ const SUGGESTIONS = [
 
 // Tools whose result is plumbing for the model, not something worth showing the
 // user as a green "✓ ..." line (e.g. the verbose food-database search dump).
-const SILENT_TOOLS = new Set(['search_food_database'])
+const SILENT_TOOLS = new Set(['search_food_database', 'search_transactions'])
 
 // True when the assistant is asking which meal to log to, so we can offer
 // Breakfast/Lunch/Dinner/Snack buttons instead of making the user type.
@@ -181,6 +181,9 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
       categories: live.current.categories,
       goals: live.current.goals,
       foods: live.current.foods,
+      // Read-only for search_transactions (cross-referencing a bought-out meal
+      // against the user's real charges); the food-search dump is silent too.
+      transactions: context.transactions || [],
       memories: context.memories || [],
       actions: wrapped,
       setActiveTab,
