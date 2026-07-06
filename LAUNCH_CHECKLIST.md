@@ -89,19 +89,21 @@ frontend + edge functions + DB migrations via GitHub Actions).
 
 ## 4. Testing & Quality
 
-- [ ] **Automated test suite (Vitest)** around the pure logic where a silent bug
-  would corrupt user data. None exists yet. Priorities:
-  - `src/lib/analysis.js` (recurring detection, merchant keys, rule matching)
-  - `src/lib/foodCost.js` (cost-per-protein, food-spend classification, burn)
-  - `src/lib/csv.js` (export escaping)
-  - `src/lib/chat.js` (`executeTool`, category/goal name resolution)
-  - `src/lib/receiptMatch.js` (receipt→transaction ranking, merchant similarity
-    normalization, `itemKey`/`foodSearchQuery` normalization, `perUnitCost`).
-    **No test runner is installed yet**, so `receiptMatch.js` was written as
-    pure, Supabase-free, side-effect-free functions (no React, no I/O) ready to
-    test the moment Vitest lands — the receipt-itemization matching logic is the
-    highest-value thing to cover here (a silent mismatch links the wrong charge).
-  **← still open.**
+- [~] **Automated test suite (Vitest)** around the pure logic where a silent bug
+  would corrupt user data. **Vitest is now installed** (`npm test` → `vitest run`)
+  with the first suite landed; the other modules still need coverage. Priorities:
+  - [x] `src/lib/receiptMatch.js` — `src/lib/receiptMatch.test.js` covers the
+    receipt→transaction confidence matcher: authorized-date extraction (a
+    late-posting charge still matches on its descriptor date), coupon-lower and
+    tax-higher amount wobble both landing at medium confidence, a same-amount
+    different-merchant charge being excluded, the no-match/empty case, and
+    already-matched exclusion. (A silent mismatch here links the wrong charge —
+    the highest-value thing to cover.)
+  - [ ] `src/lib/analysis.js` (recurring detection, merchant keys, rule matching)
+  - [ ] `src/lib/foodCost.js` (cost-per-protein, food-spend classification, burn)
+  - [ ] `src/lib/csv.js` (export escaping)
+  - [ ] `src/lib/chat.js` (`executeTool`, category/goal name resolution)
+  **← still open (most modules uncovered).**
 - [ ] **Manual cross-browser + mobile pass** (Safari iOS, Chrome Android),
   including the new landing page and share-card download/native share.
 - [ ] **Multi-account test** — create two accounts, confirm zero data bleed

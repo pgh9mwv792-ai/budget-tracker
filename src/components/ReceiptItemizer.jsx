@@ -177,17 +177,17 @@ export default function ReceiptItemizer({
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Which bank charge is this?</p>
           {matches.length === 0 && nearMisses.length === 0 && (
             <p className="text-xs text-slate-400 dark:text-slate-500">
-              No matching Plaid charge found (exact amount within {POST_LAG_LABEL}). You can still save — we’ll add a manual transaction.
+              No matching Plaid charge found. You can still save — we’ll add a manual transaction.
             </p>
           )}
           {matches.map((m) => (
             <MatchOption key={m.transaction.id} m={m} selected={chosen === m.transaction} onChoose={() => setChosen(m.transaction)} />
           ))}
           {nearMisses.length > 0 && (
-            <div className="pt-1">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Low-confidence (double-check)</p>
+            <div className="pt-1 space-y-1.5">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Possible match — please confirm</p>
               {nearMisses.map((m) => (
-                <MatchOption key={m.transaction.id} m={m} selected={chosen === m.transaction} onChoose={() => setChosen(m.transaction)} lowConfidence />
+                <MatchOption key={m.transaction.id} m={m} selected={chosen === m.transaction} onChoose={() => setChosen(m.transaction)} medium />
               ))}
             </div>
           )}
@@ -275,29 +275,37 @@ export default function ReceiptItemizer({
   )
 }
 
-const POST_LAG_LABEL = '4 days'
-
-// One transaction candidate as a selectable radio row.
-function MatchOption({ m, selected, onChoose, lowConfidence }) {
+// One transaction candidate as a selectable radio row. `medium` candidates carry
+// an amount wobble (coupon/tax) or an unconfirmed merchant, so they add a second
+// line spelling out both amounts and why they differ — the user confirms with
+// full context rather than trusting a silent best-guess.
+function MatchOption({ m, selected, onChoose, medium }) {
   const t = m.transaction
   const merchant = t.merchant_name || t.note || t.name || 'Charge'
+  const amountsDiffer = medium && Math.abs(m.amountDelta ?? 0) >= 0.01
   return (
     <label
-      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer transition ${
+      className={`block rounded-lg border px-3 py-2 text-sm cursor-pointer transition ${
         selected
           ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
-          : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+          : medium
+            ? 'border-amber-200 dark:border-amber-900/60 hover:bg-amber-50/50 dark:hover:bg-amber-950/20'
+            : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
       }`}
     >
-      <input type="radio" name="txn-match" checked={selected} onChange={onChoose} className="accent-emerald-600" />
-      <span className="font-medium text-slate-700 dark:text-slate-200 tabular-nums">${Number(t.amount).toFixed(2)}</span>
-      <span className="text-slate-400 dark:text-slate-500">·</span>
-      <span className="flex-1 min-w-0 truncate text-slate-600 dark:text-slate-300">{merchant}</span>
-      <span className="text-slate-400 dark:text-slate-500 shrink-0">{t.date}</span>
-      {lowConfidence && (
-        <span className="text-[11px] rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 shrink-0">
-          {m.reason}
-        </span>
+      <div className="flex items-center gap-2">
+        <input type="radio" name="txn-match" checked={selected} onChange={onChoose} className="accent-emerald-600" />
+        <span className="font-medium text-slate-700 dark:text-slate-200 tabular-nums">${Number(t.amount).toFixed(2)}</span>
+        <span className="text-slate-400 dark:text-slate-500">·</span>
+        <span className="flex-1 min-w-0 truncate text-slate-600 dark:text-slate-300">{merchant}</span>
+        <span className="text-slate-400 dark:text-slate-500 shrink-0">{t.date}</span>
+      </div>
+      {medium && (
+        <p className="mt-1 pl-6 text-xs text-amber-700 dark:text-amber-300">
+          {amountsDiffer
+            ? `Charged $${m.txnAmount.toFixed(2)}, receipt says $${m.receiptTotal.toFixed(2)} — coupons or tax commonly cause this gap. Confirm it's the same purchase.`
+            : 'Amount matches, but double-check the store and date before confirming.'}
+        </p>
       )}
     </label>
   )
