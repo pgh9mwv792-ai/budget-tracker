@@ -49,6 +49,14 @@ Deno.serve(async (req) => {
       const id = encodeURIComponent(String(body.fdcId))
       const resp = await fetch(`${DETAIL_URL}/${id}?api_key=${encodeURIComponent(USDA_API_KEY)}`)
       if (resp.status === 429) return rateLimited()
+      // Some foods USDA returns in search don't resolve on the detail endpoint
+      // (404). That's not an error worth failing on — the caller falls back to
+      // weight-based units, so just report "no detail".
+      if (resp.status === 404) {
+        return new Response(JSON.stringify({ food: null }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
       const f = await resp.json()
       if (!resp.ok) throw new Error(f?.error?.message ?? `USDA API error (${resp.status})`)
 

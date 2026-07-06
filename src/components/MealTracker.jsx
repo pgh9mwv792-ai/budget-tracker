@@ -413,6 +413,15 @@ function LogRow({ log, onUpdateLog, onDeleteLog }) {
 // Rounds to one decimal for tidy pre-filled macro fields (protein/carbs/fat).
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
 
+// Weight units offered for every USDA food (macros are per-100g, so scaling by
+// weight is always valid). Named portions like "1 large" get merged in front of
+// these when USDA has them for the specific food.
+const WEIGHT_UNITS = [
+  { label: 'g', grams: 1 },
+  { label: 'oz', grams: 28.3495 },
+  { label: '100 g', grams: 100 },
+]
+
 function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDetails }) {
   const empty = { name: '', servingDesc: '', calories: '', protein: '', carbs: '', fat: '', cost: '', fdcId: '' }
   const [form, setForm] = useState(empty)
@@ -490,12 +499,16 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
       }
     : null
 
-  // Human-readable serving label saved on the food, e.g. "2 × large — 100 g".
-  function servingLabel() {
-    const unit = selectedPortion.label
+  // Human-readable description of "amount × unit", used for both the live
+  // preview and the serving label saved on the food. E.g. "6 large (300 g)",
+  // "170 g", "6 oz (170 g)".
+  function amountLabel() {
+    const p = selectedPortion
     const totalG = round1(grams * qty)
-    const prefix = qty === 1 ? unit : `${amount} × ${unit}`
-    return unit === `${grams} g` ? `${totalG} g` : `${prefix} — ${totalG} g`
+    if (p.label === 'g' || p.label === '100 g') return `${totalG} g`
+    if (p.label === 'oz') return `${round1(qty)} oz (${totalG} g)`
+    const unit = p.label.replace(/^1\s+/, '') // "1 large" -> "large"
+    return `${round1(qty)} ${unit} (${totalG} g)`
   }
 
   function cancelPick() {
@@ -521,26 +534,32 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
     setPName(r.brand ? `${r.name} (${r.brand})` : r.name)
     setPCost(existing?.cost != null ? String(existing.cost) : '')
     setBase({ calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat })
-    setPortions([{ label: '100 g', grams: 100 }])
+    // Start with weight units (always valid); named portions get merged in
+    // front once/if the detail lookup returns them. Default to 100 g for now.
+    setPortions([...WEIGHT_UNITS])
     setGrams(100)
     setAmount('1')
 
-    // Fetch portions + authoritative macros in the background. Non-fatal: if it
-    // fails, the user still has the per-100g entry.
+    // Fetch the food's real-world portions (e.g. "1 large" egg) in the
+    // background. Not every USDA food has them — if the lookup fails or returns
+    // none, the weight units above still let the user log by grams/oz.
     if (!onFoodDetails) return
     setLoadingPortions(true)
     try {
       const detail = await onFoodDetails(r.fdcId)
       if (detail) {
         setBase({ calories: detail.calories, protein: detail.protein, carbs: detail.carbs, fat: detail.fat })
-        const opts = [{ label: '100 g', grams: 100 }, ...(detail.portions ?? [])]
-        setPortions(opts)
-        // Default to the first real-world portion (e.g. "1 large") when there is
-        // one, since that's usually what people mean — not 100 g.
-        if (detail.portions?.length) setGrams(detail.portions[0].grams)
+        const named = detail.portions ?? []
+        setPortions([...named, ...WEIGHT_UNITS])
+        // Default to the first named portion (e.g. "1 large") when there is one,
+        // since that's usually what people mean — otherwise stay on 100 g.
+        if (named.length) {
+          setGrams(named[0].grams)
+          setAmount('1')
+        }
       }
     } catch {
-      // keep the per-100g fallback already shown
+      // keep the weight-unit fallback already shown
     } finally {
       setLoadingPortions(false)
     }
@@ -558,7 +577,7 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
     try {
       await onAddFood({
         name: pName.trim(),
-        servingDesc: servingLabel(),
+        servingDesc: amountLabel(),
         calories: Math.round(liveMacros.calories),
         protein: round1(liveMacros.protein),
         carbs: round1(liveMacros.carbs),
@@ -593,9 +612,12 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
     }
   }
 
-  // "large — 50 g" from { label: "1 large", grams: 50 }; "100 g" stays "100 g".
+  // Dropdown text: weight units read plainly; named USDA portions like
+  // "1 large" (50 g) render as "large — 50 g".
   function portionOptionLabel(p) {
-    if (p.label === `${p.grams} g`) return p.label
+    if (p.label === 'g') return 'gram (g)'
+    if (p.label === 'oz') return 'ounce (28 g)'
+    if (p.label === '100 g') return '100 g'
     const unit = p.label.replace(/^1\s+/, '')
     return `${unit} — ${round1(p.grams)} g`
   }
@@ -708,13 +730,15 @@ function FoodLibrary({ foods, onAddFood, onDeleteFood, onSearchFoods, onFoodDeta
             </label>
           </div>
 
+          {!loadingPortions && !portions.some((p) => !['g', 'oz', '100 g'].includes(p.label)) && (
+            <p className="text-xs text-slate-400 dark:text-slate-500">
+              USDA has no preset portions for this food — log it by weight (grams or ounces).
+            </p>
+          )}
+
           {liveMacros && (
             <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                Per {qty === 1 ? '' : `${amount} × `}
-                {selectedPortion.label}
-                {selectedPortion.label !== `${grams} g` ? ` (${round1(grams * qty)} g)` : ''}
-              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Per {amountLabel()}</p>
               <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
                 <span className="font-semibold text-slate-900 dark:text-slate-100">
                   {Math.round(liveMacros.calories)} kcal
