@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 import { parseSupplement } from '../lib/supplement'
+import { reportError } from '../lib/report'
+import { normalizeFoodNutrients } from '../lib/nutrients'
 
 // "Scan a supplement label" flow: pick/snap a photo of a Supplement Facts panel
 // → Claude reads it → an editable review card of ingredients → saves a food into
@@ -16,6 +18,9 @@ export default function SupplementScanner({ onSave }) {
   const [error, setError] = useState(null)
   const [draft, setDraft] = useState(null)
   const [savedNote, setSavedNote] = useState(null)
+  // Supplements are usually taken every day, so default the "daily stack" opt-in
+  // on — the user can uncheck it for a one-off before saving.
+  const [addToStack, setAddToStack] = useState(true)
 
   const openCamera = () => {
     setError(null)
@@ -40,7 +45,10 @@ export default function SupplementScanner({ onSave }) {
       setDraft(result)
       setStatus('review')
     } catch (err) {
+      // Show the message and also send it to Sentry with the model's raw reply
+      // (when we captured one) so a "reads nothing" report is diagnosable.
       setError(err.message)
+      reportError(err, { step: 'parseSupplement', rawResponse: err.rawResponse })
       setStatus('idle')
     }
   }
@@ -73,6 +81,18 @@ export default function SupplementScanner({ onSave }) {
     setStatus('saving')
     setError(null)
     try {
+      // Raw per-serving rows exactly as read from the label (form preserved).
+      const rawNutrients = ingredients.map((ing) => ({
+        name: ing.name.trim(),
+        amount: ing.amount === '' ? null : Number(ing.amount),
+        unit: ing.unit.trim(),
+        per: 'serving',
+        amount_normalized_mcg_or_mg: ing.amountNormalized ?? null,
+        percent_dv: ing.percentDv ?? null,
+      }))
+      // Canonical per-serving set alongside the raw rows (supplements are already
+      // per serving, so scale is 1). Normalized rows carry an `id`.
+      const normalized = normalizeFoodNutrients(rawNutrients, { source: 'label', servingScale: 1 })
       await onSave({
         name: draft.brand.trim() ? `${product} (${draft.brand.trim()})` : product,
         servingDesc: draft.servingSize.trim() || '1 serving',
@@ -83,21 +103,19 @@ export default function SupplementScanner({ onSave }) {
         cost: null,
         fdcId: null,
         source: 'supplement_scan',
+        isStack: addToStack,
         // Ingredient list captured per serving into the shared nutrients jsonb.
-        nutrients: ingredients.map((ing) => ({
-          name: ing.name.trim(),
-          amount: ing.amount === '' ? null : Number(ing.amount),
-          unit: ing.unit.trim(),
-          per: 'serving',
-          amount_normalized_mcg_or_mg: ing.amountNormalized ?? null,
-          percent_dv: ing.percentDv ?? null,
-        })),
+        nutrients: [...rawNutrients, ...normalized],
       })
       setSavedNote(`Saved ${product} — log it from any meal below.`)
       setDraft(null)
       setStatus('idle')
     } catch (err) {
+      // A save failure here is usually a schema/RLS problem (e.g. migration 0014
+      // not applied, so the nutrients/source columns are missing) — surface it
+      // and report it rather than swallowing it.
       setError(err.message)
+      reportError(err, { step: 'saveSupplement' })
       setStatus('review')
     }
   }
@@ -229,6 +247,16 @@ export default function SupplementScanner({ onSave }) {
               IU units (vitamins A, D, E) keep their label value; a standard metric conversion is stored where one exists.
             </p>
           </div>
+
+          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={addToStack}
+              onChange={(e) => setAddToStack(e.target.checked)}
+              className="rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500"
+            />
+            Add to my daily stack (one-tap “Log my stack” on the Meals tab)
+          </label>
 
           <div className="flex gap-2 pt-1">
             <button

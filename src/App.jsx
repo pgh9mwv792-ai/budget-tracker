@@ -742,6 +742,10 @@ function AppShell() {
           <Settings
             data={{ categories, transactions, budgets, goals, nutritionTargets, foods, foodLogs, memories }}
             entitlements={entitlements}
+            onSetTargets={async (values) => {
+              const saved = await api.upsertNutritionTargets(values)
+              setNutritionTargets(saved)
+            }}
           />
         )}
         </Suspense>

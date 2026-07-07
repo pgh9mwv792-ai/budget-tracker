@@ -288,6 +288,7 @@ export async function createFood({
   fdcId,
   nutrients,
   source,
+  isStack,
 }) {
   const {
     data: { user },
@@ -309,6 +310,9 @@ export async function createFood({
       nutrients: nutrients ?? null,
       // Let the DB default ('manual') stand when the caller doesn't say.
       ...(source ? { source } : {}),
+      // Only send is_stack when the caller opts in, so the DB default (false)
+      // stands otherwise.
+      ...(isStack ? { is_stack: true } : {}),
     })
     .select()
     .single()
@@ -433,23 +437,26 @@ export async function fetchNutritionTargets() {
   return data
 }
 
-export async function upsertNutritionTargets({ calories, protein, carbs, fat }) {
+// Upsert the user's targets. Every field is written only when the caller passes
+// it, so a macro-only save (the macro editor) doesn't clobber micronutrient
+// settings and a micro-only save (the micronutrient editor) doesn't zero the
+// macros. On the very first insert, omitted columns fall back to the DB defaults
+// (0 macros, '{}' micro_targets, 'neutral' sex). microTargets replaces the whole
+// override map.
+export async function upsertNutritionTargets({ calories, protein, carbs, fat, microTargets, sex }) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
+  const row = { user_id: user.id, updated_at: new Date().toISOString() }
+  if (calories !== undefined) row.calories = calories || 0
+  if (protein !== undefined) row.protein = protein || 0
+  if (carbs !== undefined) row.carbs = carbs || 0
+  if (fat !== undefined) row.fat = fat || 0
+  if (microTargets !== undefined) row.micro_targets = microTargets ?? {}
+  if (sex !== undefined) row.sex = sex || 'neutral'
   const { data, error } = await supabase
     .from('nutrition_targets')
-    .upsert(
-      {
-        user_id: user.id,
-        calories: calories || 0,
-        protein: protein || 0,
-        carbs: carbs || 0,
-        fat: fat || 0,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' }
-    )
+    .upsert(row, { onConflict: 'user_id' })
     .select()
     .single()
   if (error) throw error

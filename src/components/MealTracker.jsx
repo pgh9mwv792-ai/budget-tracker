@@ -3,6 +3,7 @@ import { addDays, todayISO } from '../lib/dateHelpers'
 import { costPerDay, costPerProtein } from '../lib/foodCost'
 import { MACRO_KEYS, MACRO_META, OVER_BAR } from '../lib/macros'
 import FoodSearchSheet from './FoodSearchSheet'
+import MicronutrientSection from './MicronutrientSection'
 
 const MEALS = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -77,6 +78,40 @@ export default function MealTracker({
   const toggle = (key) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))
   const sectionKey = (meal) => meal.key ?? 'uncategorized'
 
+  // The user's daily supplement stack (foods flagged is_stack).
+  const stackFoods = useMemo(() => foods.filter((f) => f.is_stack), [foods])
+  const [loggingStack, setLoggingStack] = useState(false)
+
+  // One-tap: log every stack food at one serving to the viewed day, uncategorized
+  // (supplements aren't a meal). Single confirmation, then a batch of logs.
+  async function logStack() {
+    if (stackFoods.length === 0 || loggingStack) return
+    const names = stackFoods.map((f) => f.name).join(', ')
+    const ok = window.confirm(
+      `Log your daily stack (${stackFoods.length} item${stackFoods.length === 1 ? '' : 's'}) to ${dateLabel(date)}?\n\n${names}`
+    )
+    if (!ok) return
+    setLoggingStack(true)
+    try {
+      for (const f of stackFoods) {
+        await onLogFood({
+          date,
+          meal: null,
+          foodId: f.id,
+          name: f.name,
+          servings: 1,
+          calories: Number(f.calories) || 0,
+          protein: Number(f.protein) || 0,
+          carbs: Number(f.carbs) || 0,
+          fat: Number(f.fat) || 0,
+          cost: f.cost == null ? null : Number(f.cost),
+        })
+      }
+    } finally {
+      setLoggingStack(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <TargetsHeader
@@ -97,6 +132,26 @@ export default function MealTracker({
           }}
         />
       )}
+
+      {stackFoods.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Daily stack</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+              {stackFoods.length} supplement{stackFoods.length === 1 ? '' : 's'} · {stackFoods.map((f) => f.name).join(', ')}
+            </p>
+          </div>
+          <button
+            onClick={logStack}
+            disabled={loggingStack}
+            className="shrink-0 rounded-lg bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-60"
+          >
+            {loggingStack ? 'Logging…' : '💊 Log my stack'}
+          </button>
+        </div>
+      )}
+
+      <MicronutrientSection logs={dayLogs} foods={foods} targets={targets} onSetTargets={onSetTargets} />
 
       <WeeklyStrip transactions={transactions} logs={logs} />
 
@@ -127,7 +182,7 @@ export default function MealTracker({
         />
       )}
 
-      <LibraryManager foods={foods} onDeleteFood={onDeleteFood} />
+      <LibraryManager foods={foods} onDeleteFood={onDeleteFood} onUpdateFood={onUpdateFood} />
 
       {sheetMeal && (
         <FoodSearchSheet
@@ -481,7 +536,7 @@ function LogEditor({ log, onSave, onCancel }) {
 // Collapsed-by-default library manager: browse saved foods and delete them.
 // Adding foods now happens in the meal search sheet; this keeps delete/browse
 // reachable without cluttering the day view.
-function LibraryManager({ foods, onDeleteFood }) {
+function LibraryManager({ foods, onDeleteFood, onUpdateFood }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -520,12 +575,27 @@ function LibraryManager({ foods, onDeleteFood }) {
                   {f.cost != null && ` · $${Number(f.cost).toFixed(2)}`}
                 </p>
               </div>
-              <button
-                onClick={() => onDeleteFood(f.id)}
-                className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs shrink-0 ml-3"
-              >
-                Delete
-              </button>
+              <div className="flex items-center gap-2 shrink-0 ml-3">
+                {onUpdateFood && (
+                  <button
+                    onClick={() => onUpdateFood(f.id, { is_stack: !f.is_stack })}
+                    title={f.is_stack ? 'In your daily stack — click to remove' : 'Add to your daily stack'}
+                    className={`text-xs ${
+                      f.is_stack
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    {f.is_stack ? '★ Stack' : '☆ Stack'}
+                  </button>
+                )}
+                <button
+                  onClick={() => onDeleteFood(f.id)}
+                  className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>

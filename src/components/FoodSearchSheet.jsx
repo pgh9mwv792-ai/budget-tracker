@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import SupplementScanner from './SupplementScanner'
+import { normalizeFoodNutrients } from '../lib/nutrients'
 
 // Rounds to one decimal for tidy macro fields.
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
@@ -253,6 +254,12 @@ export default function FoodSearchSheet({
     if (!liveMacros || !pName.trim() || !(qty > 0)) return
     setBusy(true)
     try {
+      // Store the raw per-100g USDA rows AND a canonical per-serving set. `factor`
+      // (grams/100 × amount) is exactly the per-100g→serving scale, so the
+      // normalized micros already reflect the portion the user is logging. The
+      // two live side by side in the same jsonb; normalized rows carry an `id`.
+      const rawNutrients = nutrients ?? []
+      const normalized = normalizeFoodNutrients(rawNutrients, { source: 'usda', servingScale: factor })
       const created = await onAddFood({
         name: pName.trim(),
         servingDesc: amountLabel(),
@@ -262,7 +269,7 @@ export default function FoodSearchSheet({
         fat: round1(liveMacros.fat),
         cost: pCost === '' ? null : Number(pCost),
         fdcId: picked?.fdcId || null,
-        nutrients,
+        nutrients: [...rawNutrients, ...normalized],
         source: 'usda',
       })
       openQuantity(created)

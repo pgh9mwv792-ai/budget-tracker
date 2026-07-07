@@ -14,7 +14,10 @@ function readDataUrl(file) {
 
 // Reads an image File, downscales it (big phone photos/screenshots are megabytes
 // and cost more tokens than they need), and returns a Claude image content block.
-async function imageBlock(file, maxDim = 1600) {
+// `maxDim`/`quality` are tunable because a receipt reads fine at a modest size,
+// but a dense Supplement Facts panel (tiny print, 20+ rows) needs more pixels and
+// less JPEG compression or the model can't make out the numbers.
+async function imageBlock(file, { maxDim = 1600, quality = 0.8 } = {}) {
   const dataUrl = await readDataUrl(file)
   const img = await new Promise((resolve, reject) => {
     const im = new Image()
@@ -30,7 +33,7 @@ async function imageBlock(file, maxDim = 1600) {
   canvas.width = width
   canvas.height = height
   canvas.getContext('2d').drawImage(img, 0, 0, width, height)
-  const jpeg = canvas.toDataURL('image/jpeg', 0.8)
+  const jpeg = canvas.toDataURL('image/jpeg', quality)
   return { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: jpeg.split(',')[1] } }
 }
 
@@ -43,10 +46,11 @@ async function documentBlock(file) {
 }
 
 // Turns any supported receipt file (photo, screenshot, or PDF) into the right
-// Claude content block.
-export async function fileToContentBlock(file) {
+// Claude content block. `imageOpts` tunes the downscale for images (see
+// imageBlock) — labels pass a higher maxDim/quality than receipts.
+export async function fileToContentBlock(file, imageOpts) {
   if (file.type === 'application/pdf') return documentBlock(file)
-  if (file.type.startsWith('image/')) return imageBlock(file)
+  if (file.type.startsWith('image/')) return imageBlock(file, imageOpts)
   throw new Error('Please upload a photo, a screenshot, or a PDF receipt.')
 }
 
@@ -255,25 +259,96 @@ function normalizeUnit(v) {
   return null
 }
 
-// Best-effort JSON extraction — tolerates stray prose or ```json fences.
+// Best-effort JSON extraction from a model reply. Tolerates, in order:
+//   1. clean JSON,
+//   2. ```json fences and/or a "Here is the JSON:" style preamble,
+//   3. a truncated reply (the model hit max_tokens mid-object) — we walk the
+//      braces from the first "{" and, if it never closes, synthetically close
+//      the open braces/brackets so a partial-but-usable object still parses.
+// Returns the parsed object or null. Keeping this defensive matters: the
+// supplement/receipt scanners depend entirely on getting an object back, and a
+// silent null here is exactly the kind of "scanner does nothing" failure we're
+// guarding against.
 export function parseJson(text) {
   if (!text) return null
-  const cleaned = text
-    .replace(/^```(?:json)?/i, '')
-    .replace(/```$/, '')
-    .trim()
-  try {
-    return JSON.parse(cleaned)
-  } catch {
-    // fall through
-  }
-  const match = cleaned.match(/\{[\s\S]*\}/)
-  if (match) {
+
+  // Strip code fences anywhere in the string (not just the very start/end) and
+  // any prose before the first "{".
+  const stripped = text.replace(/```(?:json)?/gi, '').trim()
+
+  const attempt = (s) => {
     try {
-      return JSON.parse(match[0])
+      return JSON.parse(s)
     } catch {
-      // give up
+      return null
+    }
+  }
+
+  const direct = attempt(stripped)
+  if (direct && typeof direct === 'object') return direct
+
+  const start = stripped.indexOf('{')
+  if (start === -1) return null
+
+  // Largest balanced object starting at `start`.
+  const balanced = extractBalanced(stripped, start)
+  if (balanced) {
+    const parsed = attempt(balanced)
+    if (parsed && typeof parsed === 'object') return parsed
+  }
+
+  // Last resort: the reply was cut off. Close whatever is still open so we can
+  // salvage the ingredients read so far rather than throwing the whole scan away.
+  const repaired = attempt(repairTruncated(stripped.slice(start)))
+  return repaired && typeof repaired === 'object' ? repaired : null
+}
+
+// Returns the substring from `start` (an opening "{") through its matching close
+// brace, respecting strings/escapes, or null if it never balances.
+function extractBalanced(s, start) {
+  let depth = 0
+  let inStr = false
+  let esc = false
+  for (let i = start; i < s.length; i++) {
+    const c = s[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (c === '\\') esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') inStr = true
+    else if (c === '{' || c === '[') depth++
+    else if (c === '}' || c === ']') {
+      depth--
+      if (depth === 0) return s.slice(start, i + 1)
     }
   }
   return null
+}
+
+// Closes any unterminated string and open braces/brackets for a truncated reply,
+// trimming a dangling trailing comma so JSON.parse accepts the salvaged prefix.
+function repairTruncated(s) {
+  const stack = []
+  let inStr = false
+  let esc = false
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (c === '\\') esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') inStr = true
+    else if (c === '{') stack.push('}')
+    else if (c === '[') stack.push(']')
+    else if (c === '}' || c === ']') stack.pop()
+  }
+  let out = s
+  if (inStr) out += '"'
+  out = out.replace(/,\s*$/, '')
+  while (stack.length) out += stack.pop()
+  return out
 }

@@ -93,13 +93,22 @@ signature check inside the function, not from a JWT.
   individual access) — the Credit tab is intentionally manual entry + computed
   card utilization. Don't "fix" this by claiming to fetch a live score.
 
-## Deferred: micronutrient targets UI
-Not to be built until explicitly requested. The `foods.nutrients` jsonb column
-(migration 0014) already captures full micronutrient profiles — per-100g for
-USDA imports and per-serving for supplement scans — so the data foundation is in
-place. The future feature would add: RDA-based micronutrient targets (per user),
-a % coverage calculation from summing `nutrients` across a day's food logs, and a
-dashboard card showing which micros are short. Building it will require deciding
-how to snapshot/aggregate `nutrients` at log time (food_logs currently snapshots
-only the four macros) and reconciling per-100g vs per-serving units. Leave it
-alone until asked.
+## Micronutrient tracking (built Jul 2026)
+Now implemented — see HANDOFF §4 (schema) and §6 (Meals) for the full write-up.
+Key pieces:
+- **`src/lib/nutrients.js`** — fixed catalog of 23 canonical nutrients
+  (`{id, name, unit, usda_numbers[], aliases[]}`), `normalizeNutrient(...)`
+  (USDA-number and label-alias mapping, IU↔metric for A/D/E, folic-acid ×1.7
+  DFE, unmappable → null), plus the built-in RDA/UL table + `defaultTargets(sex)`.
+- **Storage:** each food's `nutrients` jsonb holds **raw** rows plus **normalized**
+  per-serving rows (discriminated by an `id` field). Day total for a nutrient =
+  `Σ normalized.amount × log.servings`. USDA rows are scaled to per-serving at
+  creation; supplement labels are already per-serving. `normalizeFoodNutrients`
+  is idempotent; `scripts/backfill-nutrients.mjs` re-normalizes old foods safely.
+- **Targets:** `nutrition_targets.micro_targets` (jsonb overrides) + `sex` cohort
+  (migration 0020). Unset nutrients fall back to the RDA/UL defaults.
+- **UI:** collapsible Micronutrients section on Meals (`MicronutrientSection.jsx`,
+  `lib/micronutrients.js`) with RDA bars, amber-past-UL, and `~` coverage-honesty
+  prefix when < 70% of the day's calories come from foods reporting that nutrient.
+- **Daily stack:** `foods.is_stack` (migration 0021) + one-tap "Log my stack" +
+  assistant `log_stack` tool.

@@ -3,6 +3,7 @@ import { monthKey, todayISO } from './dateHelpers'
 import { computeFoodCost } from './foodCost'
 import { searchFoods, getFoodDetails } from './api'
 import { merchantSimilarity, descriptorPurchaseDate, txnDescriptorText } from './receiptMatch'
+import { normalizeFoodNutrients } from './nutrients'
 
 const today = () => todayISO()
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
@@ -151,6 +152,22 @@ export const CHAT_TOOLS = [
         cost: { type: 'number', description: 'Optional cost (per-serving, or per-100g when `grams` is given).' },
       },
       required: ['food_name'],
+    },
+  },
+  {
+    name: 'log_stack',
+    description:
+      "Log the user's whole daily supplement STACK in one step — every food they've flagged as part of their stack, each at one serving. Use this when they say things like \"log my stack\", \"I took my supplements\", or \"log my vitamins\". Show ONE confirmation listing the stack items and ask a single yes/no before calling this; never log them one at a time with log_food. If the stack is empty, tell them to flag foods as stack items on the Meals tab first.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        meal: {
+          type: 'string',
+          enum: ['breakfast', 'lunch', 'dinner', 'snack'],
+          description: 'Optional meal to file the stack under. Omit to file it as Uncategorized (the usual choice for supplements).',
+        },
+        date: { type: 'string', description: 'Date as YYYY-MM-DD. Defaults to today.' },
+      },
     },
   },
   {
@@ -323,6 +340,11 @@ export function summarizeAppData({ categories = [], transactions = [], budgets =
       })
       .join('\n') || '(empty)'
 
+  const stackFoods = foods.filter((f) => f.is_stack)
+  const stackLine = stackFoods.length
+    ? `Daily supplement stack (${stackFoods.length}): ${stackFoods.map((f) => f.name).join(', ')}. Use log_stack to log them all at once.`
+    : 'Daily supplement stack: none flagged yet.'
+
   const memoryLines = memories.map((m) => `- ${m.content}`).join('\n') || '(nothing remembered yet)'
 
   // Food-cost intelligence: the money+food angle the app now leads with, so the
@@ -394,6 +416,7 @@ Today's logged items (this is the live list — reflects removals):
 ${todaysLogLines}
 Food library:
 ${foodLibraryLines}
+${stackLine}
 
 FOOD & MONEY (computed — use these for cost-per-protein and food-spending questions):
 ${foodCostLines}`
@@ -594,6 +617,11 @@ export async function executeTool(name, input, ctx) {
             ? foods.find((f) => f.fdc_id && String(f.fdc_id) === String(input.fdc_id))
             : existing
           if (!food && input.fdc_id) {
+            // The row is stored on a 100 g serving basis, so the normalized
+            // per-serving micros equal the per-100g values (scale 1); day totals
+            // then scale by log.servings (grams/100). Keep raw rows alongside.
+            const rawNutrients = Array.isArray(input.nutrients) ? input.nutrients : []
+            const normalized = normalizeFoodNutrients(rawNutrients, { source: 'usda', servingScale: 1 })
             food = await actions.addFood({
               name: input.food_name,
               servingDesc: '100 g',
@@ -603,7 +631,7 @@ export async function executeTool(name, input, ctx) {
               fat: round1(per100.fat),
               cost: input.cost == null ? '' : input.cost,
               fdcId: String(input.fdc_id),
-              nutrients: input.nutrients ?? null,
+              nutrients: rawNutrients.length ? [...rawNutrients, ...normalized] : null,
               source: 'usda',
             })
           }
@@ -688,6 +716,28 @@ export async function executeTool(name, input, ctx) {
         })
         const estNote = libFood?.source === 'estimate' || input.source === 'estimate' ? ' (macros are estimates)' : ''
         return `Logged ${input.servings || 1} serving(s) of "${input.food_name}" to ${input.meal || 'Uncategorized'}${estNote}.`
+      }
+      case 'log_stack': {
+        const stack = foods.filter((f) => f.is_stack)
+        if (stack.length === 0) {
+          return 'Your daily stack is empty. Flag the supplements you take daily as stack items on the Meals tab (the ☆ Stack toggle in the food library), then try again.'
+        }
+        const date = input.date || today()
+        for (const f of stack) {
+          await actions.logFood({
+            date,
+            meal: input.meal ?? null,
+            foodId: f.id,
+            name: f.name,
+            servings: 1,
+            calories: Number(f.calories) || 0,
+            protein: Number(f.protein) || 0,
+            carbs: Number(f.carbs) || 0,
+            fat: Number(f.fat) || 0,
+            cost: f.cost == null ? null : Number(f.cost),
+          })
+        }
+        return `Logged your daily stack (${stack.length} item${stack.length === 1 ? '' : 's'}) to ${input.meal || 'Uncategorized'} on ${date}: ${stack.map((f) => f.name).join(', ')}.`
       }
       case 'search_transactions': {
         const merchant = String(input.merchant || '').trim()

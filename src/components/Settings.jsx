@@ -5,7 +5,7 @@ import { downloadBackup } from '../lib/backup'
 import { startCheckout, openBillingPortal } from '../lib/billing'
 import { fetchNotificationPrefs, upsertNotificationPrefs } from '../lib/api'
 
-export default function Settings({ data, entitlements }) {
+export default function Settings({ data, entitlements, onSetTargets }) {
   const plan = entitlements?.plan ?? 'free'
   return (
     <div className="space-y-6">
@@ -13,6 +13,7 @@ export default function Settings({ data, entitlements }) {
       <PlanBillingSection entitlements={entitlements} />
       <NotificationsSection plan={plan} />
       <ProfileSection />
+      <NutritionProfileSection targets={data?.nutritionTargets} onSetTargets={onSetTargets} />
       <EmailSection />
       <PasswordSection />
       <TwoFactorSection />
@@ -247,6 +248,69 @@ function initialsOf(nameOrEmail) {
 // ---------------------------------------------------------------------------
 // Profile: display name + avatar.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Nutrition profile: the one optional question that picks default micronutrient
+// RDAs (they differ by biological sex — e.g. iron 8 vs 18 mg). "Average" is the
+// neutral midpoint and the default, so the feature works even if left unset.
+// Per-nutrient overrides live on the Meals tab; this only sets the cohort.
+// ---------------------------------------------------------------------------
+function NutritionProfileSection({ targets, onSetTargets }) {
+  const [sex, setSex] = useState(targets?.sex ?? 'neutral')
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState(null)
+
+  // Keep in sync if targets load after this section first renders.
+  useEffect(() => {
+    if (targets?.sex) setSex(targets.sex)
+  }, [targets?.sex])
+
+  async function save(next) {
+    setSex(next)
+    setBusy(true)
+    setStatus(null)
+    try {
+      await onSetTargets({ sex: next })
+      setStatus({ type: 'success', text: 'Saved.' })
+    } catch (e) {
+      setStatus({ type: 'error', text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const options = [
+    { key: 'male', label: 'Male' },
+    { key: 'female', label: 'Female' },
+    { key: 'neutral', label: 'Average / prefer not to say' },
+  ]
+
+  return (
+    <Card
+      title="Nutrition profile"
+      description="Used only to pick default vitamin & mineral targets. Optional — leave on “Average” to skip."
+    >
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => (
+          <button
+            key={opt.key}
+            type="button"
+            disabled={busy || !onSetTargets}
+            onClick={() => save(opt.key)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition disabled:opacity-60 ${
+              sex === opt.key
+                ? 'bg-slate-900 dark:bg-emerald-600 text-white'
+                : 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      <Notice status={status} />
+    </Card>
+  )
+}
+
 function ProfileSection() {
   const { user } = useAuth()
   const [name, setName] = useState(user?.user_metadata?.display_name ?? '')

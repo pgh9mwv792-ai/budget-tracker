@@ -46,7 +46,11 @@ Rules — follow exactly:
 4. If the image is not a readable Supplement Facts / Nutrition Facts panel (blurry, wrong kind of photo, unreadable), set "error" to a short message and return empty/zero values elsewhere. Do NOT hallucinate ingredient values.`
 
 export async function parseSupplement({ file }) {
-  const block = await fileToContentBlock(file)
+  // A Supplement Facts panel is dense fine print, so send more pixels and less
+  // JPEG compression than the receipt scanner uses (whose default is fine for
+  // big storefront text) — a too-degraded image is a common "reads nothing"
+  // cause.
+  const block = await fileToContentBlock(file, { maxDim: 2200, quality: 0.92 })
 
   const messages = [
     {
@@ -63,7 +67,13 @@ export async function parseSupplement({ file }) {
     .trim()
 
   const parsed = parseJson(text)
-  if (!parsed) throw new Error('Could not read that label. Try a clearer, well-lit photo of the Supplement Facts panel.')
+  if (!parsed) {
+    // Surface what the model actually said so a failure is diagnosable in Sentry
+    // (the caller reports it) instead of a dead-end "does nothing".
+    const err = new Error('Could not read that label. Try a clearer, well-lit photo of the Supplement Facts panel.')
+    err.rawResponse = text.slice(0, 500)
+    throw err
+  }
   if (parsed.error) throw new Error(String(parsed.error))
 
   const ingredients = Array.isArray(parsed.ingredients)

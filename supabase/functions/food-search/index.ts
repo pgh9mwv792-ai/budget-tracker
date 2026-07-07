@@ -73,7 +73,10 @@ Deno.serve(async (req) => {
         const name = n.nutrient?.name
         const amount = Number(n.amount)
         if (!name || !Number.isFinite(amount)) continue
-        nutrients.push({ name, amount, unit: n.nutrient?.unitName ?? '', per: '100g' })
+        // Pass USDA's stable nutrient number through so the client can map micros
+        // to canonical ids without guessing from the (localized/renamed) label.
+        const usdaNumber = n.nutrient?.number != null ? String(n.nutrient.number) : null
+        nutrients.push({ name, amount, unit: n.nutrient?.unitName ?? '', per: '100g', usda_number: usdaNumber })
       }
 
       const portions = []
