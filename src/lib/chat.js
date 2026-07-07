@@ -19,7 +19,7 @@ export const CHAT_TOOLS = [
   {
     name: 'add_transaction',
     description:
-      'Record a new income or expense transaction. Amount is always a positive number; use kind to say whether money came in or went out.',
+      'Record a new income or expense transaction. Amount is always a positive number; use kind to say whether money came in or went out. The result includes the new transaction id — if this expense paid for a meal you are also logging, pass that id to log_food as transaction_id so the charge and meal link (and the food-cost math is not double-counted).',
     input_schema: {
       type: 'object',
       properties: {
@@ -414,6 +414,14 @@ You can take actions using the provided tools (adding transactions, categories, 
 - Memory: when the user shares a durable fact or preference that would help you help them later (payday timing, dietary preferences, saving priorities, budgeting style), use the remember tool. Keep memories short. NEVER store sensitive information such as passwords, PINs, or full account/card numbers. Use forget when a remembered fact is no longer true or the user asks you to. What you already remember is listed in the data below.
 - For analysis questions, use the data snapshot below. It only includes recent transactions and monthly rollups, so if the user asks about something outside that window, say you can see recent activity but they may want to check the full list on the Transactions tab.
 
+WHEN THE USER ATTACHES A PHOTO (you can see attached images directly):
+If it's a purchase receipt, handle it end-to-end so they don't have to type anything in:
+1) Read the merchant, the FINAL total (after tax), and the purchase date from the image.
+2) Record the expense right away with add_transaction: amount = the total, kind "expense", date = the receipt date, note = the merchant, and category_name = the best-fitting EXISTING expense category (omit if none fit). Briefly confirm the charge you added.
+3) If the receipt is a FOOD purchase from a restaurant, fast-food place, or cafe, ALSO log what they ate, following "LOGGING A MEAL YOU BOUGHT OUT" below — except you ALREADY know the price and date from the receipt, so you do NOT need search_transactions. Resolve the item's macros the same way (web_search for the chain's official published numbers, else estimate a named chain item and pass source:"estimate"). Ask which meal if they didn't say, then log_food with cost = the receipt total and transaction_id = the id add_transaction just returned, so the meal links to the charge and the cost isn't counted twice. If the receipt lists several items, log the main meal item(s); never invent macros for lines you can't identify.
+4) For a NON-food receipt, just add the transaction — no food logging.
+If the image clearly isn't a receipt, just help with whatever the user is asking about it.
+
 LOGGING FOOD BY DESCRIPTION (e.g. "log 2 cups white rice and 8oz ground beef for lunch"):
 - FIRST decide which kind of item the user named, because they log differently:
   • A WHOLE prepared or restaurant/fast-food/branded item ordered as one unit — e.g. "a number 1 combo from In-N-Out", "a Big Mac", "a Chipotle burrito", "a slice of pizza". Its natural unit is the item itself, NOT a weight, so keep this simple and fast: do NOT search the USDA food database (it won't have a fast-food combo and only returns misleading component parts), do NOT ask for grams or ounces, and do NOT interrogate the user about portions. Get the macros this way:
@@ -488,7 +496,7 @@ export async function executeTool(name, input, ctx) {
           categoryId,
           note: input.note || null,
         })
-        return `Added ${input.kind} of $${Number(input.amount).toFixed(2)} on ${created.date}${catNote}.`
+        return `Added ${input.kind} of $${Number(input.amount).toFixed(2)} on ${created.date}${catNote}. (transaction id ${created.id})`
       }
       case 'add_category': {
         if (findCat(input.name)) return `A category named "${input.name}" already exists.`

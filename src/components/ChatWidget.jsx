@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { buildSystemPrompt, summarizeAppData, executeTool, callChat } from '../lib/chat'
+import { fileToContentBlock } from '../lib/receipt'
 import UpgradeGate from './UpgradeGate'
 
 const SUGGESTIONS = [
@@ -30,6 +31,16 @@ function isLogConfirmation(text) {
   return t.trimEnd().endsWith('?') && /\blog\b|\blogging\b/.test(t)
 }
 
+// A real user prompt turn in the raw model history — as opposed to a tool_result
+// turn, which is also role 'user' but carries tool_result blocks. Used to rewind
+// history when a message is edited. Handles string content (plain text) and
+// array content (a message with attached image blocks).
+function isUserPromptTurn(m) {
+  if (m.role !== 'user') return false
+  if (typeof m.content === 'string') return true
+  return Array.isArray(m.content) && !m.content.some((b) => b?.type === 'tool_result')
+}
+
 export default function ChatWidget({ plan, context, actions, setActiveTab, openWith, onConsumeOpenWith }) {
   const isPro = plan === 'pro'
   const [open, setOpen] = useState(false)
@@ -37,6 +48,10 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  // Photos the user has attached but not yet sent: {file, url}. url is an object
+  // URL used for the preview thumbnail (and kept alive once handed to a message).
+  const [attachments, setAttachments] = useState([])
+  const fileRef = useRef(null)
   // When set, we're editing the user message at this index in `messages`.
   const [editingIndex, setEditingIndex] = useState(null)
   const [editText, setEditText] = useState('')
@@ -121,8 +136,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
     let count = 0
     let cut = apiMessages.current.length
     for (let j = 0; j < apiMessages.current.length; j++) {
-      const m = apiMessages.current[j]
-      if (m.role === 'user' && typeof m.content === 'string') {
+      if (isUserPromptTurn(apiMessages.current[j])) {
         if (count === userTurnIndex) {
           cut = j
           break
@@ -137,16 +151,52 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
     await send(newText)
   }
 
-  async function send(text) {
-    const trimmed = text.trim()
-    if (!trimmed || busy) return
+  // Pick photos to attach to the next message (receipts, etc.). We keep only
+  // images — the chat vision path reads them; PDFs go through the receipt scanner.
+  function addFiles(fileList) {
+    const picked = Array.from(fileList ?? []).filter((f) => f.type.startsWith('image/'))
+    if (!picked.length) return
+    setAttachments((cur) => [...cur, ...picked.map((file) => ({ file, url: URL.createObjectURL(file) }))])
+  }
+
+  function removeAttachment(idx) {
+    setAttachments((cur) => {
+      const next = [...cur]
+      const [gone] = next.splice(idx, 1)
+      if (gone) URL.revokeObjectURL(gone.url)
+      return next
+    })
+  }
+
+  async function send(text, files = attachments) {
+    const trimmed = (text ?? '').trim()
+    if ((!trimmed && files.length === 0) || busy) return
     if (!isPro) {
       setOpen(true)
       return
     }
     setError(null)
     setInput('')
-    setMessages((prev) => [...prev, { role: 'user', text: trimmed }])
+
+    // Build the content sent to the model: a plain string when there's no photo,
+    // or an array of image blocks + a text block when there is. Converting a
+    // photo can throw on an unreadable file, so bail cleanly if it does.
+    let content = trimmed
+    const attachUrls = files.map((a) => a.url)
+    if (files.length) {
+      try {
+        const blocks = await Promise.all(files.map((a) => fileToContentBlock(a.file)))
+        content = [...blocks, { type: 'text', text: trimmed || 'Here is a photo — please take a look and help.' }]
+      } catch (e) {
+        setError(e.message)
+        return
+      }
+      // Handed off to the message below; keep the object URLs alive for the
+      // thumbnail rather than revoking them here.
+      setAttachments([])
+    }
+
+    setMessages((prev) => [...prev, { role: 'user', text: trimmed, attachments: attachUrls }])
     stoppedRef.current = false
     const controller = new AbortController()
     abortRef.current = controller
@@ -189,7 +239,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
       setActiveTab,
     }
 
-    let convo = [...apiMessages.current, { role: 'user', content: trimmed }]
+    let convo = [...apiMessages.current, { role: 'user', content }]
     // The last point that's valid to persist — one that ends on a completed
     // assistant turn or a tool_result, never on a tool_use still awaiting its
     // result or an unanswered question. If Stop interrupts, we roll back here.
@@ -449,14 +499,30 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
                   ✎
                 </button>
               )}
-              <div
-                className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
-                  mine
-                    ? 'bg-emerald-600 text-white rounded-br-sm'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-sm'
-                }`}
-              >
-                {m.text}
+              <div className={`max-w-[85%] flex flex-col gap-1 ${mine ? 'items-end' : 'items-start'}`}>
+                {m.attachments?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 justify-end">
+                    {m.attachments.map((url, k) => (
+                      <img
+                        key={k}
+                        src={url}
+                        alt="attachment"
+                        className="h-24 w-24 object-cover rounded-lg border border-emerald-300/60 dark:border-emerald-700/60"
+                      />
+                    ))}
+                  </div>
+                )}
+                {m.text && (
+                  <div
+                    className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
+                      mine
+                        ? 'bg-emerald-600 text-white rounded-br-sm'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-sm'
+                    }`}
+                  >
+                    {m.text}
+                  </div>
+                )}
               </div>
             </div>
           )
@@ -519,6 +585,28 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
           return null
         })()}
 
+      {attachments.length > 0 && editingIndex === null && (
+        <div className="px-3 pt-2 flex flex-wrap gap-2">
+          {attachments.map((a, idx) => (
+            <div key={idx} className="relative">
+              <img
+                src={a.url}
+                alt="pending attachment"
+                className="h-16 w-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
+              />
+              <button
+                type="button"
+                onClick={() => removeAttachment(idx)}
+                aria-label="Remove attachment"
+                className="absolute -top-1.5 -right-1.5 h-5 w-5 grid place-items-center rounded-full bg-slate-700 hover:bg-slate-600 text-white text-[10px] leading-none"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -527,10 +615,31 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
         className="p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-3 border-t border-slate-200 dark:border-slate-800 flex gap-2"
       >
         <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(e) => {
+            addFiles(e.target.files)
+            e.target.value = ''
+          }}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={busy}
+          title="Attach a photo"
+          aria-label="Attach a photo"
+          className="shrink-0 h-11 w-11 grid place-items-center rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50 transition"
+        >
+          📎
+        </button>
+        <input
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask or tell me to do something…"
+          placeholder="Ask, do something, or attach a receipt…"
           disabled={busy}
           className="flex-1 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
         />
@@ -547,7 +656,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
         ) : (
           <button
             type="submit"
-            disabled={!input.trim()}
+            disabled={!input.trim() && attachments.length === 0}
             className="rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 font-medium transition disabled:opacity-50"
           >
             Send
