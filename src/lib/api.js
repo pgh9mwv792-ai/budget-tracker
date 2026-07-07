@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { todayISO } from './dateHelpers'
 
 const DEFAULT_CATEGORIES = [
   { name: 'Groceries', kind: 'expense' },
@@ -502,7 +503,7 @@ export async function createCreditScore({ score, source, recordedOn, note }) {
       user_id: user.id,
       score,
       source: source || null,
-      recorded_on: recordedOn || new Date().toISOString().slice(0, 10),
+      recorded_on: recordedOn || todayISO(),
       note: note || null,
     })
     .select()

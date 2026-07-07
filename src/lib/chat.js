@@ -1,10 +1,10 @@
 import { supabase } from './supabaseClient'
-import { monthKey } from './dateHelpers'
+import { monthKey, todayISO } from './dateHelpers'
 import { computeFoodCost } from './foodCost'
 import { searchFoods, getFoodDetails } from './api'
 import { merchantSimilarity, descriptorPurchaseDate, txnDescriptorText } from './receiptMatch'
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayISO()
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
 
 // ---------------------------------------------------------------------------

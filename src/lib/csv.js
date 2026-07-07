@@ -1,5 +1,5 @@
 // Builds a CSV string from transactions and triggers a browser download.
-// No dependencies — just the DOM.
+import { todayISO } from './dateHelpers'
 
 function escapeCell(value) {
   const s = value == null ? '' : String(value)
@@ -27,7 +27,7 @@ export function downloadTransactionsCsv(transactions) {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
-  const stamp = new Date().toISOString().slice(0, 10)
+  const stamp = todayISO()
   link.href = url
   link.download = `budget-transactions-${stamp}.csv`
   document.body.appendChild(link)

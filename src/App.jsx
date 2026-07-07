@@ -31,7 +31,7 @@ import * as api from './lib/api'
 import { supabase } from './lib/supabaseClient'
 import { merchantKey, matchRules } from './lib/analysis'
 import { perUnitCost } from './lib/receiptMatch'
-import { addDays } from './lib/dateHelpers'
+import { addDays, todayISO } from './lib/dateHelpers'
 
 function AppShell() {
   const { user, loading, needsMfa, signOut } = useAuth()
@@ -354,7 +354,7 @@ function AppShell() {
   // Food & Money hero (cost/day, cost per protein), the cheapest-protein card,
   // and the verdict/charts. Uses the existing default categories by name.
   const loadSampleData = async () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayISO()
     const catId = (name) => categories.find((c) => c.name === name)?.id ?? null
     const samples = [
       { date: addDays(today, -30), amount: 3200, kind: 'income', categoryId: catId('Salary'), note: 'Salary' },

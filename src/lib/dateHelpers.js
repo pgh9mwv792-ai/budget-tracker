@@ -2,8 +2,19 @@ export function monthKey(dateStr) {
   return dateStr.slice(0, 7) // 'YYYY-MM'
 }
 
+// The current calendar date in the user's LOCAL timezone as 'YYYY-MM-DD'.
+// new Date().toISOString() gives the UTC date instead, which is already
+// "tomorrow" for anyone behind UTC in the evening — that made the whole app
+// jump a day ahead. Always use this for "today".
+export function todayISO(reference = new Date()) {
+  const y = reference.getFullYear()
+  const m = String(reference.getMonth() + 1).padStart(2, '0')
+  const d = String(reference.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export function isSameMonth(dateStr, reference = new Date()) {
-  return monthKey(dateStr) === monthKey(reference.toISOString())
+  return monthKey(dateStr) === monthKey(todayISO(reference))
 }
 
 export function monthLabel(key) {

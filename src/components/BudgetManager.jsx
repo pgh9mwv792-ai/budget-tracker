@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { monthKey } from '../lib/dateHelpers'
+import { monthKey, todayISO } from '../lib/dateHelpers'
 
 export default function BudgetManager({ categories, budgets, transactions, onSetBudget, onRemoveBudget }) {
-  const currentMonth = monthKey(new Date().toISOString())
+  const currentMonth = monthKey(todayISO())
 
   // How much has been spent per expense category THIS month.
   const spentByCategory = useMemo(() => {

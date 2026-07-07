@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { todayISO } from './dateHelpers'
 
 const MAX_PDF_BYTES = 8 * 1024 * 1024 // Anthropic accepts fairly large PDFs; keep a sane cap.
 
@@ -81,7 +82,7 @@ export async function callVision(system, messages, maxTokens) {
 // Sends a receipt file (photo, screenshot, or PDF) to Claude and returns a
 // normalized draft transaction: { merchant, date, amount, category, confidence }.
 // `category` is either one of the user's expense-category names or null.
-export async function parseReceipt({ file, categories = [], today = new Date().toISOString().slice(0, 10) }) {
+export async function parseReceipt({ file, categories = [], today = todayISO() }) {
   const expenseCats = categories.filter((c) => c.kind === 'expense').map((c) => c.name)
   const block = await fileToContentBlock(file)
 
@@ -152,7 +153,7 @@ const ITEMIZED_MAX_TOKENS = 4096
 //   • looks_like_food is the model's guess; the UI only uses it to pre-check a
 //     box — the user decides is_food.
 //   • an unreadable image returns { error } and NO invented items.
-export async function parseReceiptItemized({ file, files, today = new Date().toISOString().slice(0, 10) }) {
+export async function parseReceiptItemized({ file, files, today = todayISO() }) {
   const list = (files ?? (file ? [file] : [])).filter(Boolean)
   if (!list.length) throw new Error('Add at least one photo of the receipt.')
   const blocks = await Promise.all(list.map(fileToContentBlock))

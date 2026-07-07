@@ -9,6 +9,7 @@ import {
   CartesianGrid,
 } from 'recharts'
 import { useIsMobile } from '../lib/useMediaQuery'
+import { todayISO } from '../lib/dateHelpers'
 
 // Common places people can see their score for free — used to prefill the
 // "where did this come from" dropdown so entry is one tap.
@@ -47,7 +48,7 @@ export default function CreditTab({ scores = [], accounts = [], onAdd, onDelete 
 
 function ScoreLog({ scores, onAdd, onDelete }) {
   const isMobile = useIsMobile()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayISO()
   const [score, setScore] = useState('')
   const [source, setSource] = useState(SOURCES[0])
   const [recordedOn, setRecordedOn] = useState(today)

@@ -1,4 +1,4 @@
-import { monthKey, addDays } from './dateHelpers'
+import { monthKey, addDays, todayISO } from './dateHelpers'
 import { detectRecurring } from './analysis'
 
 function sum(txs) {
@@ -20,7 +20,7 @@ function sum(txs) {
 export function computeMonthOutlook(
   transactions = [],
   budgets = [],
-  { today = new Date().toISOString().slice(0, 10) } = {}
+  { today = todayISO() } = {}
 ) {
   const month = monthKey(today)
   const [year, mon] = month.split('-').map(Number)
@@ -200,7 +200,7 @@ export function computeInsights(
   transactions = [],
   budgets = [],
   categories = [],
-  { today = new Date().toISOString().slice(0, 10) } = {}
+  { today = todayISO() } = {}
 ) {
   const month = monthKey(today)
   const [year, mon] = month.split('-').map(Number)
@@ -260,7 +260,7 @@ export function computeInsights(
 
 // A once-a-week "here's how your week went" digest, computed from the trailing
 // 7 days vs the 7 before that. The in-app retention hook.
-export function computeWeeklySummary(transactions = [], { today = new Date().toISOString().slice(0, 10) } = {}) {
+export function computeWeeklySummary(transactions = [], { today = todayISO() } = {}) {
   const weekStart = addDays(today, -6) // inclusive 7-day window ending today
   const prevStart = addDays(today, -13)
   const prevEnd = addDays(today, -7)

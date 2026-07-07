@@ -1,6 +1,7 @@
 import { useState } from 'react'
+import { todayISO } from '../lib/dateHelpers'
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayISO()
 
 export default function TransactionForm({ categories, onSubmit, initial, onCancel, stacked = false }) {
   const [date, setDate] = useState(initial?.date ?? today())

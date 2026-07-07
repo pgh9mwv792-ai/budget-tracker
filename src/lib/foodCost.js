@@ -1,4 +1,4 @@
-import { monthKey, addDays } from './dateHelpers'
+import { monthKey, addDays, todayISO } from './dateHelpers'
 
 // ---------------------------------------------------------------------------
 // Food-cost intelligence. Pure, deterministic functions (pass `today` so they
@@ -49,7 +49,7 @@ export function classifyFoodTxn(t) {
 }
 
 function isoToday() {
-  return new Date().toISOString().slice(0, 10)
+  return todayISO()
 }
 
 // Number of days in the calendar month containing `dateStr` ('YYYY-MM-DD').

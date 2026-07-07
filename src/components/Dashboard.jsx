@@ -12,7 +12,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
-import { monthKey, monthLabel, trailingMonthKeys } from '../lib/dateHelpers'
+import { monthKey, monthLabel, trailingMonthKeys, todayISO } from '../lib/dateHelpers'
 import { detectRecurring } from '../lib/analysis'
 import { computeMonthOutlook, computeInsights, computeWeeklySummary } from '../lib/forecast'
 import { computeFoodCost } from '../lib/foodCost'
@@ -36,7 +36,7 @@ export default function Dashboard({
   onAsk,
   onLogFood,
 }) {
-  const currentMonth = monthKey(new Date().toISOString())
+  const currentMonth = monthKey(todayISO())
   const isMobile = useIsMobile()
 
   const outlook = useMemo(() => computeMonthOutlook(transactions, budgets), [transactions, budgets])
@@ -618,7 +618,7 @@ function ProteinValueCard({ efficiency, onLogFood, onNavigate }) {
   const logOne = async (food) => {
     if (!onLogFood) return
     await onLogFood({
-      date: new Date().toISOString().slice(0, 10),
+      date: todayISO(),
       meal: 'snack',
       foodId: food.id,
       name: food.name,

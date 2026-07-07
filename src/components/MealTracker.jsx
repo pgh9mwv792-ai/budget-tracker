@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { addDays } from '../lib/dateHelpers'
+import { addDays, todayISO } from '../lib/dateHelpers'
 import { costPerDay, costPerProtein } from '../lib/foodCost'
 import { MACRO_KEYS, MACRO_META, OVER_BAR } from '../lib/macros'
 import FoodSearchSheet from './FoodSearchSheet'
@@ -13,7 +13,7 @@ const MEALS = [
 const MEAL_KEYS = new Set(MEALS.map((m) => m.key))
 const UNCATEGORIZED = { key: null, label: 'Uncategorized' }
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayISO()
 
 function totalsFor(logs) {
   return logs.reduce(

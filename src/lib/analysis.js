@@ -1,4 +1,4 @@
-import { daysBetween, addDays } from './dateHelpers'
+import { daysBetween, addDays, todayISO } from './dateHelpers'
 
 // Normalizes a transaction note/merchant into a stable key so that variations
 // of the same merchant collapse together. e.g.
@@ -60,7 +60,7 @@ function median(nums) {
 }
 
 function isoToday() {
-  return new Date().toISOString().slice(0, 10)
+  return todayISO()
 }
 
 // Detects recurring transactions (subscriptions, regular income/bills) by
