@@ -155,7 +155,7 @@ export default function Dashboard({
         </div>
       </div>
 
-      <RecurringPanel items={recurring} />
+      <RecurringPanel items={recurring} onNavigate={onNavigate} />
     </div>
   )
 }
@@ -766,11 +766,21 @@ function VerdictCard({ outlook, onNavigate }) {
   )
 }
 
-function RecurringPanel({ items }) {
+function RecurringPanel({ items, onNavigate }) {
   if (items.length === 0) return null
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Recurring &amp; upcoming</h3>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Recurring &amp; upcoming</h3>
+        {onNavigate && (
+          <button
+            onClick={() => onNavigate('Transactions')}
+            className="shrink-0 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+          >
+            View all subscriptions →
+          </button>
+        )}
+      </div>
       <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
         Detected from repeating transactions — next date is an estimate.
       </p>

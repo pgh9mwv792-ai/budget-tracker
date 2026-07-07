@@ -121,6 +121,159 @@ export function detectRecurring(
   return results.sort((a, b) => (a.nextDate < b.nextDate ? -1 : 1))
 }
 
+// ---------- hardened recurring detection (mirror src/lib/analysis.js) ----------
+// Kept in lockstep with analyzeRecurring/recurringBurn in src/lib/analysis.js.
+// Used for the digest's price-change, new-recurring, and missed-charge lines.
+
+type CadenceBand = { name: string; min: number; max: number; perMonth: number; grace: number }
+
+const CADENCE_BANDS: CadenceBand[] = [
+  { name: 'weekly', min: 5, max: 9, perMonth: 30.4 / 7, grace: 3 },
+  { name: 'every 2 weeks', min: 11, max: 18, perMonth: 30.4 / 14, grace: 4 },
+  { name: 'monthly', min: 24, max: 38, perMonth: 1, grace: 7 },
+  { name: 'quarterly', min: 80, max: 100, perMonth: 1 / 3, grace: 12 },
+  { name: 'annual', min: 350, max: 380, perMonth: 1 / 12, grace: 20 },
+]
+
+function bandFor(gap: number): CadenceBand | null {
+  return CADENCE_BANDS.find((b) => gap >= b.min && gap <= b.max) ?? null
+}
+
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0
+  const s = [...nums].sort((a, b) => a - b)
+  const mid = Math.floor(s.length / 2)
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
+}
+
+const BILL_RE =
+  /utilit|electric|energy|\bgas\b|\bwater\b|sewer|insurance|\brent\b|mortgage|internet|broadband|cable|wireless|\bphone\b|verizon|comcast|xfinity|spectrum/i
+
+export type Override = { merchant_key: string; status: 'confirmed' | 'not_recurring'; nickname?: string | null }
+
+export type RecurringGroup = {
+  key: string
+  label: string
+  rawLabel: string
+  nickname: string | null
+  classification: 'subscription' | 'bill'
+  cadence: string
+  amount: number
+  monthlyEquivalent: number
+  count: number
+  lastDate: string
+  nextDate: string
+  history: Array<{ date: string; amount: number }>
+  lifetime: number
+  status: 'active' | 'price_changed' | 'missed'
+  priceDelta: { from: number; to: number; direction: 'up' | 'down' } | null
+  missedSince: string | null
+  confirmed: boolean
+}
+
+export function analyzeRecurring(
+  transactions: Txn[],
+  { today = isoToday(), overrides = new Map<string, Override>() }: { today?: string; overrides?: Map<string, Override> } = {},
+): RecurringGroup[] {
+  const groups = new Map<string, Txn[]>()
+  for (const t of transactions) {
+    if (t.kind === 'transfer' || t.kind === 'income') continue
+    const key = merchantKey(t.note)
+    if (!key) continue
+    if (overrides.get(key)?.status === 'not_recurring') continue
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(t)
+  }
+
+  const results: RecurringGroup[] = []
+  for (const [key, txs] of groups) {
+    const ov = overrides.get(key)
+    const group = buildRecurringGroup(key, txs, {
+      today,
+      confirmed: ov?.status === 'confirmed',
+      nickname: ov?.nickname || null,
+    })
+    if (group) results.push(group)
+  }
+  return results.sort((a, b) => (a.nextDate < b.nextDate ? -1 : 1))
+}
+
+function buildRecurringGroup(
+  key: string,
+  txs: Txn[],
+  { today, confirmed, nickname }: { today: string; confirmed: boolean; nickname: string | null },
+): RecurringGroup | null {
+  if (txs.length < 2) return null
+
+  const sorted = [...txs].sort((a, b) => (a.date < b.date ? -1 : 1))
+  const gaps: number[] = []
+  for (let i = 1; i < sorted.length; i++) gaps.push(daysBetween(sorted[i - 1].date, sorted[i].date))
+  const medGap = median(gaps)
+  const band = bandFor(medGap)
+
+  const minOcc = band?.name === 'annual' ? 2 : 3
+  const meetsCadence = !!band && sorted.length >= minOcc
+  if (!meetsCadence && !confirmed) return null
+
+  const amounts = sorted.map((t) => Number(t.amount))
+  const med = median(amounts)
+  const last = sorted[sorted.length - 1]
+
+  const catName = last.category?.name ?? ''
+  const noteText = sorted.map((t) => t.note ?? '').join(' ')
+  const billish = BILL_RE.test(catName) || BILL_RE.test(noteText)
+
+  const prior = amounts.slice(0, -1)
+  const priorMed = median(prior)
+  const priorTol = Math.max(0.15 * priorMed, 3)
+  const priorConsistent = prior.length === 0 || prior.every((a) => Math.abs(a - priorMed) <= priorTol)
+
+  let classification: 'subscription' | 'bill'
+  if (billish) classification = 'bill'
+  else if (priorConsistent) classification = 'subscription'
+  else if (confirmed) classification = 'bill'
+  else return null
+
+  const nextDate = addDays(last.date, Math.round(medGap || 30))
+
+  const latest = amounts[amounts.length - 1]
+  let status: 'active' | 'price_changed' | 'missed' = 'active'
+  let priceDelta: RecurringGroup['priceDelta'] = null
+  if (prior.length >= 1 && Math.abs(latest - priorMed) > priorTol) {
+    status = 'price_changed'
+    priceDelta = { from: priorMed, to: latest, direction: latest > priorMed ? 'up' : 'down' }
+  }
+
+  const grace = band?.grace ?? 7
+  const missThreshold = addDays(nextDate, Math.round(1.5 * grace))
+  let missedSince: string | null = null
+  if (missThreshold < today) {
+    status = 'missed'
+    missedSince = missThreshold
+  }
+
+  const perMonth = band?.perMonth ?? 1
+  return {
+    key,
+    label: nickname || last.note || key,
+    rawLabel: last.note || key,
+    nickname: nickname || null,
+    classification,
+    cadence: band?.name ?? 'irregular',
+    amount: med,
+    monthlyEquivalent: med * perMonth,
+    count: sorted.length,
+    lastDate: last.date,
+    nextDate,
+    history: sorted.map((t) => ({ date: t.date, amount: Number(t.amount) })),
+    lifetime: amounts.reduce((a, b) => a + b, 0),
+    status,
+    priceDelta,
+    missedSince,
+    confirmed,
+  }
+}
+
 // ---------- food classification + cost (mirror src/lib/foodCost.js) ----------
 
 const GROCERY_RE =
@@ -246,10 +399,11 @@ export type DigestInput = {
   transactions?: Txn[]
   foodLogs?: FoodLog[]
   goals?: Goal[]
+  recurringOverrides?: Override[]
 }
 
 export function composeDigest(
-  { transactions = [], foodLogs = [], goals = [] }: DigestInput,
+  { transactions = [], foodLogs = [], goals = [], recurringOverrides = [] }: DigestInput,
   { today = isoToday() }: { today?: string } = {},
 ): { subject: string; sections: Section[]; text: string; weekStart: string } {
   const weekStart = addDays(today, -6) // inclusive 7-day window ending today
@@ -344,6 +498,61 @@ export function composeDigest(
       key: 'upcoming',
       title: 'Coming up this week',
       body: `Heads up on likely charges: ${parts.join('; ')}.`,
+    })
+  }
+
+  // ---- 3b. Subscription changes this week: price hikes, new charges, misses ----
+  // Uses the hardened detector and honors the user's not_recurring/confirmed
+  // overrides. "New this week" is derived by comparing detection now vs. on the
+  // transactions dated before this week, so we only announce a change once.
+  const overridesMap = new Map<string, Override>(
+    (recurringOverrides ?? []).map((o) => [o.merchant_key, o]),
+  )
+  const recurringNow = analyzeRecurring(transactions, { today, overrides: overridesMap })
+  const recurringBefore = analyzeRecurring(
+    transactions.filter((t) => t.date < weekStart),
+    { today, overrides: overridesMap },
+  )
+  const knownBefore = new Set(recurringBefore.map((r) => r.key))
+
+  const priceChanges = recurringNow.filter(
+    (r) => r.status === 'price_changed' && r.priceDelta && r.lastDate >= weekStart,
+  )
+  if (priceChanges.length > 0) {
+    const parts = priceChanges
+      .slice(0, 4)
+      .map(
+        (r) =>
+          `${r.label} went from $${r.priceDelta!.from.toFixed(2)} → $${r.priceDelta!.to.toFixed(2)}`,
+      )
+    sections.push({ key: 'price_change', title: 'A price went up', body: `${parts.join('. ')}.` })
+  }
+
+  const newlyDetected = recurringNow.filter(
+    (r) => !knownBefore.has(r.key) && r.status !== 'missed' && r.lastDate >= weekStart,
+  )
+  if (newlyDetected.length > 0) {
+    const parts = newlyDetected
+      .slice(0, 4)
+      .map((r) => `${r.label} (~$${money(r.monthlyEquivalent)}/mo)`)
+    sections.push({
+      key: 'new_recurring',
+      title: 'New recurring charge',
+      body: `Looks like a new recurring charge: ${parts.join('; ')}.`,
+    })
+  }
+
+  const missed = recurringNow.filter(
+    (r) => r.status === 'missed' && r.missedSince != null && r.missedSince >= weekStart && r.missedSince <= today,
+  )
+  if (missed.length > 0) {
+    const parts = missed
+      .slice(0, 4)
+      .map((r) => `${r.label} didn’t charge this cycle (expected around ${r.nextDate.slice(5)})`)
+    sections.push({
+      key: 'missed',
+      title: 'A charge went missing',
+      body: `${parts.join('. ')}. If you cancelled, nice — if not, worth a look.`,
     })
   }
 

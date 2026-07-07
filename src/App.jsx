@@ -18,6 +18,7 @@ const MealTracker = lazy(() => import('./components/MealTracker'))
 const GoalTracker = lazy(() => import('./components/GoalTracker'))
 const CategoryManager = lazy(() => import('./components/CategoryManager'))
 const Settings = lazy(() => import('./components/Settings'))
+const Subscriptions = lazy(() => import('./components/Subscriptions'))
 // The floating assistant is always mounted but never needed for first paint,
 // so it (and its chat library) load after the initial render.
 const ChatWidget = lazy(() => import('./components/ChatWidget'))
@@ -49,6 +50,8 @@ function AppShell() {
   // Itemized receipts (migration 0016) and the remembered raw-item→food rules.
   const [receipts, setReceipts] = useState([])
   const [receiptItemRules, setReceiptItemRules] = useState([])
+  // Per-merchant curation of recurring-charge detection (migration 0019).
+  const [recurringOverrides, setRecurringOverrides] = useState([])
   // The latest weekly digest the user hasn't dismissed (migration 0015),
   // surfaced as a card at the top of the Dashboard. null when there's none.
   const [latestDigest, setLatestDigest] = useState(null)
@@ -73,7 +76,7 @@ function AppShell() {
   const loadAll = useCallback(async () => {
     if (!user) return
     if (!hasLoadedOnce.current) setDataLoading(true)
-    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules] = await Promise.all([
+    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules, recovr] = await Promise.all([
       api.ensureDefaultCategories(user.id),
       api.fetchTransactions(),
       api.fetchGoals(),
@@ -99,6 +102,8 @@ function AppShell() {
       // Itemized receipts + item rules live in migration 0016; degrade gracefully.
       api.fetchReceipts().catch(() => []),
       api.fetchReceiptItemRules().catch(() => []),
+      // Recurring-charge overrides live in migration 0019; degrade gracefully.
+      api.fetchRecurringOverrides().catch(() => []),
     ])
 
     // Auto-categorize: apply saved merchant rules to any uncategorized
@@ -131,6 +136,7 @@ function AppShell() {
     setEntitlements(ents ?? { plan: 'free', status: null, period_end: null })
     setReceipts(rcpts ?? [])
     setReceiptItemRules(ritemrules ?? [])
+    setRecurringOverrides(recovr ?? [])
     hasLoadedOnce.current = true
     setDataLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -507,6 +513,19 @@ function AppShell() {
     return updatedItem
   }
 
+  // Curate the recurring-charge detection: confirm a marginal group, exclude a
+  // false positive (e.g. groceries), or set a friendly nickname. Persists to
+  // recurring_overrides and keeps local state in sync so the Subscriptions view
+  // updates instantly.
+  const setRecurringOverride = async (merchantKey, { status, nickname }) => {
+    const saved = await api.upsertRecurringOverride(merchantKey, { status, nickname })
+    setRecurringOverrides((prev) => [...prev.filter((o) => o.merchant_key !== merchantKey), saved])
+  }
+  const clearRecurringOverride = async (merchantKey) => {
+    await api.deleteRecurringOverride(merchantKey)
+    setRecurringOverrides((prev) => prev.filter((o) => o.merchant_key !== merchantKey))
+  }
+
   return (
     <div className="min-h-screen">
       <NavBar
@@ -540,10 +559,16 @@ function AppShell() {
 
         {activeTab === 'Transactions' && (
           <>
+            <Subscriptions
+              transactions={transactions}
+              overrides={recurringOverrides}
+              onSetOverride={setRecurringOverride}
+              onClearOverride={clearRecurringOverride}
+            />
             <UpgradeGate
               plan={plan}
               title="Connect your bank — a Pro feature"
-              blurb="Free covers manual entry and receipt scanning. Pro adds automatic bank & credit-card import and syncing."
+              blurb="Free covers manual entry and receipt scanning. Pro adds automatic bank & credit-card import and syncing — which also powers automatic subscription & recurring-bill tracking."
             >
               <PlaidLinkButton onLinked={loadAll} onSync={loadAll} />
             </UpgradeGate>

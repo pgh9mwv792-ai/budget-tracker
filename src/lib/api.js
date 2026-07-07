@@ -187,6 +187,51 @@ export async function deleteMerchantRule(id) {
   if (error) throw error
 }
 
+// ---------- recurring overrides (subscription curation) ----------
+
+// Per-merchant user curation of the recurring-charge detection (migration
+// 0019). Keyed by (user_id, merchant_key). status is 'confirmed' | 'not_recurring';
+// nickname is an optional friendly display name. Callers degrade to [] until run.
+export async function fetchRecurringOverrides() {
+  const { data, error } = await supabase.from('recurring_overrides').select('*')
+  if (error) throw error
+  return data
+}
+
+export async function upsertRecurringOverride(merchantKey, { status, nickname }) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('recurring_overrides')
+    .upsert(
+      {
+        user_id: user.id,
+        merchant_key: merchantKey,
+        status,
+        nickname: nickname === '' || nickname == null ? null : nickname,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,merchant_key' }
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteRecurringOverride(merchantKey) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { error } = await supabase
+    .from('recurring_overrides')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('merchant_key', merchantKey)
+  if (error) throw error
+}
+
 // ---------- budgets ----------
 
 export async function fetchBudgets() {

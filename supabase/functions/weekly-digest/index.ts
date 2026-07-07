@@ -99,21 +99,30 @@ async function processUser(
   }
 
   // --- pull the data the digest needs (service role, filtered by user) ---
-  const since90 = addDays(today, -97)
+  // Transactions reach back ~13 months so the recurring detector can see annual
+  // charges and a subscription's price history; the spend/food math windows
+  // itself down internally, so the extra rows are harmless.
+  const since400 = addDays(today, -400)
   const since40 = addDays(today, -40)
 
-  const [{ data: transactions }, { data: foodLogs }, { data: goals }] = await Promise.all([
+  const [{ data: transactions }, { data: foodLogs }, { data: goals }, { data: overrides }] = await Promise.all([
     admin
       .from('transactions')
       .select('date, amount, kind, note, category:categories(name, kind)')
       .eq('user_id', userId)
-      .gte('date', since90),
+      .gte('date', since400),
     admin.from('food_logs').select('date, servings, protein, cost').eq('user_id', userId).gte('date', since40),
     admin.from('goals').select('name, target_amount, current_amount').eq('user_id', userId),
+    admin.from('recurring_overrides').select('merchant_key, status, nickname').eq('user_id', userId),
   ])
 
   const { subject, sections, text, weekStart } = composeDigest(
-    { transactions: transactions ?? [], foodLogs: foodLogs ?? [], goals: goals ?? [] },
+    {
+      transactions: transactions ?? [],
+      foodLogs: foodLogs ?? [],
+      goals: goals ?? [],
+      recurringOverrides: overrides ?? [],
+    },
     { today },
   )
 
