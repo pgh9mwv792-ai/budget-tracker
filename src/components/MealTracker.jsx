@@ -10,6 +10,7 @@ const MEALS = [
   { key: 'lunch', label: 'Lunch' },
   { key: 'dinner', label: 'Dinner' },
   { key: 'snack', label: 'Snacks' },
+  { key: 'supplement', label: 'Supplements' },
 ]
 const MEAL_KEYS = new Set(MEALS.map((m) => m.key))
 const UNCATEGORIZED = { key: null, label: 'Uncategorized' }
@@ -82,8 +83,8 @@ export default function MealTracker({
   const stackFoods = useMemo(() => foods.filter((f) => f.is_stack), [foods])
   const [loggingStack, setLoggingStack] = useState(false)
 
-  // One-tap: log every stack food at one serving to the viewed day, uncategorized
-  // (supplements aren't a meal). Single confirmation, then a batch of logs.
+  // One-tap: log every stack food at one serving to the viewed day, filed under
+  // the Supplements section. Single confirmation, then a batch of logs.
   async function logStack() {
     if (stackFoods.length === 0 || loggingStack) return
     const names = stackFoods.map((f) => f.name).join(', ')
@@ -96,7 +97,7 @@ export default function MealTracker({
       for (const f of stackFoods) {
         await onLogFood({
           date,
-          meal: null,
+          meal: 'supplement',
           foodId: f.id,
           name: f.name,
           servings: 1,

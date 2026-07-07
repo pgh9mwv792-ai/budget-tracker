@@ -116,8 +116,8 @@ export const CHAT_TOOLS = [
         food_name: { type: 'string', description: 'Name of the food (existing library item, or a new one-off).' },
         meal: {
           type: 'string',
-          enum: ['breakfast', 'lunch', 'dinner', 'snack'],
-          description: 'Which meal to log under. Omit if unknown — the food is filed as Uncategorized.',
+          enum: ['breakfast', 'lunch', 'dinner', 'snack', 'supplement'],
+          description: 'Which meal to log under. Use "supplement" for vitamins/supplements. Omit if unknown — the food is filed as Uncategorized.',
         },
         grams: {
           type: 'number',
@@ -163,8 +163,8 @@ export const CHAT_TOOLS = [
       properties: {
         meal: {
           type: 'string',
-          enum: ['breakfast', 'lunch', 'dinner', 'snack'],
-          description: 'Optional meal to file the stack under. Omit to file it as Uncategorized (the usual choice for supplements).',
+          enum: ['breakfast', 'lunch', 'dinner', 'snack', 'supplement'],
+          description: 'Optional meal to file the stack under. Defaults to "supplement" (the Supplements section) when omitted.',
         },
         date: { type: 'string', description: 'Date as YYYY-MM-DD. Defaults to today.' },
       },
@@ -723,10 +723,11 @@ export async function executeTool(name, input, ctx) {
           return 'Your daily stack is empty. Flag the supplements you take daily as stack items on the Meals tab (the ☆ Stack toggle in the food library), then try again.'
         }
         const date = input.date || today()
+        const meal = input.meal ?? 'supplement'
         for (const f of stack) {
           await actions.logFood({
             date,
-            meal: input.meal ?? null,
+            meal,
             foodId: f.id,
             name: f.name,
             servings: 1,
@@ -737,7 +738,7 @@ export async function executeTool(name, input, ctx) {
             cost: f.cost == null ? null : Number(f.cost),
           })
         }
-        return `Logged your daily stack (${stack.length} item${stack.length === 1 ? '' : 's'}) to ${input.meal || 'Uncategorized'} on ${date}: ${stack.map((f) => f.name).join(', ')}.`
+        return `Logged your daily stack (${stack.length} item${stack.length === 1 ? '' : 's'}) to ${meal} on ${date}: ${stack.map((f) => f.name).join(', ')}.`
       }
       case 'search_transactions': {
         const merchant = String(input.merchant || '').trim()
