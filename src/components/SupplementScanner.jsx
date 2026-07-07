@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { parseSupplement } from '../lib/supplement'
 import { reportError } from '../lib/report'
-import { normalizeFoodNutrients } from '../lib/nutrients'
+import { normalizeFoodNutrients, normalizeNutrient, NUTRIENT_BY_ID } from '../lib/nutrients'
 
 // "Scan a supplement label" flow: pick/snap a photo of a Supplement Facts panel
 // → Claude reads it → an editable review card of ingredients → saves a food into
@@ -126,6 +126,14 @@ export default function SupplementScanner({ onSave }) {
     setError(null)
   }
 
+  // What each parsed row will count as on the Meals tab, computed live so edits
+  // reflect immediately. `mapped` is the canonical micronutrient name (e.g.
+  // "Zinc") or null when the row's name doesn't match a tracked nutrient.
+  const detected = (draft?.ingredients ?? []).map((ing) => {
+    const norm = normalizeNutrient(ing.name, ing.amount, ing.unit, 'label')
+    return { ...ing, mapped: norm ? NUTRIENT_BY_ID.get(norm.id)?.name ?? null : null }
+  })
+
   return (
     <div>
       {/* Camera: opens the camera directly on phones. */}
@@ -197,9 +205,37 @@ export default function SupplementScanner({ onSave }) {
             </div>
           )}
 
+          {detected.length > 0 && (
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30 px-3 py-2.5">
+              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 mb-1.5">Will be logged</p>
+              <ul className="space-y-1">
+                {detected.map((d, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm">
+                    <span className="tabular-nums font-semibold text-slate-800 dark:text-slate-100 shrink-0 w-16 text-right">
+                      {d.amount === '' ? '—' : d.amount} {d.unit}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">
+                      {d.name || <span className="italic text-amber-600 dark:text-amber-400">add a name below →</span>}
+                    </span>
+                    {d.mapped ? (
+                      <span className="shrink-0 rounded-full bg-emerald-600 text-white text-xs font-medium px-2 py-0.5">{d.mapped}</span>
+                    ) : (
+                      <span className="shrink-0 rounded-full bg-amber-200 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 text-xs font-medium px-2 py-0.5">
+                        not counted
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-[11px] text-emerald-700/80 dark:text-emerald-400/70">
+                Green pills count toward that micronutrient on the Meals tab. Fix any “not counted” row below.
+              </p>
+            </div>
+          )}
+
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Ingredients (per serving)</span>
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Ingredients (edit if needed)</span>
               <button onClick={addIngredient} className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline">
                 + Add row
               </button>

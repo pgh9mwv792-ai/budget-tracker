@@ -86,7 +86,10 @@ export async function parseSupplement({ file }) {
           amountNormalized: finiteOrNull(ing?.amount_normalized_mcg_or_mg),
           percentDv: finiteOrNull(ing?.percent_dv),
         }))
-        .filter((ing) => ing.name)
+        // Keep any row the reader got an amount for even if it missed the name,
+        // so the review card surfaces it (with a "not counted" flag) for the user
+        // to name — rather than silently dropping a nutrient it half-read.
+        .filter((ing) => ing.name || ing.amount !== '')
     : []
 
   if (!ingredients.length && !String(parsed.product ?? '').trim()) {
