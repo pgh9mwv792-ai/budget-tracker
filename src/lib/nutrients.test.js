@@ -45,6 +45,23 @@ describe('normalizeNutrient — label alias matching', () => {
     expect(normalizeNutrient('Cholecalciferol', 25, 'mcg', 'label').id).toBe('vitamin_d')
   })
 
+  it('maps a mineral written as "Nutrient (as form)"', () => {
+    expect(normalizeNutrient('Zinc (as zinc glycinate)', 15, 'mg', 'label').id).toBe('zinc')
+    expect(normalizeNutrient('Copper (as copper glycinate)', 2, 'mg', 'label').id).toBe('copper')
+  })
+
+  it('maps a bare chelate/salt form with no base-mineral prefix', () => {
+    expect(normalizeNutrient('Copper Glycinate', 2, 'mg', 'label').id).toBe('copper')
+    expect(normalizeNutrient('Zinc Bisglycinate', 15, 'mg', 'label').id).toBe('zinc')
+    expect(normalizeNutrient('Chelated Magnesium', 100, 'mg', 'label').id).toBe('magnesium')
+  })
+
+  it('still prefers the exact carrier-salt alias over the element fallback', () => {
+    // "Sodium Selenite" must resolve to selenium (its alias), not sodium (first token).
+    expect(normalizeNutrient('Sodium Selenite', 100, 'mcg', 'label').id).toBe('selenium')
+    expect(normalizeNutrient('Potassium Iodide', 150, 'mcg', 'label').id).toBe('iodine')
+  })
+
   it('returns null for an unmappable ingredient name', () => {
     expect(normalizeNutrient('Proprietary Herbal Blend', 450, 'mg', 'label')).toBeNull()
   })

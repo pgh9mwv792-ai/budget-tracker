@@ -36,14 +36,15 @@ Respond with ONLY a JSON object — no prose, no markdown code fences. Use exact
 }
 
 Rules — follow exactly:
-1. PRESERVE the chemical form in the ingredient name. "Zinc (as zinc glycinate)" stays "Zinc (as zinc glycinate)", not just "Zinc". "Vitamin B12 (as methylcobalamin)" keeps the form.
-2. Keep the label's LITERAL amount and unit in "amount"/"unit". Additionally set "amount_normalized_mcg_or_mg" ONLY for these known standard IU conversions:
+1. Capture EVERY row of the Supplement Facts panel, even if the panel is tiny (a single-mineral pill may list just one or two rows, e.g. Zinc and Copper). Never skip a mineral or vitamin because its amount is small.
+2. ALWAYS include the base nutrient name, and PRESERVE the chemical form. Write it as "<Nutrient> (as <form>)" — e.g. "Zinc (as zinc glycinate)", "Copper (as copper glycinate)", "Vitamin B12 (as methylcobalamin)". If the label prints only the chemical form (e.g. just "Copper Glycinate"), still infer and lead with the base nutrient: "Copper (as copper glycinate)". Never return an empty "name".
+3. Keep the label's LITERAL amount and unit in "amount"/"unit". Additionally set "amount_normalized_mcg_or_mg" ONLY for these known standard IU conversions:
      - Vitamin D / D3: 40 IU = 1 mcg  (normalized value in mcg)
      - Vitamin E: 1 IU = 0.67 mg d-alpha-tocopherol  (normalized value in mg)
      - Vitamin A: 1 IU = 0.3 mcg RAE  (normalized value in mcg)
    If the unit is already mcg/mg/g, OR the conversion is not one of the standards above, set "amount_normalized_mcg_or_mg" to null. NEVER invent or guess a conversion.
-3. PROPRIETARY BLENDS (e.g. "Immune Complex 450 mg" with no per-ingredient breakdown): capture the blend as a SINGLE ingredient using the blend's name and total amount. Do NOT invent the individual ingredients or split the total.
-4. If the image is not a readable Supplement Facts / Nutrition Facts panel (blurry, wrong kind of photo, unreadable), set "error" to a short message and return empty/zero values elsewhere. Do NOT hallucinate ingredient values.`
+4. PROPRIETARY BLENDS (e.g. "Immune Complex 450 mg" with no per-ingredient breakdown): capture the blend as a SINGLE ingredient using the blend's name and total amount. Do NOT invent the individual ingredients or split the total.
+5. If the image is not a readable Supplement Facts / Nutrition Facts panel (blurry, wrong kind of photo, unreadable), set "error" to a short message and return empty/zero values elsewhere. Do NOT hallucinate ingredient values.`
 
 export async function parseSupplement({ file }) {
   // A Supplement Facts panel is dense fine print, so send more pixels and less

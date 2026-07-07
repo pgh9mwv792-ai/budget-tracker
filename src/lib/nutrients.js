@@ -32,8 +32,8 @@ export const NUTRIENTS = [
   { id: 'calcium', name: 'Calcium', unit: 'mg', usda_numbers: ['301'], aliases: ['calcium', 'calcium carbonate', 'calcium citrate'] },
   { id: 'iron', name: 'Iron', unit: 'mg', usda_numbers: ['303'], aliases: ['iron', 'ferrous sulfate', 'ferrous bisglycinate', 'ferrous fumarate'] },
   { id: 'magnesium', name: 'Magnesium', unit: 'mg', usda_numbers: ['304'], aliases: ['magnesium', 'magnesium oxide', 'magnesium citrate', 'magnesium glycinate'] },
-  { id: 'zinc', name: 'Zinc', unit: 'mg', usda_numbers: ['309'], aliases: ['zinc', 'zinc glycinate', 'zinc picolinate', 'zinc gluconate', 'zinc oxide'] },
-  { id: 'copper', name: 'Copper', unit: 'mg', usda_numbers: ['312'], aliases: ['copper', 'copper gluconate', 'cupric oxide'] },
+  { id: 'zinc', name: 'Zinc', unit: 'mg', usda_numbers: ['309'], aliases: ['zinc', 'zinc glycinate', 'zinc bisglycinate', 'zinc picolinate', 'zinc gluconate', 'zinc citrate', 'zinc sulfate', 'zinc monomethionine', 'zinc oxide'] },
+  { id: 'copper', name: 'Copper', unit: 'mg', usda_numbers: ['312'], aliases: ['copper', 'copper glycinate', 'copper bisglycinate', 'copper gluconate', 'copper citrate', 'copper sulfate', 'cupric sulfate', 'cupric oxide'] },
   { id: 'selenium', name: 'Selenium', unit: 'mcg', usda_numbers: ['317'], aliases: ['selenium', 'selenomethionine', 'sodium selenite'] },
   { id: 'potassium', name: 'Potassium', unit: 'mg', usda_numbers: ['306'], aliases: ['potassium', 'potassium chloride', 'potassium citrate'] },
   { id: 'sodium', name: 'Sodium', unit: 'mg', usda_numbers: ['307'], aliases: ['sodium', 'sodium chloride', 'salt'] },
@@ -60,6 +60,22 @@ for (const n of NUTRIENTS) {
     const key = compact(a)
     if (!BY_ALIAS.has(key)) BY_ALIAS.set(key, n)
   }
+}
+
+// Single-word element names for the minerals, used ONLY as a last-resort label
+// fallback: a chelate/salt row printed without the base-mineral prefix, e.g.
+// "Copper Glycinate", "Zinc Bisglycinate", "Chelated Magnesium". We match the
+// first element token that appears. Restricting the fallback to these unambiguous
+// element names keeps it safe — a full carrier-salt name like "Sodium Selenite"
+// or "Potassium Iodide" still resolves correctly via its own alias first (exact
+// match wins), so this only fires when nothing else matched.
+const MINERAL_IDS = new Set([
+  'calcium', 'iron', 'magnesium', 'zinc', 'copper', 'selenium',
+  'potassium', 'sodium', 'phosphorus', 'iodine',
+])
+const ELEMENT_TOKEN = new Map()
+for (const n of NUTRIENTS) {
+  if (MINERAL_IDS.has(n.id)) ELEMENT_TOKEN.set(compact(n.name), n)
 }
 
 // Lowercase, drop everything but letters/digits — makes "Vitamin B-12", "B12"
@@ -145,6 +161,19 @@ export function normalizeNutrient(raw, amount, unit, source) {
     const split = splitForm(raw)
     base = split.base
     entry = BY_ALIAS.get(compact(base)) ?? null
+    // Fallback: a mineral written as a bare chelate/salt form with no base-mineral
+    // prefix ("Copper Glycinate", "Zinc Bisglycinate", "Chelated Magnesium").
+    // Take the first recognizable element token. Only reached when the exact alias
+    // match above failed, so proper carrier-salt names still resolve correctly.
+    if (!entry) {
+      for (const tok of base.toLowerCase().split(/[^a-z0-9]+/)) {
+        const hit = ELEMENT_TOKEN.get(tok)
+        if (hit) {
+          entry = hit
+          break
+        }
+      }
+    }
   }
   if (!entry) return null
 
