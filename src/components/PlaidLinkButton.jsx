@@ -12,13 +12,17 @@ async function callFunction(name, body) {
   })
   if (error) {
     // supabase.functions.invoke hides our function's error body on a non-2xx
-    // response, so dig it out of error.context to show the real message.
+    // response, so dig the real message out of error.context. Build the message
+    // first, THEN throw — throwing inside the try would be caught right below and
+    // swallow the real message, leaving only the generic "non-2xx" text.
+    let message = error.message
     try {
       const details = await error.context.json()
-      throw new Error(details.error ?? error.message)
+      if (details?.error) message = details.error
     } catch {
-      throw error
+      // keep the fallback message
     }
+    throw new Error(message)
   }
   return data
 }
