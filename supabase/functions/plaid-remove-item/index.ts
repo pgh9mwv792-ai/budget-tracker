@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     // what stops one user from removing another user's bank.
     const { data: item, error: findErr } = await supabase
       .from('plaid_items')
-      .select('id, item_id, access_token_enc, access_token')
+      .select('id, item_id, access_token_enc')
       .eq('id', id)
       .eq('user_id', userId)
       .single()

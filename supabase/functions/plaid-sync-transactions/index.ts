@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
 
     const { data: items, error: itemsError } = await supabase
       .from('plaid_items')
-      .select('id, item_id, access_token_enc, access_token, cursor')
+      .select('id, item_id, access_token_enc, cursor')
       .eq('user_id', userId)
     if (itemsError) throw itemsError
 
