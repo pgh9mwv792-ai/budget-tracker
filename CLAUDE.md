@@ -112,3 +112,22 @@ Key pieces:
   prefix when < 70% of the day's calories come from foods reporting that nutrient.
 - **Daily stack:** `foods.is_stack` (migration 0021) + one-tap "Log my stack" +
   assistant `log_stack` tool.
+
+## Branded food capture (built Jul 2026)
+Extends the meal tracker to packaged/branded foods — see HANDOFF §4 (schema) and
+§6/§8 (Meals + assistant). Migration **0023** adds `foods.aliases text[]`,
+`foods.source_ref`, and two new `source` values (`'label_scan'`, `'web'`).
+- **Label scanner** — `FoodLabelScanner.jsx` + `lib/foodLabel.js`: photograph a
+  Nutrition Facts panel → per-serving food with `source='label_scan'` and its
+  full micro profile. It's the 🍎 tab beside 💊 Supplement in `FoodSearchSheet`.
+- **Aliases** — short quick-names on the food row (Postgres array, not a side
+  table). Resolution: exact alias → library name → USDA (`lib/foodResolve.js`).
+  Ambiguous aliases make the assistant ask, then `set_default_alias` resolves it.
+  Edit them per-food in `FoodLibraryRow.jsx`.
+- **Web nutrition** — `lib/webNutrition.js` + the assistant's
+  `search_web_nutrition`/`save_web_food` tools: when USDA misses, Anthropic web
+  search finds the official panel (the `chat` function's `web_search:true` flag),
+  always confirmed with its `source_url`, saved with `source='web'`.
+- **Enrichment** — `lib/foodEnrich.js` + `FoodLibraryRow.jsx`: fill a branded
+  food's missing micronutrients from a generic USDA equivalent, tagged
+  `enriched_from`, without touching its own label numbers.

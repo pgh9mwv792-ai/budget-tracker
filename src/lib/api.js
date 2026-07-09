@@ -288,6 +288,8 @@ export async function createFood({
   fdcId,
   nutrients,
   source,
+  sourceRef,
+  aliases,
   isStack,
 }) {
   const {
@@ -310,6 +312,12 @@ export async function createFood({
       nutrients: nutrients ?? null,
       // Let the DB default ('manual') stand when the caller doesn't say.
       ...(source ? { source } : {}),
+      // Provenance URL for web-sourced foods (migration 0023); omit otherwise so
+      // the column stays null.
+      ...(sourceRef ? { source_ref: sourceRef } : {}),
+      // Short spoken names ("eggs", "my eggs") the assistant/search resolve on
+      // (migration 0023). Only send when provided so the DB default ('{}') stands.
+      ...(Array.isArray(aliases) && aliases.length ? { aliases: normalizeAliases(aliases) } : {}),
       // Only send is_stack when the caller opts in, so the DB default (false)
       // stands otherwise.
       ...(isStack ? { is_stack: true } : {}),
@@ -318,6 +326,22 @@ export async function createFood({
     .single()
   if (error) throw error
   return data
+}
+
+// Normalize an alias list for storage: trim, lowercase, drop blanks, dedupe.
+// Aliases are matched case-insensitively, so storing them lowercased keeps the
+// resolution code simple and the stored data tidy.
+export function normalizeAliases(aliases) {
+  const seen = new Set()
+  const out = []
+  for (const a of aliases ?? []) {
+    const clean = String(a ?? '').trim().toLowerCase()
+    if (clean && !seen.has(clean)) {
+      seen.add(clean)
+      out.push(clean)
+    }
+  }
+  return out
 }
 
 // Searches the USDA FoodData Central database via the `food-search` edge

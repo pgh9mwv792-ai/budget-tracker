@@ -12,7 +12,7 @@ const SUGGESTIONS = [
 
 // Tools whose result is plumbing for the model, not something worth showing the
 // user as a green "✓ ..." line (e.g. the verbose food-database search dump).
-const SILENT_TOOLS = new Set(['search_food_database', 'search_transactions'])
+const SILENT_TOOLS = new Set(['search_food_database', 'search_transactions', 'search_web_nutrition'])
 
 // True when the assistant is asking which meal to log to, so we can offer
 // Breakfast/Lunch/Dinner/Snack buttons instead of making the user type.
@@ -68,6 +68,10 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
   // Live copies of created-during-this-turn items so a multi-step request (e.g.
   // "make a Travel category and budget it $200") can see what it just created.
   const live = useRef({ categories: [], goals: [], foods: [] })
+  // Web-nutrition lookups from search_web_nutrition, cached so save_web_food can
+  // persist the SAME numbers + URL the user confirms on a LATER turn. Must NOT
+  // reset per send (unlike `live`), since confirmation is its own message.
+  const webLookups = useRef(new Map())
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -237,6 +241,8 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
       memories: context.memories || [],
       actions: wrapped,
       setActiveTab,
+      // Persists across turns so a confirmed web lookup saves the exact numbers.
+      webLookups: webLookups.current,
     }
 
     let convo = [...apiMessages.current, { role: 'user', content }]

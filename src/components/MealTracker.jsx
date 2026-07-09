@@ -4,6 +4,7 @@ import { costPerDay, costPerProtein } from '../lib/foodCost'
 import { MACRO_KEYS, MACRO_META, OVER_BAR } from '../lib/macros'
 import FoodSearchSheet from './FoodSearchSheet'
 import MicronutrientSection from './MicronutrientSection'
+import FoodLibraryRow from './FoodLibraryRow'
 
 const MEALS = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -183,7 +184,13 @@ export default function MealTracker({
         />
       )}
 
-      <LibraryManager foods={foods} onDeleteFood={onDeleteFood} onUpdateFood={onUpdateFood} />
+      <LibraryManager
+        foods={foods}
+        onDeleteFood={onDeleteFood}
+        onUpdateFood={onUpdateFood}
+        onSearchFoods={onSearchFoods}
+        onFoodDetails={onFoodDetails}
+      />
 
       {sheetMeal && (
         <FoodSearchSheet
@@ -383,7 +390,7 @@ function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDe
 
 // Small inline marker on foods whose macros are the assistant's estimate of a
 // named chain item (source='estimate'), so approximate numbers read as such.
-function EstBadge() {
+export function EstBadge() {
   return (
     <span
       title="Macros are an estimate"
@@ -537,7 +544,7 @@ function LogEditor({ log, onSave, onCancel }) {
 // Collapsed-by-default library manager: browse saved foods and delete them.
 // Adding foods now happens in the meal search sheet; this keeps delete/browse
 // reachable without cluttering the day view.
-function LibraryManager({ foods, onDeleteFood, onUpdateFood }) {
+function LibraryManager({ foods, onDeleteFood, onUpdateFood, onSearchFoods, onFoodDetails }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -563,41 +570,14 @@ function LibraryManager({ foods, onDeleteFood, onUpdateFood }) {
             </p>
           )}
           {foods.map((f) => (
-            <div key={f.id} className="flex items-center justify-between px-4 py-2 text-sm">
-              <div className="min-w-0">
-                <p className="truncate text-slate-700 dark:text-slate-200">
-                  {f.name}
-                  {f.serving_desc && <span className="text-slate-400 dark:text-slate-500"> · {f.serving_desc}</span>}
-                  {f.source === 'estimate' && <EstBadge />}
-                </p>
-                <p className="text-xs text-slate-400 dark:text-slate-500">
-                  {Math.round(Number(f.calories))} cal · {Math.round(Number(f.protein))}g P · {Math.round(Number(f.carbs))}g C ·{' '}
-                  {Math.round(Number(f.fat))}g F
-                  {f.cost != null && ` · $${Number(f.cost).toFixed(2)}`}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0 ml-3">
-                {onUpdateFood && (
-                  <button
-                    onClick={() => onUpdateFood(f.id, { is_stack: !f.is_stack })}
-                    title={f.is_stack ? 'In your daily stack — click to remove' : 'Add to your daily stack'}
-                    className={`text-xs ${
-                      f.is_stack
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-                    }`}
-                  >
-                    {f.is_stack ? '★ Stack' : '☆ Stack'}
-                  </button>
-                )}
-                <button
-                  onClick={() => onDeleteFood(f.id)}
-                  className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
+            <FoodLibraryRow
+              key={f.id}
+              food={f}
+              onDeleteFood={onDeleteFood}
+              onUpdateFood={onUpdateFood}
+              onSearchFoods={onSearchFoods}
+              onFoodDetails={onFoodDetails}
+            />
           ))}
         </div>
       )}

@@ -73,22 +73,26 @@ Deno.serve(async (req) => {
       console.warn('ai_usage check errored, allowing request:', e.message)
     }
 
-    const { system, messages, tools, max_tokens } = await req.json()
+    const { system, messages, tools, max_tokens, web_search } = await req.json()
 
     // The chat UI is happy with 1024, but a vision extraction (e.g. a supplement
     // label with 20+ ingredients) can need more room to return complete JSON.
     // Honor a caller-supplied value, clamped so no single request can balloon.
     const maxTokens = Math.min(Math.max(Number(max_tokens) || 1024, 1), 4096)
 
-    // Append Anthropic's server-side web search tool, but only when the caller
-    // already sent client tools (the interactive assistant). The receipt-vision
-    // path sends no tools, so it stays untouched. web_search is generally
-    // available on anthropic-version 2023-06-01 — no beta header needed.
-    // max_uses caps searches per request to bound cost.
-    const outboundTools =
-      WEB_SEARCH_ENABLED && Array.isArray(tools) && tools.length > 0
-        ? [...tools, { type: 'web_search_20250305', name: 'web_search', max_uses: 5 }]
-        : tools
+    // Append Anthropic's server-side web search tool when either the caller sent
+    // client tools (the interactive assistant) OR explicitly asked for it via the
+    // `web_search: true` flag (the dedicated nutrition lookup, which sends no
+    // client tools of its own). The receipt/label vision paths send neither, so
+    // they stay untouched. web_search is generally available on anthropic-version
+    // 2023-06-01 — no beta header needed. max_uses caps searches to bound cost.
+    const clientTools = Array.isArray(tools) ? tools : []
+    const wantWebSearch = WEB_SEARCH_ENABLED && (web_search === true || clientTools.length > 0)
+    const outboundTools = wantWebSearch
+      ? [...clientTools, { type: 'web_search_20250305', name: 'web_search', max_uses: 5 }]
+      : clientTools.length > 0
+        ? clientTools
+        : undefined
 
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

@@ -318,6 +318,11 @@ function AppShell() {
       setFoods((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
       return created
     },
+    updateFood: async (id, updates) => {
+      const updated = await api.updateFood(id, updates)
+      setFoods((prev) => prev.map((f) => (f.id === id ? updated : f)))
+      return updated
+    },
     logFood: async (values) => {
       const created = await api.createFoodLog(values)
       setFoodLogs((prev) => [created, ...prev])

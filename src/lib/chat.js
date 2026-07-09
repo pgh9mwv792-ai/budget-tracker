@@ -4,6 +4,8 @@ import { computeFoodCost } from './foodCost'
 import { searchFoods, getFoodDetails } from './api'
 import { merchantSimilarity, descriptorPurchaseDate, txnDescriptorText } from './receiptMatch'
 import { normalizeFoodNutrients } from './nutrients'
+import { resolveLibraryFood } from './foodResolve'
+import { lookupWebNutrition, urlDomain } from './webNutrition'
 
 const today = () => todayISO()
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
@@ -180,6 +182,45 @@ export const CHAT_TOOLS = [
         query: { type: 'string', description: 'What to search for, e.g. "cooked white rice" or "ground beef 85 15".' },
         fdcId: { type: 'string', description: 'A specific food id from a prior search, to fetch its detail + portion conversions.' },
       },
+    },
+  },
+  {
+    name: 'search_web_nutrition',
+    description:
+      "LAST-RESORT nutrition lookup for a specific packaged/branded product that is NOT in the user's library AND NOT found by search_food_database. Searches the web for the manufacturer's or a retailer's OFFICIAL published Nutrition Facts and returns per-serving macros + micronutrients plus the source URL. Tell the user you're looking it up before calling. ALWAYS present the result for confirmation (show the source domain: \"found on brand.com — verify against your package\") and, on approval, persist it with save_web_food — do NOT retype the numbers into add_food/log_food yourself. If it returns that nothing reliable was found, don't guess: offer to scan the label or enter it by hand.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        product: { type: 'string', description: 'The product to look up, as specific as possible (brand + item), e.g. "RXBAR chocolate sea salt".' },
+      },
+      required: ['product'],
+    },
+  },
+  {
+    name: 'save_web_food',
+    description:
+      "Persist a product that search_web_nutrition just found into the food library, with its web provenance (source='web' + the source URL). Call this ONLY after the user confirms the looked-up numbers, and reference the SAME product string you passed to search_web_nutrition so the cached result (macros, micronutrients, and URL) is reused verbatim — never re-enter the numbers. Optionally pass quick-name aliases and a cost. To ALSO log it right after saving, call log_food with the returned food name and servings.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        product: { type: 'string', description: 'The exact product string from the preceding search_web_nutrition call.' },
+        aliases: { type: 'array', items: { type: 'string' }, description: 'Optional short quick-names, e.g. ["rxbar"].' },
+        cost: { type: 'number', description: 'Optional cost per serving in dollars.' },
+      },
+      required: ['product'],
+    },
+  },
+  {
+    name: 'set_default_alias',
+    description:
+      "Resolve an ambiguous quick-name by making ONE food the default for it. Adds `alias` to the chosen food and removes that same alias from every OTHER library food that had it, so future \"log <alias>\" resolves unambiguously. Use this only after asking the user which food they meant for a shared quick-name.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        food_name: { type: 'string', description: 'The exact library food name to make the default.' },
+        alias: { type: 'string', description: 'The quick-name to point at that food, e.g. "eggs".' },
+      },
+      required: ['food_name', 'alias'],
     },
   },
   {
@@ -470,6 +511,14 @@ LOGGING FOOD BY DESCRIPTION (e.g. "log 2 cups white rice and 8oz ground beef for
 - After logging, reply with the day's updated totals vs targets using the meal-tracker numbers in the data snapshot.
 - Keep within the tool-call budget: one search per unresolved item (plus a detail call only when you need portion conversions). For long lists, issue the searches together rather than one round-trip each.
 
+PACKAGED / BRANDED PRODUCTS the database doesn't have (a specific bar, drink, protein powder, etc.):
+- Resolve nutrition in this strict order, stopping at the first hit: (1) the user's food library (name OR a quick-name/alias — see the food library below), then (2) search_food_database, then (3) — ONLY when both miss — search_web_nutrition for the manufacturer's/retailer's official published Nutrition Facts. Never skip straight to the web for something USDA or the library already covers.
+- When you do use search_web_nutrition: tell the user you're looking it up, then ALWAYS present the result for confirmation and name the source (e.g. "found on brand.com — double-check it matches your package") before saving. On approval, persist with save_web_food (reusing the same product string) — do NOT retype the numbers into add_food/log_food. If it reports nothing reliable was found, don't guess: offer to scan the label (Meals tab) or enter it by hand.
+
+QUICK-NAMES / ALIASES (short spoken names for a library food, e.g. "eggs" → "Eggland's Best Large Eggs"):
+- Logging resolves a name by exact alias first, then exact library name, then the database. If the user's word matches SEVERAL library foods (the log_food tool tells you when it's ambiguous), don't pick one — ask which they meant, and offer to make that one the default so you stop asking.
+- When they choose, call set_default_alias(food_name, alias): it points the quick-name at that food and removes it from the others. Only do this after they pick.
+
 LOGGING A MEAL YOU BOUGHT OUT (restaurant / fast-food / cafe) — cross-reference the charge:
 When the user says they BOUGHT a meal somewhere ("log the number 1 combo I got from In-N-Out yesterday"), tie it to the real bank charge and its price so the food-cost math is exact.
 1) FIND THE CHARGE: call search_transactions with the merchant and a tight date window — resolve "yesterday"/"last night"/etc. to YYYY-MM-DD yourself from today's date and allow about ±1 day. If the user hinted at a price, pass amount_near.
@@ -497,7 +546,7 @@ ${dataSummary}`
 // gets sent back to the model as the tool_result.
 // ---------------------------------------------------------------------------
 export async function executeTool(name, input, ctx) {
-  const { categories, goals, foods, transactions = [], memories = [], actions, setActiveTab } = ctx
+  const { categories, goals, foods, transactions = [], memories = [], actions, setActiveTab, webLookups } = ctx
   const findCat = (n) =>
     categories.find((c) => c.name.toLowerCase() === String(n || '').trim().toLowerCase())
   const isIsoDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
@@ -590,9 +639,16 @@ export async function executeTool(name, input, ctx) {
         return `Top matches for "${q}":\n${lines.join('\n')}`
       }
       case 'log_food': {
-        const existing = foods.find(
-          (f) => f.name.toLowerCase() === String(input.food_name || '').trim().toLowerCase()
-        )
+        // Resolve the named food against the library by exact alias, then exact
+        // name (foodResolve). When several foods claim the same quick-name/name
+        // and the caller didn't pin a specific USDA food, ask which one — and
+        // offer to make one the default (set_default_alias) so we stop asking.
+        const resolved = resolveLibraryFood(foods, input.food_name)
+        if (resolved.ambiguous && !input.fdc_id) {
+          const names = resolved.ambiguous.map((f) => `"${f.name}"`).join(', ')
+          return `Several of your foods match "${String(input.food_name).trim()}": ${names}. Which one should I log? I can also make one the default for "${String(input.food_name).trim()}" so I don't ask again.`
+        }
+        const existing = resolved.match
 
         // Gram / per-100g path (foods resolved via search_food_database). The
         // supplied macros are per 100 g; we scale them to the eaten weight. USDA
@@ -739,6 +795,84 @@ export async function executeTool(name, input, ctx) {
           })
         }
         return `Logged your daily stack (${stack.length} item${stack.length === 1 ? '' : 's'}) to ${meal} on ${date}: ${stack.map((f) => f.name).join(', ')}.`
+      }
+      case 'search_web_nutrition': {
+        const product = String(input.product || '').trim()
+        if (!product) return 'Tell me which product to look up.'
+        // lookupWebNutrition throws a user-facing message when nothing reliable
+        // is found; surface it so the assistant can offer the label/manual path.
+        let draft
+        try {
+          draft = await lookupWebNutrition(product)
+        } catch (e) {
+          return e.message
+        }
+        // Cache the full normalized draft so save_web_food can persist the SAME
+        // numbers + URL the user confirms, without the model retyping them. The
+        // Map lives on the ChatWidget (persists across turns), keyed by the
+        // normalized product string both tools share.
+        if (webLookups) webLookups.set(product.toLowerCase(), draft)
+        const domain = draft.sourceUrl ? urlDomain(draft.sourceUrl) : ''
+        const micros = (draft.nutrients || [])
+          .filter((n) => n && n.id && n.name)
+          .map((n) => `${n.name} ${round1(n.amount)}${n.unit || ''}`)
+        const microLine = micros.length ? ` Micros: ${micros.slice(0, 12).join(', ')}.` : ''
+        return (
+          `Found published nutrition for "${draft.product}"${draft.brand ? ` (${draft.brand})` : ''}` +
+          `${domain ? ` on ${domain}` : ''}. Per ${draft.servingSize}: ` +
+          `${Math.round(draft.calories)} kcal, ${round1(draft.protein)}g protein, ` +
+          `${round1(draft.carbs)}g carbs, ${round1(draft.fat)}g fat.${microLine}` +
+          ` Show these to the user to verify against their package, then call save_web_food` +
+          ` with product "${product}" once they confirm.`
+        )
+      }
+      case 'save_web_food': {
+        const product = String(input.product || '').trim()
+        const cached = webLookups ? webLookups.get(product.toLowerCase()) : null
+        if (!cached) {
+          return `I don't have a cached web lookup for "${product}". Run search_web_nutrition for that exact product first, then save it after the user confirms.`
+        }
+        const created = await actions.addFood({
+          name: cached.brand ? `${cached.product} (${cached.brand})` : cached.product,
+          servingDesc: cached.servingSize,
+          calories: cached.calories,
+          protein: cached.protein,
+          carbs: cached.carbs,
+          fat: cached.fat,
+          cost: input.cost == null ? '' : input.cost,
+          fdcId: null,
+          source: 'web',
+          sourceRef: cached.sourceUrl || null,
+          aliases: Array.isArray(input.aliases) ? input.aliases : undefined,
+          nutrients: cached.nutrients?.length ? cached.nutrients : null,
+        })
+        const domain = cached.sourceUrl ? urlDomain(cached.sourceUrl) : ''
+        return `Saved "${created.name}" to your food library${domain ? ` (source: ${domain})` : ''}. You can log it now with log_food.`
+      }
+      case 'set_default_alias': {
+        const alias = String(input.alias || '').trim().toLowerCase()
+        if (!alias) return 'Tell me which quick-name to set as the default.'
+        const target = foods.find(
+          (f) => f.name.toLowerCase() === String(input.food_name || '').trim().toLowerCase()
+        )
+        if (!target) return `No library food named "${input.food_name}" exists.`
+        const aliasesOf = (f) => (Array.isArray(f.aliases) ? f.aliases : [])
+        // Add the alias to the chosen food (if missing)…
+        if (!aliasesOf(target).map((a) => a.toLowerCase()).includes(alias)) {
+          await actions.updateFood(target.id, { aliases: [...aliasesOf(target), alias] })
+        }
+        // …and strip it from every OTHER food so the quick-name is unambiguous.
+        let removed = 0
+        for (const f of foods) {
+          if (f.id === target.id) continue
+          const had = aliasesOf(f).some((a) => a.toLowerCase() === alias)
+          if (!had) continue
+          await actions.updateFood(f.id, {
+            aliases: aliasesOf(f).filter((a) => a.toLowerCase() !== alias),
+          })
+          removed++
+        }
+        return `"${alias}" now points to "${target.name}"${removed ? ` (removed it from ${removed} other food${removed === 1 ? '' : 's'})` : ''}. I won't ask again.`
       }
       case 'search_transactions': {
         const merchant = String(input.merchant || '').trim()

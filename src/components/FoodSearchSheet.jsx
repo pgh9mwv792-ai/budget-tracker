@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import SupplementScanner from './SupplementScanner'
+import FoodLabelScanner from './FoodLabelScanner'
 import { normalizeFoodNutrients } from '../lib/nutrients'
+import { foodMatchesQuery } from '../lib/foodResolve'
 
 // Rounds to one decimal for tidy macro fields.
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
@@ -42,6 +44,9 @@ export default function FoodSearchSheet({
 
   const [showManual, setShowManual] = useState(false)
   const [showScan, setShowScan] = useState(false)
+  // Which label the scanner reads: 'food' (Nutrition Facts) or 'supplement'
+  // (Supplement Facts). Defaults to food since this is the meal tracker.
+  const [scanKind, setScanKind] = useState('food')
   const [busy, setBusy] = useState(false)
 
   // Close on Escape.
@@ -61,11 +66,12 @@ export default function FoodSearchSheet({
     return s
   }, [foods])
 
-  // Client-side library matches for the current query.
+  // Client-side library matches for the current query — matches a food's name OR
+  // any of its quick-name aliases (e.g. typing "eggs" finds a carton aliased so).
   const libraryMatches = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = query.trim()
     if (!q) return []
-    return foods.filter((f) => f.name.toLowerCase().includes(q)).slice(0, 12)
+    return foods.filter((f) => foodMatchesQuery(f, q)).slice(0, 12)
   }, [foods, query])
 
   // USDA results deduped against the library by fdc_id.
@@ -478,7 +484,31 @@ export default function FoodSearchSheet({
 
                 {showScan && (
                   <div className="space-y-2">
-                    <div className="flex justify-end">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 text-xs font-medium">
+                        <button
+                          type="button"
+                          onClick={() => setScanKind('food')}
+                          className={`px-2.5 py-1 rounded-md transition ${
+                            scanKind === 'food'
+                              ? 'bg-emerald-600 text-white'
+                              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          🍎 Food label
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setScanKind('supplement')}
+                          className={`px-2.5 py-1 rounded-md transition ${
+                            scanKind === 'supplement'
+                              ? 'bg-emerald-600 text-white'
+                              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          💊 Supplement
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setShowScan(false)}
@@ -487,9 +517,13 @@ export default function FoodSearchSheet({
                         Close scanner
                       </button>
                     </div>
-                    <SupplementScanner onSave={onAddFood} />
+                    {scanKind === 'food' ? (
+                      <FoodLabelScanner onSave={onAddFood} />
+                    ) : (
+                      <SupplementScanner onSave={onAddFood} />
+                    )}
                     <p className="text-xs text-slate-400 dark:text-slate-500">
-                      Saved supplements appear under “My foods” — search for one above to log it.
+                      Saved items appear under “My foods” — search for one above to log it.
                     </p>
                   </div>
                 )}
