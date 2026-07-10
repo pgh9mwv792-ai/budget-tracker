@@ -9,12 +9,20 @@ import { useState } from 'react'
 //   onNavigate(tab): jump to a tab (and the parent closes onboarding).
 //   onLoadSample(): populate a few example transactions so the dashboard fills
 //     in immediately. Returns a promise.
-export default function Onboarding({ onFinish, onNavigate, onLoadSample }) {
+//   onScanReceipt(): jump to the Transactions tab AND focus the receipt scanner
+//     (the receipt-first primary path). Falls back to onNavigate('Transactions').
+export default function Onboarding({ onFinish, onNavigate, onLoadSample, onScanReceipt }) {
   const [step, setStep] = useState(0)
   const [loadingSample, setLoadingSample] = useState(false)
 
   const go = (tab) => {
     onNavigate(tab)
+    onFinish()
+  }
+
+  const goScanReceipt = () => {
+    if (onScanReceipt) onScanReceipt()
+    else onNavigate('Transactions')
     onFinish()
   }
 
@@ -38,9 +46,20 @@ export default function Onboarding({ onFinish, onNavigate, onLoadSample }) {
       ),
     },
     {
+      emoji: '🧾',
+      title: 'Start with a receipt',
+      body: 'The fastest way in: snap a photo of a grocery or restaurant receipt. It reads the total and every line item, so your spending — and the foods you bought — land in one step. No typing.',
+      actions: (
+        <div className="w-full space-y-2">
+          <PrimaryButton onClick={goScanReceipt}>Scan a receipt</PrimaryButton>
+          <SecondaryButton onClick={() => setStep(2)}>Other ways to start</SecondaryButton>
+        </div>
+      ),
+    },
+    {
       emoji: '💸',
-      title: 'Add your money & meals',
-      body: 'Pick the fastest way to start — the sample data includes a few logged meals so you can see the food-cost dashboard right away. You can always change or add more later.',
+      title: 'Other ways to start',
+      body: 'Prefer not to scan? Connect a bank to import automatically, add a few transactions by hand, or load sample data (including a few logged meals) to explore the food-cost dashboard right away.',
       actions: (
         <div className="w-full space-y-2">
           <PrimaryButton onClick={() => go('Transactions')}>Connect a bank (auto-import)</PrimaryButton>

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { parseReceipt, parseReceiptItemized } from '../lib/receipt'
 import ReceiptItemizer from './ReceiptItemizer'
 
@@ -18,9 +18,31 @@ import ReceiptItemizer from './ReceiptItemizer'
 //   onAdd(values): create a transaction { date, amount, kind, categoryId, note }
 //   itemize: { transactions, foods, receiptItemRules, matchedTransactionIds,
 //     onSearchFoods, onSaveReceipt, onMapItem, onCreateFood, onApplyCategory }
-export default function ReceiptScanner({ categories = [], onAdd, itemize = null }) {
+//   autoFocus: when true (a new user arrived here from the receipt-first
+//     onboarding step), scroll this card into view and pulse a highlight ring so
+//     it's unmistakably the thing to use next. We deliberately do NOT auto-open
+//     the camera — mobile browsers block that outside a direct tap.
+//   onAutoFocusDone(): clear the one-shot autoFocus signal in the parent.
+export default function ReceiptScanner({
+  categories = [],
+  onAdd,
+  itemize = null,
+  autoFocus = false,
+  onAutoFocusDone,
+}) {
   const cameraRef = useRef(null)
   const uploadRef = useRef(null)
+  const rootRef = useRef(null)
+  const [highlighted, setHighlighted] = useState(false)
+
+  useEffect(() => {
+    if (!autoFocus) return
+    rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setHighlighted(true)
+    const t = setTimeout(() => setHighlighted(false), 2500)
+    onAutoFocusDone?.()
+    return () => clearTimeout(t)
+  }, [autoFocus, onAutoFocusDone])
   const [mode, setMode] = useState('simple') // simple | itemize
   const [status, setStatus] = useState('idle') // idle | reading | review | saving | itemize
   const [error, setError] = useState(null)
@@ -135,7 +157,14 @@ export default function ReceiptScanner({ categories = [], onAdd, itemize = null 
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+    <div
+      ref={rootRef}
+      className={`bg-white dark:bg-slate-900 rounded-xl border shadow-sm p-4 transition-shadow ${
+        highlighted
+          ? 'border-emerald-400 ring-2 ring-emerald-400/60'
+          : 'border-slate-200 dark:border-slate-800'
+      }`}
+    >
       {/* Camera: opens the camera directly on phones. */}
       <input
         ref={cameraRef}

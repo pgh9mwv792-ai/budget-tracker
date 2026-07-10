@@ -61,6 +61,9 @@ function AppShell() {
   const [entitlements, setEntitlements] = useState({ plan: 'free', status: null, period_end: null })
   const [dataLoading, setDataLoading] = useState(true)
   const [onboardDismissed, setOnboardDismissed] = useState(false)
+  // One-shot signal: a new user chose "Scan a receipt" in onboarding, so the
+  // Transactions tab should scroll to and highlight the receipt scanner.
+  const [receiptFocus, setReceiptFocus] = useState(false)
   // A prompt handed to the assistant from elsewhere (e.g. the Dashboard quick-ask
   // bar or an insight nudge). ChatWidget opens and sends it, then clears it.
   const [assistantPrompt, setAssistantPrompt] = useState(null)
@@ -582,6 +585,8 @@ function AppShell() {
             <ReceiptScanner
               categories={categories}
               onAdd={addScannedTransaction}
+              autoFocus={receiptFocus}
+              onAutoFocusDone={() => setReceiptFocus(false)}
               itemize={{
                 transactions,
                 foods,
@@ -772,7 +777,15 @@ function AppShell() {
 
       {showOnboarding && (
         <Suspense fallback={null}>
-          <Onboarding onFinish={finishOnboarding} onNavigate={setActiveTab} onLoadSample={loadSampleData} />
+          <Onboarding
+            onFinish={finishOnboarding}
+            onNavigate={setActiveTab}
+            onLoadSample={loadSampleData}
+            onScanReceipt={() => {
+              setReceiptFocus(true)
+              setActiveTab('Transactions')
+            }}
+          />
         </Suspense>
       )}
     </div>

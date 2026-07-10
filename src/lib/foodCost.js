@@ -245,6 +245,46 @@ export function proteinBudgetEfficiency(foods = []) {
 }
 
 // -----------------------------------------------------------------------------
+// estimateProteinCosts(): the "cost per 30g of protein" for a handful of common
+// foods. This powers the signed-out landing page — it makes the app's core idea
+// (protein has a price, and some sources are far cheaper than others) concrete
+// with a real, ranked number, without needing any of the visitor's own data.
+//
+// Prices are rough US grocery averages and are clearly framed as examples in the
+// UI. Pure + deterministic so the landing figure is unit-tested, not hand-typed
+// into JSX where it could silently drift.
+// -----------------------------------------------------------------------------
+export const PROTEIN_EXAMPLE_FOODS = [
+  { name: 'Lentils', unit: '1 cup cooked', price: 0.4, protein: 18 },
+  { name: 'Eggs', unit: '2 large', price: 0.5, protein: 12 },
+  { name: 'Whey protein', unit: '1 scoop', price: 1.0, protein: 24 },
+  { name: 'Chicken breast', unit: '6 oz', price: 2.2, protein: 40 },
+  { name: 'Canned tuna', unit: '1 can', price: 1.3, protein: 20 },
+  { name: 'Greek yogurt', unit: '1 cup', price: 1.2, protein: 17 },
+]
+
+export function estimateProteinCosts(foods = PROTEIN_EXAMPLE_FOODS, { per = 30 } = {}) {
+  return foods
+    .map((f) => {
+      const price = Number(f.price) || 0
+      const protein = Number(f.protein) || 0
+      if (!(price > 0) || !(protein > 0)) return null
+      const costPerGram = price / protein
+      return {
+        name: f.name,
+        unit: f.unit || '',
+        price,
+        protein,
+        costPerGram,
+        costPerPortion: costPerGram * per, // dollars per `per` grams of protein
+        per,
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.costPerGram - b.costPerGram)
+}
+
+// -----------------------------------------------------------------------------
 // Aggregate everything the dashboard needs in one pass, including the
 // "your bulk costs $X/mo" projection (what a month of hitting your protein
 // target would cost at your current cost-per-protein). Falls back to the

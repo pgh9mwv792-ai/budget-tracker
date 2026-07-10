@@ -1,3 +1,5 @@
+import { estimateProteinCosts } from '../lib/foodCost'
+
 // Signed-out marketing page. No router in this app by design — App renders this
 // (or Login) in the signed-out branch. `onGetStarted` opens sign-up; `onSignIn`
 // opens the sign-in view. Copy register: plain verbs, sentence case, specific.
@@ -50,6 +52,163 @@ const TRUST = [
     body: 'Export everything to JSON or CSV anytime, and delete your account and all its data permanently in one click.',
   },
 ]
+
+// A real, ranked cost-per-protein table computed from estimateProteinCosts —
+// the app's central idea shown with concrete numbers before you sign up. Bars
+// are relative to the priciest example so the cheap-vs-expensive gap is visible.
+function ProteinCostExample() {
+  const ranked = estimateProteinCosts()
+  const max = Math.max(...ranked.map((r) => r.costPerPortion))
+  return (
+    <section className="max-w-3xl mx-auto px-4 pb-20">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8">
+        <h2 className="text-2xl font-semibold text-center">What does 30g of protein cost you?</h2>
+        <p className="mt-2 text-center text-slate-600 dark:text-slate-300 text-sm">
+          Same protein, wildly different prices. This is the ranking the app builds automatically from
+          your own foods — here are a few common ones to start.
+        </p>
+        <ul className="mt-6 space-y-2.5">
+          {ranked.map((r) => (
+            <li key={r.name} className="flex items-center gap-3">
+              <span className="w-32 shrink-0 text-sm text-slate-700 dark:text-slate-200">
+                {r.name}
+                <span className="block text-xs text-slate-400 dark:text-slate-500">{r.unit}</span>
+              </span>
+              <span className="flex-1 h-6 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <span
+                  className="block h-full bg-emerald-500/80 rounded"
+                  style={{ width: `${Math.max(8, (r.costPerPortion / max) * 100)}%` }}
+                />
+              </span>
+              <span className="w-16 shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                ${r.costPerPortion.toFixed(2)}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-center text-xs text-slate-400 dark:text-slate-500">
+          Cost per 30g of protein. Example grocery prices — your numbers come from what you actually buy.
+        </p>
+      </div>
+    </section>
+  )
+}
+
+// Blurred, non-interactive mock-ups of the two Pro features, each behind a lock
+// badge. They convey "there's more here" without shipping a fake screenshot or
+// promising data we don't have. Clicking a card starts the free sign-up.
+function ProPreviews({ onGetStarted }) {
+  return (
+    <section className="max-w-5xl mx-auto px-4 pb-20">
+      <h2 className="text-2xl font-semibold text-center">Upgrade to automate the busywork</h2>
+      <p className="mt-2 text-center text-slate-600 dark:text-slate-300">
+        Free does everything by hand. Pro connects your bank and adds the assistant.
+      </p>
+      <div className="mt-10 grid sm:grid-cols-2 gap-6">
+        <PreviewCard
+          title="Automatic bank import"
+          blurb="Transactions flow in and categorize themselves — which also powers subscription and recurring-bill tracking."
+          onGetStarted={onGetStarted}
+        >
+          <MockRows />
+        </PreviewCard>
+        <PreviewCard
+          title="The AI assistant"
+          blurb="Ask questions in plain language or tell it to log a meal, add a transaction, or set a budget — it makes the change."
+          onGetStarted={onGetStarted}
+        >
+          <MockChat />
+        </PreviewCard>
+      </div>
+    </section>
+  )
+}
+
+function PreviewCard({ title, blurb, children, onGetStarted }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+      <div className="relative h-40 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+        {/* The mock content is blurred + dimmed so it reads as "preview". */}
+        <div className="absolute inset-0 p-4 blur-[3px] opacity-60 select-none pointer-events-none" aria-hidden>
+          {children}
+        </div>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 text-white text-xs font-semibold px-3 py-1 shadow">
+            <span aria-hidden>🔒</span> Pro
+          </span>
+        </div>
+      </div>
+      <div className="p-5">
+        <h3 className="font-semibold">{title}</h3>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{blurb}</p>
+        <button
+          onClick={onGetStarted}
+          className="mt-4 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+        >
+          Start free →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function MockRows() {
+  const rows = [
+    ['Whole Foods Market', '-$82.40', 'Groceries'],
+    ['Netflix', '-$15.99', 'Entertainment'],
+    ['Shell Gas', '-$44.00', 'Transportation'],
+    ['Payroll', '+$3,200.00', 'Salary'],
+  ]
+  return (
+    <div className="space-y-2">
+      {rows.map(([name, amt, cat]) => (
+        <div key={name} className="flex items-center justify-between rounded-lg bg-white dark:bg-slate-900 px-3 py-2 text-xs">
+          <span className="font-medium text-slate-700 dark:text-slate-200">{name}</span>
+          <span className="text-slate-400 dark:text-slate-500">{cat}</span>
+          <span className="font-semibold text-slate-900 dark:text-slate-100">{amt}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MockChat() {
+  return (
+    <div className="space-y-2">
+      <div className="ml-auto max-w-[80%] rounded-2xl bg-emerald-600 text-white px-3 py-2 text-xs">
+        how much did I spend eating out this month?
+      </div>
+      <div className="max-w-[85%] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs text-slate-700 dark:text-slate-200">
+        You’ve spent $312 on restaurants so far — 55% of your food spending.
+      </div>
+    </div>
+  )
+}
+
+// Honest, first-person "why I built this." No invented press, awards, or user
+// counts — just the reason it exists. Update the copy freely; keep it truthful.
+function FounderStory() {
+  return (
+    <section className="max-w-3xl mx-auto px-4 pb-20">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
+        <h2 className="text-2xl font-semibold">Why I built this</h2>
+        <div className="mt-4 space-y-3 text-slate-600 dark:text-slate-300 leading-relaxed">
+          <p>
+            I wanted to eat more protein without wrecking my budget, and none of the apps I tried could
+            answer a simple question: what is my food actually costing me per gram of protein? Calorie
+            trackers ignore money; budgeting apps ignore what you eat.
+          </p>
+          <p>
+            So I built the tool I wanted — one place where my transactions and my meals live together, so
+            I can see the cheapest protein I already buy, where my food money goes, and whether hitting my
+            goal is affordable. It’s free to use by hand; the paid tier just automates the parts I got
+            tired of doing myself.
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 function ScreenshotPlaceholder({ label }) {
   return (
@@ -111,6 +270,9 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Free to start. No ads, ever.</p>
       </section>
 
+      {/* Cost-per-protein example — the core idea, made concrete with real numbers */}
+      <ProteinCostExample />
+
       {/* Features */}
       <section className="max-w-5xl mx-auto px-4 pb-20 space-y-16">
         {FEATURES.map((f, i) => (
@@ -126,6 +288,12 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
           </div>
         ))}
       </section>
+
+      {/* What Pro unlocks — blurred previews behind a lock, honest about the gate */}
+      <ProPreviews onGetStarted={onGetStarted} />
+
+      {/* Founder story — why this exists, in plain first person. No fake press. */}
+      <FounderStory />
 
       {/* Pricing */}
       <section className="bg-slate-50 dark:bg-slate-900/40 border-y border-slate-200 dark:border-slate-800">

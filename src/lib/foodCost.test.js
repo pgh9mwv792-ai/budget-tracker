@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { costPerDay, costPerProtein, computeFoodCost, classifyFoodTxn } from './foodCost'
+import {
+  costPerDay,
+  costPerProtein,
+  computeFoodCost,
+  classifyFoodTxn,
+  estimateProteinCosts,
+  PROTEIN_EXAMPLE_FOODS,
+} from './foodCost'
 
 const TODAY = '2026-07-06'
 
@@ -74,5 +81,37 @@ describe('log-level cost wins over a library default', () => {
     // 11.83 (restaurant) + 2.00 * 2 servings (home) = 15.83, counted once each.
     expect(protein.cost).toBeCloseTo(15.83, 2)
     expect(protein.protein).toBeCloseTo(37 + 40, 2)
+  })
+})
+
+describe('estimateProteinCosts (landing-page example)', () => {
+  it('ranks cheapest cost-per-gram first and computes the per-30g portion', () => {
+    const ranked = estimateProteinCosts()
+    // Lentils ($0.40 / 18g) is the cheapest per gram in the example set.
+    expect(ranked[0].name).toBe('Lentils')
+    expect(ranked[0].costPerGram).toBeCloseTo(0.4 / 18, 4)
+    expect(ranked[0].costPerPortion).toBeCloseTo((0.4 / 18) * 30, 4)
+    // Ranking is monotonically non-decreasing by cost per gram.
+    for (let i = 1; i < ranked.length; i++) {
+      expect(ranked[i].costPerGram).toBeGreaterThanOrEqual(ranked[i - 1].costPerGram)
+    }
+  })
+
+  it('honors a custom portion size and drops unpriced/zero-protein foods', () => {
+    const ranked = estimateProteinCosts(
+      [
+        { name: 'A', price: 2, protein: 20 },
+        { name: 'Free', price: 0, protein: 10 },
+        { name: 'NoProtein', price: 1, protein: 0 },
+      ],
+      { per: 100 }
+    )
+    expect(ranked).toHaveLength(1)
+    expect(ranked[0].name).toBe('A')
+    expect(ranked[0].costPerPortion).toBeCloseTo((2 / 20) * 100, 4)
+  })
+
+  it('ships a non-empty default example set', () => {
+    expect(PROTEIN_EXAMPLE_FOODS.length).toBeGreaterThan(3)
   })
 })
