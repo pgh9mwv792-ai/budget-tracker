@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { addDays, todayISO } from '../lib/dateHelpers'
 import { costPerDay, costPerProtein } from '../lib/foodCost'
+import { itemsFromLogs, plannedTemplatesForDate, templateTotals } from '../lib/mealTemplates'
 import { MACRO_KEYS, MACRO_META, OVER_BAR, macroContributors } from '../lib/macros'
 import FoodSearchSheet from './FoodSearchSheet'
 import MicronutrientSection from './MicronutrientSection'
@@ -46,11 +47,18 @@ function dateLabel(date) {
   })
 }
 
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
 export default function MealTracker({
   foods,
   logs,
   targets,
   transactions,
+  mealTemplates = [],
+  onSaveTemplate,
+  onUpdateTemplate,
+  onDeleteTemplate,
+  onLogTemplate,
   onAddFood,
   onUpdateFood,
   onDeleteFood,
@@ -125,6 +133,78 @@ export default function MealTracker({
     }
   }
 
+  // --- Meal templates ("my usual breakfast") ---------------------------------
+
+  // Planned templates for the viewed day: scheduled on this weekday. Each is
+  // annotated with whether it's already been logged today and its auto-log flag.
+  const planned = useMemo(
+    () => plannedTemplatesForDate(mealTemplates, logs, date),
+    [mealTemplates, logs, date]
+  )
+  // "Skip for today" is session-only — dismissing a planned card hides it without
+  // logging. Keyed by `${templateId}:${date}` so skipping doesn't leak to other days.
+  const [skipped, setSkipped] = useState(() => new Set())
+  const [loggingTemplateId, setLoggingTemplateId] = useState(null)
+
+  async function logTemplate(template, { confirm = true } = {}) {
+    if (loggingTemplateId) return
+    const t = templateTotals(template.items || [])
+    if (confirm) {
+      const ok = window.confirm(
+        `Log "${template.name}" (${(template.items || []).length} item${
+          (template.items || []).length === 1 ? '' : 's'
+        }) to ${dateLabel(date)}?\n\n${(template.items || [])
+          .map((it) => `${it.name}${Number(it.servings) !== 1 ? ` ×${it.servings}` : ''}`)
+          .join(', ')}\n\n${Math.round(t.calories)} cal · ${Math.round(t.protein)}g protein${
+          t.cost > 0 ? ` · $${t.cost.toFixed(2)}` : ''
+        }`
+      )
+      if (!ok) return
+    }
+    setLoggingTemplateId(template.id)
+    try {
+      await onLogTemplate(template, { date })
+    } finally {
+      setLoggingTemplateId(null)
+    }
+  }
+
+  // Auto-log opted-in templates on their scheduled day — but only for the real
+  // "today" (never when browsing past/future days) and only once (the log's
+  // template_id makes `alreadyLogged` flip true, so the effect won't re-fire).
+  const autoLoggingRef = useRef(new Set())
+  useEffect(() => {
+    if (date !== today()) return
+    for (const p of planned) {
+      if (!p.autoLog || p.alreadyLogged) continue
+      if (autoLoggingRef.current.has(p.template.id)) continue
+      autoLoggingRef.current.add(p.template.id)
+      onLogTemplate(p.template, { date }).catch(() => {
+        autoLoggingRef.current.delete(p.template.id)
+      })
+    }
+  }, [planned, date, onLogTemplate])
+
+  // Save a day's meal section (its logs) as a reusable template.
+  async function saveSectionAsTemplate(mealKey, sectionLogs) {
+    if (!onSaveTemplate || sectionLogs.length === 0) return
+    const label = MEALS.find((m) => m.key === mealKey)?.label ?? 'meal'
+    const suggested = `My ${label.toLowerCase()}`
+    const name = window.prompt(`Save these ${sectionLogs.length} item(s) as a reusable meal. Name it:`, suggested)
+    if (name == null) return
+    const trimmed = name.trim()
+    if (!trimmed) return
+    await onSaveTemplate({
+      name: trimmed,
+      meal: mealKey ?? null,
+      items: itemsFromLogs(sectionLogs),
+      scheduledDays: [],
+      autoLog: false,
+    })
+  }
+
+  const visiblePlanned = planned.filter((p) => !p.alreadyLogged && !p.autoLog && !skipped.has(`${p.template.id}:${date}`))
+
   return (
     <div className="space-y-4">
       <TargetsHeader
@@ -166,6 +246,21 @@ export default function MealTracker({
         </div>
       )}
 
+      {visiblePlanned.length > 0 && (
+        <div className="space-y-2">
+          {visiblePlanned.map((p) => (
+            <PlannedMealCard
+              key={p.template.id}
+              template={p.template}
+              dateLabel={dateLabel(date)}
+              logging={loggingTemplateId === p.template.id}
+              onConfirm={() => logTemplate(p.template, { confirm: false })}
+              onSkip={() => setSkipped((s) => new Set(s).add(`${p.template.id}:${date}`))}
+            />
+          ))}
+        </div>
+      )}
+
       <MicronutrientSection
         logs={dayLogs}
         foods={foods}
@@ -188,6 +283,7 @@ export default function MealTracker({
           onAdd={() => setSheetMeal(meal)}
           onUpdateLog={onUpdateLog}
           onDeleteLog={onDeleteLog}
+          onSaveMeal={onSaveTemplate ? (sectionLogs) => saveSectionAsTemplate(meal.key, sectionLogs) : null}
           estimateFoodIds={estimateFoodIds}
           brandByFoodId={brandByFoodId}
         />
@@ -204,6 +300,16 @@ export default function MealTracker({
           onDeleteLog={onDeleteLog}
           estimateFoodIds={estimateFoodIds}
           brandByFoodId={brandByFoodId}
+        />
+      )}
+
+      {mealTemplates.length > 0 && (
+        <SavedMealsManager
+          templates={mealTemplates}
+          logging={loggingTemplateId}
+          onLog={(t) => logTemplate(t)}
+          onUpdate={onUpdateTemplate}
+          onDelete={onDeleteTemplate}
         />
       )}
 
@@ -391,7 +497,7 @@ function MacroRow({ macroKey, value, target, fallbackPct = 0, logs, foodsById })
   )
 }
 
-function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDeleteLog, estimateFoodIds, brandByFoodId }) {
+function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDeleteLog, onSaveMeal, estimateFoodIds, brandByFoodId }) {
   const t = totalsFor(logs)
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -440,6 +546,181 @@ function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDe
               Nothing logged. Tap + to add a food.
             </p>
           )}
+          {onSaveMeal && logs.length > 0 && (
+            <div className="px-4 py-2">
+              <button
+                onClick={() => onSaveMeal(logs)}
+                className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+              >
+                ＋ Save as a reusable meal
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// A "planned" card for a scheduled template on the viewed day: one tap to
+// confirm-log it, or skip for today. Never logs on its own (auto-log templates
+// bypass this card entirely and log silently).
+function PlannedMealCard({ template, dateLabel, logging, onConfirm, onSkip }) {
+  const t = templateTotals(template.items || [])
+  const count = (template.items || []).length
+  return (
+    <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 p-4 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+          Planned: {template.name}
+        </p>
+        <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70 truncate">
+          {count} item{count === 1 ? '' : 's'} · {Math.round(t.calories)} cal · {Math.round(t.protein)}g protein
+          {t.cost > 0 ? ` · $${t.cost.toFixed(2)}` : ''} · for {dateLabel}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={onSkip}
+          disabled={logging}
+          className="text-xs text-emerald-700/70 dark:text-emerald-300/70 hover:text-emerald-900 dark:hover:text-emerald-100 px-2 py-1.5 disabled:opacity-50"
+        >
+          Skip
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={logging}
+          className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
+        >
+          {logging ? 'Logging…' : 'Log it'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Collapsed-by-default manager for saved meals: one-tap log, per-template
+// weekday scheduling + auto-log opt-in, and delete.
+function SavedMealsManager({ templates, logging, onLog, onUpdate, onDelete }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-4 py-2.5 text-left"
+        aria-expanded={open}
+      >
+        <span className={`text-slate-400 dark:text-slate-500 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
+          ›
+        </span>
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Saved meals</span>
+        <span className="text-xs text-slate-400 dark:text-slate-500">
+          {templates.length} {templates.length === 1 ? 'meal' : 'meals'}
+        </span>
+      </button>
+
+      {open && (
+        <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
+          {templates.map((t) => (
+            <SavedMealRow
+              key={t.id}
+              template={t}
+              logging={logging === t.id}
+              onLog={() => onLog(t)}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SavedMealRow({ template, logging, onLog, onUpdate, onDelete }) {
+  const [editing, setEditing] = useState(false)
+  const t = templateTotals(template.items || [])
+  const count = (template.items || []).length
+  const days = Array.isArray(template.scheduled_days) ? template.scheduled_days : []
+  const scheduleText = days.length
+    ? [...days].sort((a, b) => a - b).map((d) => WEEKDAY_LABELS[d]).join(' ')
+    : 'Not scheduled'
+
+  const toggleDay = (d) => {
+    const next = days.includes(d) ? days.filter((x) => x !== d) : [...days, d]
+    onUpdate(template.id, { scheduled_days: next.sort((a, b) => a - b) })
+  }
+
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{template.name}</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+            {count} item{count === 1 ? '' : 's'} · {Math.round(t.calories)} cal · {Math.round(t.protein)}g P
+            {t.cost > 0 ? ` · $${t.cost.toFixed(2)}` : ''} · {scheduleText}
+            {template.auto_log && days.length > 0 ? ' · auto' : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setEditing((v) => !v)}
+            className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 text-xs px-1 py-1.5 sm:py-0"
+          >
+            {editing ? 'Done' : 'Schedule'}
+          </button>
+          <button
+            onClick={onLog}
+            disabled={logging}
+            className="rounded-lg bg-slate-900 dark:bg-emerald-600 text-white text-xs font-medium px-3 py-1.5 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-60"
+          >
+            {logging ? 'Logging…' : 'Log'}
+          </button>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="mt-3 space-y-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">
+              Plan on these days
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {WEEKDAY_LABELS.map((label, d) => (
+                <button
+                  key={d}
+                  onClick={() => toggleDay(d)}
+                  className={`w-9 h-8 rounded-md text-xs font-medium transition ${
+                    days.includes(d)
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={!!template.auto_log}
+              disabled={days.length === 0}
+              onChange={(e) => onUpdate(template.id, { auto_log: e.target.checked })}
+              className="rounded border-slate-300 dark:border-slate-600"
+            />
+            Log automatically on planned days (no confirmation)
+          </label>
+          <button
+            onClick={() => {
+              if (window.confirm(`Delete the saved meal "${template.name}"? Meals you already logged from it stay.`)) {
+                onDelete(template.id)
+              }
+            }}
+            className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+          >
+            Delete saved meal
+          </button>
         </div>
       )}
     </div>

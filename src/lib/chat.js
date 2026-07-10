@@ -6,6 +6,7 @@ import { merchantSimilarity, descriptorPurchaseDate, txnDescriptorText } from '.
 import { normalizeFoodNutrients } from './nutrients'
 import { resolveLibraryFood } from './foodResolve'
 import { lookupWebNutrition, urlDomain } from './webNutrition'
+import { resolveTemplateByName, templateTotals } from './mealTemplates'
 
 const today = () => todayISO()
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
@@ -173,6 +174,27 @@ export const CHAT_TOOLS = [
     },
   },
   {
+    name: 'log_meal_template',
+    description:
+      "Log a SAVED meal (\"meal template\") the user set up earlier — e.g. \"log my usual breakfast\", \"log my post-workout meal\". Match the `name` against the saved meals listed in the app-data summary. This logs every item in the template at once, tagged to the template. Show ONE confirmation listing the template's items and ask a single yes/no before calling; never log the items one at a time with log_food. If no saved meal matches the name, say so and list the saved meals they do have (or tell them they can save one from the Meals tab). Do NOT invent a template.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The saved meal to log, as the user named it (e.g. "usual breakfast"). Matched leniently against saved-meal names.',
+        },
+        meal: {
+          type: 'string',
+          enum: ['breakfast', 'lunch', 'dinner', 'snack', 'supplement'],
+          description: "Optional meal section override. Defaults to the template's own saved meal section.",
+        },
+        date: { type: 'string', description: 'Date as YYYY-MM-DD. Defaults to today.' },
+      },
+      required: ['name'],
+    },
+  },
+  {
     name: 'search_food_database',
     description:
       "Look up a food in the USDA food database to get real per-100g macros and portion conversions — use this to resolve foods the user describes in words before logging them. Without `fdcId`: text search returning the top ~5 matches (name, brand, per-100g calories/protein/carbs/fat, fdcId, and whether it's already in the user's library). With `fdcId`: the detail record for one food, including `portions` (household-measure → gram conversions like \"1 cup = 158 g\") and the full nutrient list. Prefer foods already in the user's library (they carry the user's costs). NEVER use macro numbers from your own knowledge — get them here.",
@@ -292,7 +314,7 @@ export const CHAT_TOOLS = [
 // of the current state. Kept small on purpose (recent items + monthly rollups)
 // so we don't blow up the token budget on long histories.
 // ---------------------------------------------------------------------------
-export function summarizeAppData({ categories = [], transactions = [], budgets = [], goals = [], nutritionTargets = null, foods = [], foodLogs = [], memories = [] }) {
+export function summarizeAppData({ categories = [], transactions = [], budgets = [], goals = [], nutritionTargets = null, foods = [], foodLogs = [], mealTemplates = [], memories = [] }) {
   const thisMonth = monthKey(today())
   const money = (n) => `$${Number(n || 0).toFixed(2)}`
 
@@ -386,6 +408,12 @@ export function summarizeAppData({ categories = [], transactions = [], budgets =
     ? `Daily supplement stack (${stackFoods.length}): ${stackFoods.map((f) => f.name).join(', ')}. Use log_stack to log them all at once.`
     : 'Daily supplement stack: none flagged yet.'
 
+  const templateLine = mealTemplates.length
+    ? `Saved meals (log with log_meal_template by name): ${mealTemplates
+        .map((t) => `"${t.name}"${t.meal ? ` [${t.meal}]` : ''} (${(t.items || []).length} item${(t.items || []).length === 1 ? '' : 's'})`)
+        .join(', ')}.`
+    : 'Saved meals: none yet.'
+
   const memoryLines = memories.map((m) => `- ${m.content}`).join('\n') || '(nothing remembered yet)'
 
   // Food-cost intelligence: the money+food angle the app now leads with, so the
@@ -458,6 +486,7 @@ ${todaysLogLines}
 Food library:
 ${foodLibraryLines}
 ${stackLine}
+${templateLine}
 
 FOOD & MONEY (computed — use these for cost-per-protein and food-spending questions):
 ${foodCostLines}`
@@ -546,7 +575,7 @@ ${dataSummary}`
 // gets sent back to the model as the tool_result.
 // ---------------------------------------------------------------------------
 export async function executeTool(name, input, ctx) {
-  const { categories, goals, foods, transactions = [], memories = [], actions, setActiveTab, webLookups } = ctx
+  const { categories, goals, foods, transactions = [], memories = [], mealTemplates = [], actions, setActiveTab, webLookups } = ctx
   const findCat = (n) =>
     categories.find((c) => c.name.toLowerCase() === String(n || '').trim().toLowerCase())
   const isIsoDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
@@ -795,6 +824,33 @@ export async function executeTool(name, input, ctx) {
           })
         }
         return `Logged your daily stack (${stack.length} item${stack.length === 1 ? '' : 's'}) to ${meal} on ${date}: ${stack.map((f) => f.name).join(', ')}.`
+      }
+      case 'log_meal_template': {
+        if (mealTemplates.length === 0) {
+          return "You don't have any saved meals yet. On the Meals tab, log a meal the way you like it and tap “Save as a meal” to reuse it — then I can log it for you by name."
+        }
+        const { match, candidates } = resolveTemplateByName(mealTemplates, input.name)
+        if (!match) {
+          if (candidates.length > 1) {
+            return `Several saved meals match "${input.name}": ${candidates.map((t) => `"${t.name}"`).join(', ')}. Which one?`
+          }
+          return `I couldn't find a saved meal called "${input.name}". Your saved meals are: ${mealTemplates
+            .map((t) => `"${t.name}"`)
+            .join(', ')}.`
+        }
+        const items = match.items || []
+        if (items.length === 0) {
+          return `"${match.name}" is saved but has no items in it, so there's nothing to log.`
+        }
+        const date = input.date || today()
+        const meal = input.meal ?? match.meal ?? null
+        await actions.logMealTemplate(match, { date, meal })
+        const t = templateTotals(items)
+        return `Logged "${match.name}" (${items.length} item${items.length === 1 ? '' : 's'}) to ${
+          meal || 'Uncategorized'
+        } on ${date}: ${Math.round(t.calories)} kcal, ${round1(t.protein)}g protein${
+          t.cost > 0 ? `, $${t.cost.toFixed(2)}` : ''
+        }.`
       }
       case 'search_web_nutrition': {
         const product = String(input.product || '').trim()

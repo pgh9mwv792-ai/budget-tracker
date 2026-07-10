@@ -45,6 +45,8 @@ function AppShell() {
   const [rules, setRules] = useState([])
   const [foods, setFoods] = useState([])
   const [foodLogs, setFoodLogs] = useState([])
+  // Saved "usual" meals (migration 0028): one-tap re-logging + weekday planning.
+  const [mealTemplates, setMealTemplates] = useState([])
   const [nutritionTargets, setNutritionTargets] = useState(null)
   const [memories, setMemories] = useState([])
   const [plaidAccounts, setPlaidAccounts] = useState([])
@@ -81,7 +83,7 @@ function AppShell() {
   const loadAll = useCallback(async () => {
     if (!user) return
     if (!hasLoadedOnce.current) setDataLoading(true)
-    const [cats, txs, gls, buds, rls, fds, flogs, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules, recovr] = await Promise.all([
+    const [cats, txs, gls, buds, rls, fds, flogs, mtmpls, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules, recovr] = await Promise.all([
       api.ensureDefaultCategories(user.id),
       api.fetchTransactions(),
       api.fetchGoals(),
@@ -93,6 +95,8 @@ function AppShell() {
       // graceful degradation until that migration is run.
       api.fetchFoods().catch(() => []),
       api.fetchFoodLogs().catch(() => []),
+      // Saved meal templates live in migration 0028; degrade gracefully until run.
+      api.fetchMealTemplates().catch(() => []),
       api.fetchNutritionTargets().catch(() => null),
       // Assistant memory lives in migration 0004; degrade gracefully until run.
       api.fetchMemories().catch(() => []),
@@ -133,6 +137,7 @@ function AppShell() {
     setRules(rls)
     setFoods(fds)
     setFoodLogs(flogs)
+    setMealTemplates(mtmpls ?? [])
     setNutritionTargets(ntargets)
     setMemories(mems)
     setPlaidAccounts(paccts ?? [])
@@ -331,6 +336,44 @@ function AppShell() {
     logFood: async (values) => {
       const created = await api.createFoodLog(values)
       setFoodLogs((prev) => [created, ...prev])
+      return created
+    },
+    addMealTemplate: async (values) => {
+      const created = await api.createMealTemplate(values)
+      setMealTemplates((prev) => [...prev, created])
+      return created
+    },
+    updateMealTemplate: async (id, updates) => {
+      const updated = await api.updateMealTemplate(id, updates)
+      setMealTemplates((prev) => prev.map((t) => (t.id === id ? updated : t)))
+      return updated
+    },
+    deleteMealTemplate: async (id) => {
+      await api.deleteMealTemplate(id)
+      setMealTemplates((prev) => prev.filter((t) => t.id !== id))
+    },
+    // Log every item of a template to a date, each tagged with the template id so
+    // "already logged today" is queryable. Returns the created logs.
+    logMealTemplate: async (template, { date, meal } = {}) => {
+      const targetMeal = meal ?? template.meal ?? null
+      const created = []
+      for (const it of template.items || []) {
+        const log = await api.createFoodLog({
+          date,
+          meal: targetMeal,
+          foodId: it.food_id || null,
+          name: it.name,
+          servings: Number(it.servings) || 1,
+          calories: Number(it.calories) || 0,
+          protein: Number(it.protein) || 0,
+          carbs: Number(it.carbs) || 0,
+          fat: Number(it.fat) || 0,
+          cost: it.cost == null ? null : Number(it.cost),
+          templateId: template.id,
+        })
+        created.push(log)
+      }
+      setFoodLogs((prev) => [...created, ...prev])
       return created
     },
     setTargets: async (values) => {
@@ -664,6 +707,11 @@ function AppShell() {
             logs={foodLogs}
             targets={nutritionTargets}
             transactions={transactions}
+            mealTemplates={mealTemplates}
+            onSaveTemplate={actions.addMealTemplate}
+            onUpdateTemplate={actions.updateMealTemplate}
+            onDeleteTemplate={actions.deleteMealTemplate}
+            onLogTemplate={actions.logMealTemplate}
             onAddFood={async (values) => {
               const created = await api.createFood(values)
               setFoods((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
@@ -767,7 +815,7 @@ function AppShell() {
       <Suspense fallback={null}>
         <ChatWidget
           plan={plan}
-          context={{ categories, transactions, budgets, goals, nutritionTargets, foods, foodLogs, memories }}
+          context={{ categories, transactions, budgets, goals, nutritionTargets, foods, foodLogs, mealTemplates, memories }}
           actions={actions}
           setActiveTab={setActiveTab}
           openWith={assistantPrompt}

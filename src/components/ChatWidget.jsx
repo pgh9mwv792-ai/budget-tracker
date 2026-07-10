@@ -239,6 +239,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
       // against the user's real charges); the food-search dump is silent too.
       transactions: context.transactions || [],
       memories: context.memories || [],
+      mealTemplates: context.mealTemplates || [],
       actions: wrapped,
       setActiveTab,
       // Persists across turns so a confirmed web lookup saves the exact numbers.

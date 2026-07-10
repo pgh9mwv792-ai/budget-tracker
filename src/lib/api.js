@@ -451,7 +451,7 @@ export async function fetchFoodLogs() {
   return data
 }
 
-export async function createFoodLog({ date, meal, foodId, name, servings, calories, protein, carbs, fat, cost, transactionId }) {
+export async function createFoodLog({ date, meal, foodId, name, servings, calories, protein, carbs, fat, cost, transactionId, templateId }) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -473,6 +473,9 @@ export async function createFoodLog({ date, meal, foodId, name, servings, calori
       // The bank charge this meal was paid with (0018). Null for home meals or
       // when no matching transaction was found.
       transaction_id: transactionId || null,
+      // The meal template that produced this log (0028), if any. Lets the app
+      // tell "already logged my usual breakfast today".
+      template_id: templateId || null,
     })
     .select()
     .single()
@@ -488,6 +491,53 @@ export async function updateFoodLog(id, updates) {
 
 export async function deleteFoodLog(id) {
   const { error } = await supabase.from('food_logs').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ---------- meal templates (saved "usual" meals, migration 0028) ----------
+
+export async function fetchMealTemplates() {
+  const { data, error } = await supabase
+    .from('meal_templates')
+    .select('*')
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createMealTemplate({ name, meal, items, scheduledDays, autoLog }) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('meal_templates')
+    .insert({
+      user_id: user.id,
+      name,
+      meal: meal ?? null,
+      items: items ?? [],
+      scheduled_days: scheduledDays ?? [],
+      auto_log: !!autoLog,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateMealTemplate(id, updates) {
+  const { data, error } = await supabase
+    .from('meal_templates')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteMealTemplate(id) {
+  const { error } = await supabase.from('meal_templates').delete().eq('id', id)
   if (error) throw error
 }
 
