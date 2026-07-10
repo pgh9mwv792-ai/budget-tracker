@@ -20,15 +20,15 @@ Respond with ONLY a JSON object — no prose, no markdown code fences. Use exact
 {
   "product_name": string,       // the specific item WITHOUT the brand, e.g. "Pasture-Raised Large Eggs"; "" if not visible
   "brand": string|null,         // the maker/company name only, e.g. "Contented Hen"; null if not visible
-  "serving_size": string,       // the label's serving size verbatim, e.g. "2 eggs (100 g)", "1 cup (240 mL)"
+  "serving_size": string,       // copy the label's "Serving size" line EXACTLY as printed, e.g. "1 egg (50 g)", "2 eggs (100 g)", "1 cup (240 mL)". Do NOT convert to 100 g or round.
   "servings_per_container": number|null, // servings per container if printed, else null
   "calories": number,           // calories PER SERVING; 0 if the label lists none
   "protein": number,            // grams of protein PER SERVING; 0 if none
   "carbs": number,              // grams of total carbohydrate PER SERVING; 0 if none
   "fat": number,                // grams of total fat PER SERVING; 0 if none
-  "nutrients": [                // one object per vitamin/mineral row, PER SERVING
+  "nutrients": [                // one object per NON-macro nutrient row, PER SERVING (see rule 1 for exactly which rows)
     {
-      "name": string,           // the nutrient exactly as printed, e.g. "Sodium", "Vitamin D", "Calcium", "Iron", "Potassium"
+      "name": string,           // the nutrient exactly as printed, e.g. "Saturated Fat", "Cholesterol", "Dietary Fiber", "Total Sugars", "Sodium", "Vitamin D", "Calcium", "Iron", "Potassium"
       "amount": number,         // the numeric amount as printed on the label
       "unit": string,           // the unit as printed, e.g. "mcg", "mg", "g", "IU"
       "amount_normalized_mcg_or_mg": number|null,
@@ -39,8 +39,11 @@ Respond with ONLY a JSON object — no prose, no markdown code fences. Use exact
 }
 
 Rules — follow exactly:
-1. Capture EVERY vitamin/mineral row printed in the lower part of the panel — at minimum the four the US label mandates (Vitamin D, Calcium, Iron, Potassium) whenever they appear, plus Sodium, and any others the label lists (magnesium, zinc, folate, the B vitamins, vitamin A/C/E, etc.). Sodium goes in "nutrients", NOT in the macro fields.
-2. Keep the calorie and macro fields (calories/protein/carbs/fat) for the panel's top section. Do NOT also duplicate protein/carbs/fat as rows inside "nutrients".
+1. Put EVERY non-macro nutrient row into "nutrients", PER SERVING. This includes BOTH:
+   (a) the upper-panel sub-rows that sit under the calorie/fat/carb totals — specifically Saturated Fat, Trans Fat, Cholesterol, Sodium, Dietary Fiber, Total Sugars, and "Includes … Added Sugars" — whenever the label prints them (use amount 0 for a row printed as 0); AND
+   (b) EVERY vitamin/mineral row in the lower part of the panel — at minimum the four the US label mandates (Vitamin D, Calcium, Iron, Potassium) whenever they appear, plus any others the label lists (magnesium, zinc, folate, the B vitamins, vitamin A/C/E, etc.).
+   Use the name exactly as printed (e.g. "Saturated Fat", "Cholesterol", "Dietary Fiber", "Total Sugars", "Added Sugars").
+2. The ONLY numbers that go in the macro fields are the panel's four top-line totals: calories, total Protein, total Carbohydrate (carbs), and total Fat. Do NOT duplicate those four as rows in "nutrients". But their sub-rows DO belong in "nutrients": Saturated Fat and Trans Fat (sub-rows of total fat), and Dietary Fiber and Total/Added Sugars (sub-rows of total carbohydrate), plus Cholesterol and Sodium.
 3. ALWAYS include the base nutrient name exactly as printed. Never return an empty "name".
 4. Keep the label's LITERAL amount and unit in "amount"/"unit". Additionally set "amount_normalized_mcg_or_mg" ONLY for these known standard IU conversions:
      - Vitamin D / D3: 40 IU = 1 mcg  (normalized value in mcg)
