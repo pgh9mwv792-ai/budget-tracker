@@ -34,7 +34,7 @@ export default function MicronutrientSection({ logs, foods, targets, onSetTarget
         </span>
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Micronutrients</span>
         <span className="text-xs text-slate-400 dark:text-slate-500">
-          {anyLogged ? 'vitamins & minerals today' : 'no micros logged yet'}
+          {anyLogged ? 'vitamins, minerals, fats & sugars today' : 'no micros logged yet'}
         </span>
       </button>
 
@@ -75,13 +75,27 @@ export default function MicronutrientSection({ logs, foods, targets, onSetTarget
   )
 }
 
-// One nutrient's bar: consumed / target, % (or "—" when no target), a "~" prefix
-// when coverage is low, and an amber bar + "over UL" note past the upper limit.
+// One nutrient's bar. Two flavors:
+//   • target nutrients (vitamins/minerals/fiber): bar fills toward the RDA,
+//     turns emerald at 100%, amber past the tolerable upper limit.
+//   • limit nutrients (saturated fat, cholesterol, added sugars): bar fills
+//     toward the cap and turns amber once over it — reaching it isn't a "win",
+//     so it never goes emerald.
+// A "~" prefix flags low coverage; a nutrient with no reference just shows its
+// running total (e.g. total sugars).
 function MicroRow({ row }) {
-  const { name, unit, amount, target, upperLimit, lowCoverage, pct, overUL } = row
+  const { name, unit, amount, target, upperLimit, lowCoverage, overUL, kind } = row
   const shown = formatAmount(amount, unit)
-  const barPct = target != null ? Math.min(100, pct) : amount > 0 ? 100 : 0
-  const barColor = overUL ? 'bg-amber-500' : target != null && pct >= 100 ? 'bg-emerald-500' : 'bg-sky-500'
+  const isLimit = kind === 'limit'
+  // What the bar (and the "/ x" denominator) is measured against.
+  const scale = isLimit ? upperLimit : target
+  const pct = scale != null && scale > 0 ? (amount / scale) * 100 : 0
+  const barPct = scale != null ? Math.min(100, pct) : amount > 0 ? 100 : 0
+  const barColor = overUL
+    ? 'bg-amber-500'
+    : !isLimit && target != null && pct >= 100
+      ? 'bg-emerald-500'
+      : 'bg-sky-500'
 
   return (
     <div>
@@ -92,8 +106,8 @@ function MicroRow({ row }) {
             {lowCoverage && amount > 0 ? '~' : ''}
             {shown}
           </span>
-          {target != null ? ` / ${formatAmount(target, unit)} ${unit}` : ` ${unit}`}
-          {target != null && (
+          {scale != null ? ` / ${formatAmount(scale, unit)} ${unit}${isLimit ? ' max' : ''}` : ` ${unit}`}
+          {scale != null && (
             <span className={`ml-1 ${overUL ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>
               {Math.round(pct)}%
             </span>
@@ -105,7 +119,7 @@ function MicroRow({ row }) {
       </div>
       {overUL && (
         <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
-          Over the safe upper limit ({formatAmount(upperLimit, unit)} {unit}).
+          Over the {isLimit ? 'recommended limit' : 'safe upper limit'} ({formatAmount(upperLimit, unit)} {unit}).
         </p>
       )}
     </div>

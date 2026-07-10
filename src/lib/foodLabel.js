@@ -18,8 +18,8 @@ const MAX_TOKENS = 4096
 const system = `You read a packaged food's NUTRITION FACTS panel from an image and extract it as structured data.
 Respond with ONLY a JSON object — no prose, no markdown code fences. Use exactly this schema:
 {
-  "product_name": string,       // the product name, or "" if not visible
-  "brand": string|null,         // the brand/manufacturer, or null if not visible
+  "product_name": string,       // the specific item WITHOUT the brand, e.g. "Pasture-Raised Large Eggs"; "" if not visible
+  "brand": string|null,         // the maker/company name only, e.g. "Contented Hen"; null if not visible
   "serving_size": string,       // the label's serving size verbatim, e.g. "2 eggs (100 g)", "1 cup (240 mL)"
   "servings_per_container": number|null, // servings per container if printed, else null
   "calories": number,           // calories PER SERVING; 0 if the label lists none
@@ -49,7 +49,8 @@ Rules — follow exactly:
    If the unit is already mcg/mg/g, OR the conversion is not one of the standards above, set "amount_normalized_mcg_or_mg" to null. NEVER invent or guess a conversion.
 5. If a row prints ONLY a % Daily Value with no absolute amount, set "amount" to that % Daily Value's number, leave "unit" as "" — but PREFER the printed absolute amount whenever one is shown.
 6. You may receive SEVERAL images of the SAME product (e.g. the Nutrition Facts panel, the front of the package, an ingredients panel, or the panel split across two close-ups). Treat them together as one product: read the nutrition numbers from whichever image shows the Nutrition Facts panel, and fill "product_name"/"brand" from whichever image shows them (usually the front). If two images show the same panel, do not double-count — report each nutrient once. Never invent numbers that no image shows.
-7. If NONE of the images is a readable Nutrition Facts panel (blurry, wrong kind of photo, unreadable), set "error" to a short message and return empty/zero values elsewhere. Do NOT hallucinate nutrient values.`
+7. If NONE of the images is a readable Nutrition Facts panel (blurry, wrong kind of photo, unreadable), set "error" to a short message and return empty/zero values elsewhere. Do NOT hallucinate nutrient values.
+8. Separate the brand from the product cleanly. "brand" is the MAKER/company — usually the logo or the largest name on the FRONT of the package (e.g. "Contented Hen", "Vital Farms"). "product_name" is the specific food WITHOUT that brand (e.g. "Pasture-Raised Large Eggs"). Never repeat the brand inside "product_name", and never put a product descriptor (like "Pasture Raised" or "Organic") in "brand". If you truly can't tell the maker, use null for "brand" rather than guessing a descriptor.`
 
 export async function parseFoodLabel({ files, file, frontFile = null }) {
   // Accept either a single `file`/`frontFile` (legacy) or a `files` array of one

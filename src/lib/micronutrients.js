@@ -96,6 +96,8 @@ export function micronutrientRows(logs, foodsById, targetsRow) {
       id,
       name: meta.name,
       unit: meta.unit,
+      // 'target' (aim to reach, e.g. vitamins) vs 'limit' (cap, e.g. sat fat).
+      kind: meta.kind ?? 'target',
       amount,
       target: hasTarget ? Number(target) : null,
       upperLimit: upper_limit != null ? Number(upper_limit) : null,

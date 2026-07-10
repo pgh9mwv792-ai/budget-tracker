@@ -112,6 +112,24 @@ describe('normalizeNutrient — mass unit conversions', () => {
     expect(normalizeNutrient('Zinc', null, 'mg', 'label')).toBeNull()
     expect(normalizeNutrient('Zinc', 'n/a', 'mg', 'label')).toBeNull()
   })
+
+  it('keeps gram-canonical nutrients in grams', () => {
+    // Saturated fat is a gram-scale nutrient — a label row in g stays in g.
+    expect(normalizeNutrient('Saturated Fat', 3, 'g', 'label')).toEqual({
+      id: 'saturated_fat',
+      amount: 3,
+      unit: 'g',
+    })
+    // Cholesterol is mg-canonical; Dietary Fiber and Total Sugars are g.
+    expect(normalizeNutrient('Cholesterol', 370, 'mg', 'label')).toEqual({
+      id: 'cholesterol',
+      amount: 370,
+      unit: 'mg',
+    })
+    expect(normalizeNutrient('Total Sugars', 12, 'g', 'label').id).toBe('total_sugars')
+    // mg into a gram-canonical nutrient converts correctly (500 mg = 0.5 g).
+    expect(normalizeNutrient('Dietary Fiber', 500, 'mg', 'label').amount).toBeCloseTo(0.5, 6)
+  })
 })
 
 describe('normalizeFoodNutrients', () => {

@@ -39,6 +39,16 @@ export const NUTRIENTS = [
   { id: 'sodium', name: 'Sodium', unit: 'mg', usda_numbers: ['307'], aliases: ['sodium', 'sodium chloride', 'salt'] },
   { id: 'phosphorus', name: 'Phosphorus', unit: 'mg', usda_numbers: ['305'], aliases: ['phosphorus', 'phosphorous'] },
   { id: 'iodine', name: 'Iodine', unit: 'mcg', usda_numbers: ['314'], aliases: ['iodine', 'potassium iodide', 'kelp'] },
+  // ---- fats, cholesterol, fiber & sugars (the label's lower % Daily Value block) ----
+  // Tracked alongside the vitamins/minerals so a scanned label counts them
+  // instead of showing "not counted". `kind:'limit'` marks the ones you cap
+  // (bar fills toward the limit and turns amber past it) rather than aim to hit.
+  { id: 'saturated_fat', name: 'Saturated Fat', unit: 'g', kind: 'limit', usda_numbers: ['606'], aliases: ['saturated fat', 'total saturated fat', 'saturated fatty acids'] },
+  { id: 'trans_fat', name: 'Trans Fat', unit: 'g', kind: 'limit', usda_numbers: ['605'], aliases: ['trans fat', 'total trans fat', 'trans fatty acids'] },
+  { id: 'cholesterol', name: 'Cholesterol', unit: 'mg', kind: 'limit', usda_numbers: ['601'], aliases: ['cholesterol'] },
+  { id: 'fiber', name: 'Dietary Fiber', unit: 'g', usda_numbers: ['291'], aliases: ['dietary fiber', 'fiber', 'fibre', 'total dietary fiber', 'total fiber'] },
+  { id: 'total_sugars', name: 'Total Sugars', unit: 'g', usda_numbers: ['269'], aliases: ['total sugars', 'sugars', 'total sugar'] },
+  { id: 'added_sugars', name: 'Added Sugars', unit: 'g', kind: 'limit', usda_numbers: ['539'], aliases: ['added sugars', 'added sugar', 'includes added sugars'] },
 ]
 
 // Display order for the curated micronutrient view (vitamins, then minerals).
@@ -103,6 +113,8 @@ export function splitForm(rawName) {
 }
 
 // mcg per one unit of mass. IU is nutrient-specific and handled separately.
+// `g` is a valid canonical unit too (for the gram-scale nutrients — saturated
+// fat, fiber, sugars — added below), not just an input unit.
 const MASS_TO_MCG = { g: 1e6, mg: 1e3, mcg: 1 }
 
 function normalizeUnit(unit) {
@@ -131,9 +143,10 @@ function convertToCanonical(amount, fromUnit, entry) {
     const factor = IU_CONVERSION[entry.id]?.[to]
     return factor == null ? null : amount * factor
   }
-  if (fromUnit in MASS_TO_MCG) {
+  if (fromUnit in MASS_TO_MCG && to in MASS_TO_MCG) {
+    // Convert via mcg, then down to the target unit (mcg, mg, or g).
     const mcg = amount * MASS_TO_MCG[fromUnit]
-    return to === 'mcg' ? mcg : mcg / MASS_TO_MCG.mg
+    return mcg / MASS_TO_MCG[to]
   }
   return null
 }
@@ -293,6 +306,15 @@ const RDA = {
   sodium: { male: { target: 1500, upper_limit: 2300 }, female: { target: 1500, upper_limit: 2300 } },
   phosphorus: { male: { target: 700, upper_limit: null }, female: { target: 700, upper_limit: null } },
   iodine: { male: { target: 150, upper_limit: 1100 }, female: { target: 150, upper_limit: 1100 } },
+  // Fats/cholesterol/sugars are limits (cap, no target) on a ~2,000 kcal diet;
+  // fiber is a target (Adequate Intake); total sugars is tracked without a set
+  // reference (a `null` target/limit just shows the running count).
+  saturated_fat: { male: { target: null, upper_limit: 20 }, female: { target: null, upper_limit: 20 } },
+  trans_fat: { male: { target: null, upper_limit: 2 }, female: { target: null, upper_limit: 2 } },
+  cholesterol: { male: { target: null, upper_limit: 300 }, female: { target: null, upper_limit: 300 } },
+  fiber: { male: { target: 38, upper_limit: null }, female: { target: 25, upper_limit: null } },
+  total_sugars: { male: { target: null, upper_limit: null }, female: { target: null, upper_limit: null } },
+  added_sugars: { male: { target: null, upper_limit: 50 }, female: { target: null, upper_limit: 50 } },
 }
 
 // Default { target, upper_limit } for one nutrient given the user's cohort.
@@ -301,8 +323,11 @@ export function defaultTarget(id, sex = 'neutral') {
   const row = RDA[id]
   if (!row) return { target: null, upper_limit: null }
   if (sex === 'male' || sex === 'female') return { ...row[sex] }
-  // Neutral: average the RDA/AI, keep the (near-identical) UL.
-  const target = round2((row.male.target + row.female.target) / 2)
+  // Neutral: average the RDA/AI, keep the (near-identical) UL. Guard nulls so a
+  // limit-only nutrient (target null) stays null instead of averaging to 0.
+  const mt = row.male.target
+  const ft = row.female.target
+  const target = mt == null || ft == null ? (mt ?? ft ?? null) : round2((mt + ft) / 2)
   const upper_limit = row.male.upper_limit ?? row.female.upper_limit ?? null
   return { target, upper_limit }
 }

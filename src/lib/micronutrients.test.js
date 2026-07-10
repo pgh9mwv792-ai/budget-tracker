@@ -113,7 +113,26 @@ describe('micronutrientRows', () => {
 
   it('returns a row for every catalog nutrient in curated order', () => {
     const rows = micronutrientRows([], foodsById, null)
-    expect(rows.length).toBe(23)
+    expect(rows.length).toBe(29)
     expect(rows[0].id).toBe('vitamin_a')
+  })
+
+  it('tracks a limit nutrient and flags it over the cap', () => {
+    // 25 g saturated fat in a serving; the default limit is 20 g.
+    const fatty = {
+      id: 'f-butter',
+      source: 'label_scan',
+      nutrients: [{ id: 'saturated_fat', amount: 25, unit: 'g', per: 'serving' }],
+    }
+    const rows = micronutrientRows(
+      [{ food_id: 'f-butter', servings: 1, calories: 200 }],
+      new Map([['f-butter', fatty]]),
+      { sex: 'neutral', micro_targets: {} }
+    )
+    const sat = rows.find((r) => r.id === 'saturated_fat')
+    expect(sat.kind).toBe('limit')
+    expect(sat.amount).toBe(25)
+    expect(sat.upperLimit).toBe(20)
+    expect(sat.overUL).toBe(true)
   })
 })
