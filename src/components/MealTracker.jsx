@@ -4,6 +4,7 @@ import { costPerDay, costPerProtein } from '../lib/foodCost'
 import { itemsFromLogs, plannedTemplatesForDate, templateTotals } from '../lib/mealTemplates'
 import { MACRO_KEYS, MACRO_META, OVER_BAR, macroContributors } from '../lib/macros'
 import FoodSearchSheet from './FoodSearchSheet'
+import FoodImport from './FoodImport'
 import MicronutrientSection from './MicronutrientSection'
 import ContributorDropdown from './ContributorDropdown'
 import FoodLibraryRow from './FoodLibraryRow'
@@ -65,6 +66,7 @@ export default function MealTracker({
   onLogFood,
   onUpdateLog,
   onDeleteLog,
+  onImportLogs,
   onSetTargets,
   onSearchFoods,
   onFoodDetails,
@@ -320,6 +322,8 @@ export default function MealTracker({
         onSearchFoods={onSearchFoods}
         onFoodDetails={onFoodDetails}
       />
+
+      {onImportLogs && <FoodImport onImportLogs={onImportLogs} />}
 
       {sheetMeal && (
         <FoodSearchSheet

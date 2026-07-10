@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { rankTransactionMatches, itemKey, foodSearchQuery, perUnitCost } from '../lib/receiptMatch'
+import { aggregatePantry, suggestFoodMapping } from '../lib/pantry'
 
 // The itemized-receipt flow, rendered by ReceiptScanner once Claude has
 // transcribed a receipt into line items. Two deliberate, verify-before-save
@@ -58,6 +59,9 @@ export default function ReceiptItemizer({
   const [savedReceipt, setSavedReceipt] = useState(null)
   const [linkedTxn, setLinkedTxn] = useState(null)
   const [categoryApplied, setCategoryApplied] = useState(false)
+  // Food actually mapped this session (itemId → food), so the pantry summary
+  // updates live as lines get linked (savedReceipt.items isn't re-fetched here).
+  const [mappedById, setMappedById] = useState({})
 
   const excludeIds = useMemo(
     () => new Set([...(matchedTransactionIds ?? [])]),
@@ -112,6 +116,20 @@ export default function ReceiptItemizer({
   }
 
   const foodItems = (savedReceipt?.items ?? []).filter((it) => it.is_food)
+
+  // Nutrition brought home: overlay this session's mappings onto the saved items,
+  // then aggregate. Foods created mid-flow live in mappedById, so include them.
+  const pantry = useMemo(() => {
+    const byId = new Map(foods.map((f) => [f.id, f]))
+    for (const food of Object.values(mappedById)) if (food) byId.set(food.id, food)
+    const items = foodItems.map((it) => {
+      const mapped = mappedById[it.id]
+      return mapped ? { ...it, food_id: mapped.id } : it
+    })
+    return aggregatePantry(items, byId)
+  }, [foodItems, mappedById, foods])
+
+  const onItemMapped = (itemId, food) => setMappedById((m) => ({ ...m, [itemId]: food }))
 
   const finish = () => {
     const mapped = foodItems.filter((it) => it.food_id).length
@@ -259,9 +277,12 @@ export default function ReceiptItemizer({
             onSearchFoods={onSearchFoods}
             onCreateFood={onCreateFood}
             onMap={onMapItem}
+            onMapped={onItemMapped}
           />
         ))}
       </div>
+
+      {pantry.nutritionItemCount > 0 && <PantrySummary pantry={pantry} />}
 
       {error && <ErrorBox>{error}</ErrorBox>}
 
@@ -348,13 +369,21 @@ function CategoryPrompt({ categories, onApply }) {
 
 // One food line: shows the mapped/remembered food or a picker (USDA search +
 // library select), confirms into a rule + cost update, or skips.
-function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood, onMap }) {
+function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood, onMap, onMapped }) {
   const key = itemKey(item.raw_name)
   const rememberedFoodId = useMemo(() => {
     const rule = receiptItemRules.find((r) => r.item_key === key)
     return rule?.food_id ?? null
   }, [receiptItemRules, key])
   const rememberedFood = foods.find((f) => f.id === rememberedFoodId) || null
+
+  // Alias/grade-aware best-guess from the library, shown only when there's no
+  // remembered rule (a saved rule is a stronger, explicit signal).
+  const suggestion = useMemo(
+    () => (rememberedFood ? null : suggestFoodMapping(item.raw_name, foods)),
+    [rememberedFood, item.raw_name, foods]
+  )
+  const suggestedFood = suggestion && suggestion.food !== rememberedFood ? suggestion.food : null
 
   const [state, setState] = useState(item.food_id ? 'mapped' : 'idle') // idle | open | mapped | skipped
   const [mappedName, setMappedName] = useState(item.food?.name ?? null)
@@ -398,6 +427,7 @@ function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood
     setError(null)
     try {
       await onMap({ item, food, itemKey: key })
+      onMapped?.(item.id, food)
       setMappedName(food.name)
       setState('mapped')
     } catch (err) {
@@ -424,6 +454,7 @@ function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood
         source: 'usda',
       })
       await onMap({ item, food: created, itemKey: key })
+      onMapped?.(item.id, created)
       setMappedName(created.name)
       setState('mapped')
     } catch (err) {
@@ -481,7 +512,23 @@ function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood
         </div>
       )}
 
-      {state === 'idle' && !rememberedFood && (
+      {state === 'idle' && !rememberedFood && suggestedFood && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-xs rounded-full bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 px-2 py-0.5 shrink-0">suggested</span>
+          <span className="flex-1 min-w-0 truncate text-slate-600 dark:text-slate-300">{suggestedFood.name}</span>
+          <button
+            disabled={busy}
+            onClick={() => commit(suggestedFood)}
+            className="rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
+          >
+            Use
+          </button>
+          <button onClick={() => setState('open')} className="text-xs text-slate-500 dark:text-slate-400 hover:underline">Change</button>
+          <button onClick={() => setState('skipped')} className="text-xs text-slate-500 dark:text-slate-400 hover:underline">Skip</button>
+        </div>
+      )}
+
+      {state === 'idle' && !rememberedFood && !suggestedFood && (
         <div className="flex gap-2">
           <button onClick={() => setState('open')} className="rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
             Match a food
@@ -561,6 +608,41 @@ function ErrorBox({ children }) {
   return (
     <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-sm px-3 py-2">
       {children}
+    </div>
+  )
+}
+
+// "What this shop bought" — the nutrition brought home from the mapped, weight-
+// priced lines. Honest about coverage: shows the priced fraction with a ~ prefix
+// (mirroring the Meals cost-per-protein) when not every dollar could be counted.
+function PantrySummary({ pantry }) {
+  const partial = pantry.coverage < 0.999
+  const prefix = partial ? '~' : ''
+  return (
+    <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-4">
+      <h4 className="text-sm font-semibold text-emerald-800 dark:text-emerald-200 mb-2">This shop brought home</h4>
+      <div className="grid grid-cols-3 gap-3">
+        <PantryStat label="Protein" value={`${prefix}${Math.round(pantry.protein)}g`} />
+        <PantryStat label="Calories" value={`${prefix}${Math.round(pantry.calories).toLocaleString()}`} />
+        <PantryStat
+          label="$ / 100g protein"
+          value={pantry.costPer100gProtein != null ? `${prefix}$${pantry.costPer100gProtein.toFixed(2)}` : '—'}
+        />
+      </div>
+      {partial && (
+        <p className="mt-2 text-xs text-emerald-700/80 dark:text-emerald-300/70">
+          From {Math.round(pantry.coverage * 100)}% of mapped spend — only weight-priced items with known macros are counted.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function PantryStat({ label, value }) {
+  return (
+    <div>
+      <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70">{label}</p>
+      <p className="text-lg font-semibold text-emerald-900 dark:text-emerald-100 tabular-nums">{value}</p>
     </div>
   )
 }

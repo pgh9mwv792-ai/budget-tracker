@@ -737,6 +737,11 @@ function AppShell() {
               await api.deleteFoodLog(id)
               setFoodLogs((prev) => prev.filter((l) => l.id !== id))
             }}
+            onImportLogs={async (drafts) => {
+              const created = []
+              for (const d of drafts) created.push(await api.createFoodLog(d))
+              setFoodLogs((prev) => [...created, ...prev])
+            }}
             onSetTargets={async (values) => {
               const saved = await api.upsertNutritionTargets(values)
               setNutritionTargets(saved)
