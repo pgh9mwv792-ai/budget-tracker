@@ -740,6 +740,41 @@ export async function upsertReceiptItemRule(itemKey, foodId) {
   return data
 }
 
+// ---------- transfer pairs (linked credit-card-payment / transfer legs) ----------
+
+// A transfer_pair (migration 0029) LINKS the two legs of one internal money
+// move so the UI shows them as one row. It never merges/edits the underlying
+// transactions. Callers degrade to [] until the migration is run.
+export async function fetchTransferPairs() {
+  const { data, error } = await supabase.from('transfer_pairs').select('*')
+  if (error) throw error
+  return data
+}
+
+export async function createTransferPair({ transactionA, transactionB, status = 'auto' }) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('transfer_pairs')
+    .insert({
+      user_id: user.id,
+      transaction_a: transactionA,
+      transaction_b: transactionB,
+      status,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// Unpairing is just deleting the link row — both transactions are untouched.
+export async function deleteTransferPair(id) {
+  const { error } = await supabase.from('transfer_pairs').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ---------- plaid ----------
 
 export async function fetchPlaidConnections() {

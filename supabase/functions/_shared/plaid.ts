@@ -3,6 +3,11 @@
 
 import { decodeBase64, encodeBase64 } from 'jsr:@std/encoding/base64'
 
+// Pure classifier lives in its own Deno-free module so vitest can unit-test it.
+// Re-exported here so callers keep importing classifyKind from '_shared/plaid.ts'.
+export { classifyKind } from './classify.ts'
+export type { PlaidTxnLike, AccountLike } from './classify.ts'
+
 const PLAID_ENV = Deno.env.get('PLAID_ENV') ?? 'sandbox'
 const PLAID_CLIENT_ID = Deno.env.get('PLAID_CLIENT_ID')
 const PLAID_SECRET = Deno.env.get('PLAID_SECRET')
@@ -152,17 +157,3 @@ export async function syncAccounts(
   return rows
 }
 
-// Plaid's personal_finance_category marks internal money movements as
-// TRANSFER_IN / TRANSFER_OUT. Those are moving your own money between accounts
-// (e.g. savings -> checking), not real income or spending — so we tag them
-// 'transfer' and they drop out of every income/expense total. Falls back to
-// the legacy category array, then to the amount sign.
-export function classifyKind(t: any): 'income' | 'expense' | 'transfer' {
-  const primary = t.personal_finance_category?.primary
-  if (primary === 'TRANSFER_IN' || primary === 'TRANSFER_OUT') return 'transfer'
-  const legacy = Array.isArray(t.category) ? t.category : []
-  if (legacy.some((c: string) => /transfer/i.test(c))) return 'transfer'
-  // Plaid convention: positive amount = money out (expense),
-  // negative amount = money in (income/credit).
-  return t.amount >= 0 ? 'expense' : 'income'
-}

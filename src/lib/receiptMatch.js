@@ -56,6 +56,21 @@ export function normalizeMerchant(s) {
   return { compact: tokens.join(''), tokens }
 }
 
+// A human-friendly merchant name for display, built from the same token
+// normalization used for matching: uppercases + strips store numbers, state
+// codes, and generic descriptor noise ("PURCHASE", "POS DEBIT", "ON 06/28"),
+// then Title-Cases what's left. "WHOLEFDS #10234 CA PURCHASE" -> "Wholefds",
+// "SQ *BLUE BOTTLE" -> "Blue Bottle". Falls back to the trimmed raw text when
+// nothing meaningful survives (so a note is never blanked out).
+export function cleanMerchantName(s) {
+  const raw = String(s ?? '').trim()
+  const { tokens } = normalizeMerchant(raw)
+  if (tokens.length === 0) return raw
+  return tokens
+    .map((t) => t.charAt(0) + t.slice(1).toLowerCase())
+    .join(' ')
+}
+
 // Similarity in [0,1] between a receipt store name and a transaction's
 // note/merchant text. Bank descriptors abbreviate ("WHOLEFDS" for "Whole
 // Foods"), so exact substring/token equality isn't enough — we also credit a

@@ -5,7 +5,7 @@ import Login from './components/Login'
 import Landing from './components/Landing'
 import MfaChallenge from './components/MfaChallenge'
 import NavBar from './components/NavBar'
-import UncategorizedBucket from './components/UncategorizedBucket'
+import NeedsReview from './components/NeedsReview'
 import UpgradeGate from './components/UpgradeGate'
 // Tab bodies are code-split: each loads its own chunk (and heavy deps like
 // Recharts) only when the user first opens that tab, keeping the initial
@@ -33,6 +33,7 @@ import * as api from './lib/api'
 import { supabase } from './lib/supabaseClient'
 import { merchantKey, matchRules } from './lib/analysis'
 import { perUnitCost } from './lib/receiptMatch'
+import { pairTransfers } from './lib/transferPair'
 import { addDays, todayISO } from './lib/dateHelpers'
 
 function AppShell() {
@@ -56,6 +57,11 @@ function AppShell() {
   const [receiptItemRules, setReceiptItemRules] = useState([])
   // Per-merchant curation of recurring-charge detection (migration 0019).
   const [recurringOverrides, setRecurringOverrides] = useState([])
+  // Saved links between the two legs of one internal transfer (migration 0029),
+  // plus the client-computed "suspected" pairs awaiting user confirmation (held
+  // in memory only — surfaced in the Needs-review strip, never auto-linked).
+  const [transferPairs, setTransferPairs] = useState([])
+  const [suspectedTransferPairs, setSuspectedTransferPairs] = useState([])
   // The latest weekly digest the user hasn't dismissed (migration 0015),
   // surfaced as a card at the top of the Dashboard. null when there's none.
   const [latestDigest, setLatestDigest] = useState(null)
@@ -83,7 +89,7 @@ function AppShell() {
   const loadAll = useCallback(async () => {
     if (!user) return
     if (!hasLoadedOnce.current) setDataLoading(true)
-    const [cats, txs, gls, buds, rls, fds, flogs, mtmpls, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules, recovr] = await Promise.all([
+    const [cats, txs, gls, buds, rls, fds, flogs, mtmpls, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules, recovr, tpairs] = await Promise.all([
       api.ensureDefaultCategories(user.id),
       api.fetchTransactions(),
       api.fetchGoals(),
@@ -113,6 +119,8 @@ function AppShell() {
       api.fetchReceiptItemRules().catch(() => []),
       // Recurring-charge overrides live in migration 0019; degrade gracefully.
       api.fetchRecurringOverrides().catch(() => []),
+      // Saved transfer-pair links live in migration 0029; degrade gracefully.
+      api.fetchTransferPairs().catch(() => []),
     ])
 
     // Auto-categorize: apply saved merchant rules to any uncategorized
@@ -147,6 +155,28 @@ function AppShell() {
     setReceipts(rcpts ?? [])
     setReceiptItemRules(ritemrules ?? [])
     setRecurringOverrides(recovr ?? [])
+
+    // Reconcile transfer pairs over the freshly-loaded transactions: auto-link
+    // confident matches (persisted), and hold suspected matches in memory for
+    // the Needs-review strip. Pairing only ever adds a link row — it never
+    // touches the transactions themselves. Degrades to no-op until 0029 is run.
+    const savedPairs = tpairs ?? []
+    const pairedIds = new Set(savedPairs.flatMap((p) => [p.transaction_a, p.transaction_b]))
+    const { autoPairs, suspectedPairs } = pairTransfers(finalTxs, { alreadyPairedIds: pairedIds })
+    const createdPairs = []
+    for (const p of autoPairs) {
+      try {
+        createdPairs.push(
+          await api.createTransferPair({ transactionA: p.a.id, transactionB: p.b.id, status: 'auto' })
+        )
+      } catch {
+        // transfer_pairs table may not exist yet (0029), or the leg was linked
+        // concurrently — pairing is best-effort, so skip and move on.
+      }
+    }
+    setTransferPairs([...savedPairs, ...createdPairs])
+    setSuspectedTransferPairs(suspectedPairs)
+
     hasLoadedOnce.current = true
     setDataLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -579,6 +609,37 @@ function AppShell() {
     setRecurringOverrides((prev) => prev.filter((o) => o.merchant_key !== merchantKey))
   }
 
+  // Confirm a suspected transfer pair from the Needs-review strip: persist the
+  // link (status 'confirmed') and drop it from the suspected list. Both
+  // transactions stay exactly as they are — only a link row is created.
+  const confirmTransferPair = async (pair) => {
+    const saved = await api.createTransferPair({
+      transactionA: pair.a.id,
+      transactionB: pair.b.id,
+      status: 'confirmed',
+    })
+    setTransferPairs((prev) => [...prev, saved])
+    setSuspectedTransferPairs((prev) =>
+      prev.filter((p) => !(p.a.id === pair.a.id && p.b.id === pair.b.id))
+    )
+    return saved
+  }
+
+  // Dismiss a suspected pair without linking it ("not the same payment") — just
+  // removes it from the in-memory review list for this session.
+  const dismissSuspectedPair = (pair) => {
+    setSuspectedTransferPairs((prev) =>
+      prev.filter((p) => !(p.a.id === pair.a.id && p.b.id === pair.b.id))
+    )
+  }
+
+  // Unpair (from a combined transfer row): delete the link row. The two
+  // transactions are untouched and simply render as separate legs again.
+  const unpairTransfer = async (pairId) => {
+    await api.deleteTransferPair(pairId)
+    setTransferPairs((prev) => prev.filter((p) => p.id !== pairId))
+  }
+
   return (
     <div className="min-h-screen">
       <NavBar
@@ -642,17 +703,25 @@ function AppShell() {
                 onApplyCategory: assignCategory,
               }}
             />
-            <UncategorizedBucket
+            <NeedsReview
               transactions={transactions}
               categories={categories}
-              onAssign={assignCategory}
+              onAssignCategory={assignCategory}
               onApplyRules={applySavedRules}
               savedMatchCount={savedMatchCount}
+              receipts={receipts}
+              suspectedPairs={suspectedTransferPairs}
+              onConfirmPair={confirmTransferPair}
+              onDismissPair={dismissSuspectedPair}
+              recurringOverrides={recurringOverrides}
+              onSetRecurringOverride={setRecurringOverride}
             />
             <TransactionList
               transactions={transactions}
               categories={categories}
               receiptsByTransaction={receiptsByTransaction}
+              accounts={plaidAccounts}
+              transferPairs={transferPairs}
               onCreate={async (values) => {
                 const created = await api.createTransaction(values)
                 setTransactions((prev) => [created, ...prev])
@@ -665,6 +734,7 @@ function AppShell() {
                 await api.deleteTransaction(id)
                 setTransactions((prev) => prev.filter((t) => t.id !== id))
               }}
+              onUnpair={unpairTransfer}
             />
           </>
         )}

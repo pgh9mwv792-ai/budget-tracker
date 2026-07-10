@@ -40,11 +40,18 @@ Deno.serve(async (req) => {
       const accessToken = await resolveAccessToken(item)
 
       // Keep account balances fresh (checking/savings). Don't let a balance
-      // hiccup block transaction syncing.
+      // hiccup block transaction syncing. We also keep each account's
+      // type/subtype so classifyKind can recognize a credit-card payment's
+      // receiving leg (a "PAYMENT THANK YOU" landing on the credit account).
+      let accountsById = new Map<string, { type?: string | null; subtype?: string | null }>()
       try {
-        await syncAccounts(supabase, userId, accessToken)
+        const accts = await syncAccounts(supabase, userId, accessToken)
+        accountsById = new Map(
+          accts.map((a: any) => [a.account_id, { type: a.type, subtype: a.subtype }]),
+        )
       } catch (_e) {
-        // ignore — balances are best-effort
+        // ignore — balances are best-effort; classification falls back to Plaid's
+        // own category fields when we have no account context.
       }
 
       let cursor = full ? undefined : (item.cursor ?? undefined)
@@ -66,7 +73,7 @@ Deno.serve(async (req) => {
           user_id: userId,
           date: t.date,
           amount: Math.abs(t.amount),
-          kind: classifyKind(t),
+          kind: classifyKind(t, accountsById.get(t.account_id)),
           note: t.name ?? null,
           source: 'plaid',
           plaid_transaction_id: t.transaction_id,
