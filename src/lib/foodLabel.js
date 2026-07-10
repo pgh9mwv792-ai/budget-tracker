@@ -48,25 +48,26 @@ Rules — follow exactly:
      - Vitamin A: 1 IU = 0.3 mcg RAE  (normalized value in mcg)
    If the unit is already mcg/mg/g, OR the conversion is not one of the standards above, set "amount_normalized_mcg_or_mg" to null. NEVER invent or guess a conversion.
 5. If a row prints ONLY a % Daily Value with no absolute amount, set "amount" to that % Daily Value's number, leave "unit" as "" — but PREFER the printed absolute amount whenever one is shown.
-6. If a SECOND image is provided, it is the FRONT of the package — use it ONLY to fill "product_name"/"brand" if the facts panel didn't show them. Never read nutrient numbers from the front image.
-7. If the image is not a readable Nutrition Facts panel (blurry, wrong kind of photo, unreadable), set "error" to a short message and return empty/zero values elsewhere. Do NOT hallucinate nutrient values.`
+6. You may receive SEVERAL images of the SAME product (e.g. the Nutrition Facts panel, the front of the package, an ingredients panel, or the panel split across two close-ups). Treat them together as one product: read the nutrition numbers from whichever image shows the Nutrition Facts panel, and fill "product_name"/"brand" from whichever image shows them (usually the front). If two images show the same panel, do not double-count — report each nutrient once. Never invent numbers that no image shows.
+7. If NONE of the images is a readable Nutrition Facts panel (blurry, wrong kind of photo, unreadable), set "error" to a short message and return empty/zero values elsewhere. Do NOT hallucinate nutrient values.`
 
-export async function parseFoodLabel({ file, frontFile = null }) {
-  // A Nutrition Facts panel is dense fine print, so send more pixels and less
-  // JPEG compression than the receipt scanner (whose default is fine for big
-  // storefront text) — a too-degraded image is a common "reads nothing" cause.
-  const block = await fileToContentBlock(file, { maxDim: 2200, quality: 0.92 })
-  const content = [block]
-  if (frontFile) {
-    const front = await fileToContentBlock(frontFile, { maxDim: 1600, quality: 0.85 })
-    content.push(front)
-    content.push({
-      type: 'text',
-      text: 'The first image is the Nutrition Facts panel. The second image is the FRONT of the package — use it only to fill the product name and brand. Extract as JSON following the schema exactly.',
-    })
-  } else {
-    content.push({ type: 'text', text: 'Extract this nutrition facts panel as JSON following the schema exactly.' })
-  }
+export async function parseFoodLabel({ files, file, frontFile = null }) {
+  // Accept either a single `file`/`frontFile` (legacy) or a `files` array of one
+  // or more photos of the SAME product. A Nutrition Facts panel is dense fine
+  // print, so send more pixels and less JPEG compression than the receipt scanner
+  // (whose default is fine for big storefront text) — a too-degraded image is a
+  // common "reads nothing" cause.
+  const list = (Array.isArray(files) ? files : [file, frontFile]).filter(Boolean)
+  if (!list.length) throw new Error('Add at least one photo of the food’s label.')
+
+  const blocks = await Promise.all(
+    list.map((f) => fileToContentBlock(f, { maxDim: 2200, quality: 0.92 }))
+  )
+  const instruction =
+    list.length > 1
+      ? `These ${list.length} images are different photos of the SAME product (some show the Nutrition Facts panel, others the front/name). Combine them and extract as JSON following the schema exactly.`
+      : 'Extract this nutrition facts panel as JSON following the schema exactly.'
+  const content = [...blocks, { type: 'text', text: instruction }]
 
   const messages = [{ role: 'user', content }]
 

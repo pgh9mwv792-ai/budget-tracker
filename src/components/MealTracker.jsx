@@ -77,6 +77,14 @@ export default function MealTracker({
     [foods]
   )
 
+  // Maker for each library food, so a logged row can show the brand on its own
+  // line beneath the food name (migration 0024). Looked up by the log's
+  // food_id — logs themselves don't store a brand.
+  const brandByFoodId = useMemo(
+    () => new Map(foods.filter((f) => f.brand).map((f) => [f.id, f.brand])),
+    [foods]
+  )
+
   const toggle = (key) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))
   const sectionKey = (meal) => meal.key ?? 'uncategorized'
 
@@ -168,6 +176,7 @@ export default function MealTracker({
           onUpdateLog={onUpdateLog}
           onDeleteLog={onDeleteLog}
           estimateFoodIds={estimateFoodIds}
+          brandByFoodId={brandByFoodId}
         />
       ))}
 
@@ -181,6 +190,7 @@ export default function MealTracker({
           onUpdateLog={onUpdateLog}
           onDeleteLog={onDeleteLog}
           estimateFoodIds={estimateFoodIds}
+          brandByFoodId={brandByFoodId}
         />
       )}
 
@@ -334,7 +344,7 @@ function MacroRow({ macroKey, value, target, fallbackPct = 0 }) {
   )
 }
 
-function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDeleteLog, estimateFoodIds }) {
+function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDeleteLog, estimateFoodIds, brandByFoodId }) {
   const t = totalsFor(logs)
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -373,6 +383,7 @@ function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDe
               key={l.id}
               log={l}
               isEstimate={!!(l.food_id && estimateFoodIds?.has(l.food_id))}
+              brand={l.food_id ? brandByFoodId?.get(l.food_id) : null}
               onUpdateLog={onUpdateLog}
               onDeleteLog={onDeleteLog}
             />
@@ -401,7 +412,7 @@ export function EstBadge() {
   )
 }
 
-function LogRow({ log, isEstimate, onUpdateLog, onDeleteLog }) {
+function LogRow({ log, isEstimate, brand, onUpdateLog, onDeleteLog }) {
   const [editing, setEditing] = useState(false)
   const s = Number(log.servings) || 0
 
@@ -426,6 +437,7 @@ function LogRow({ log, isEstimate, onUpdateLog, onDeleteLog }) {
           {s !== 1 && <span className="text-slate-400 dark:text-slate-500"> ×{s}</span>}
           {isEstimate && <EstBadge />}
         </p>
+        {brand && <p className="truncate text-xs text-slate-500 dark:text-slate-400">{brand}</p>}
         <p className="text-xs text-slate-400 dark:text-slate-500">
           {Math.round(Number(log.calories) * s)} cal · {Math.round(Number(log.protein) * s)}g P
           {log.cost != null && ` · $${(Number(log.cost) * s).toFixed(2)}`}

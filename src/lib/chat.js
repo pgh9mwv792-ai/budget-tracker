@@ -833,7 +833,10 @@ export async function executeTool(name, input, ctx) {
           return `I don't have a cached web lookup for "${product}". Run search_web_nutrition for that exact product first, then save it after the user confirms.`
         }
         const created = await actions.addFood({
-          name: cached.brand ? `${cached.product} (${cached.brand})` : cached.product,
+          // Keep the name clean; the maker lives in its own `brand` column
+          // (migration 0024) so the UI can show it on a separate line.
+          name: cached.product,
+          brand: cached.brand || null,
           servingDesc: cached.servingSize,
           calories: cached.calories,
           protein: cached.protein,

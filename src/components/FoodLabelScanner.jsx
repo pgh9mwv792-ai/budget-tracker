@@ -1,13 +1,14 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseFoodLabel } from '../lib/foodLabel'
 import { reportError } from '../lib/report'
 import { normalizeFoodNutrients, normalizeNutrient, NUTRIENT_BY_ID } from '../lib/nutrients'
 
-// "Scan a food label" flow: pick/snap a photo of a packaged food's Nutrition
-// Facts panel → Claude reads it → an editable review card of macros + the
-// micronutrient rows → saves a branded food into the library (source
-// 'label_scan') that logs like any other food. Sibling of SupplementScanner;
-// they share the same secure vision pipeline (see lib/foodLabel.js).
+// "Scan a food label" flow: pick/snap one or more photos of a packaged food's
+// Nutrition Facts panel (plus optionally the front of the package) → Claude
+// reads them together → an editable review card of macros + the micronutrient
+// rows → saves a branded food into the library (source 'label_scan') that logs
+// like any other food. Sibling of SupplementScanner; they share the same secure
+// vision pipeline (see lib/foodLabel.js).
 //
 // Props:
 //   onSave(values): create a foods row. Same shape createFood accepts. Should
@@ -15,20 +16,26 @@ import { normalizeFoodNutrients, normalizeNutrient, NUTRIENT_BY_ID } from '../li
 export default function FoodLabelScanner({ onSave }) {
   const cameraRef = useRef(null)
   const uploadRef = useRef(null)
-  const frontRef = useRef(null)
+  const addRef = useRef(null)
   const [status, setStatus] = useState('idle') // idle | reading | review | saving
   const [error, setError] = useState(null)
   const [draft, setDraft] = useState(null)
   const [savedNote, setSavedNote] = useState(null)
-  // The Nutrition Facts image we read, kept so an optional front-of-package photo
-  // can be sent alongside it to recover a missing product name/brand.
-  const [factsFile, setFactsFile] = useState(null)
-  const [frontBusy, setFrontBusy] = useState(false)
+  // Every image we read, kept so the user can add more photos of the SAME
+  // product (a second close-up of the panel, or the front for the name/brand)
+  // and we re-read them all together.
+  const [files, setFiles] = useState([])
+  const [addBusy, setAddBusy] = useState(false)
   // Optional typical cost per serving — stored on the food so future logs
   // pre-fill it (the app's established "remembered cost" behavior).
   const [cost, setCost] = useState('')
   // Short spoken names ("eggs", "my eggs") the assistant + search resolve on.
   const [aliasText, setAliasText] = useState('')
+
+  // Object-URL thumbnails for the chosen photos, revoked when the set changes so
+  // we don't leak blobs as the user adds/removes images.
+  const previews = useMemo(() => files.map((f) => ({ url: URL.createObjectURL(f), name: f.name })), [files])
+  useEffect(() => () => previews.forEach((p) => URL.revokeObjectURL(p.url)), [previews])
 
   const openCamera = () => {
     setError(null)
@@ -41,16 +48,18 @@ export default function FoodLabelScanner({ onSave }) {
     uploadRef.current?.click()
   }
 
+  // First read: take whatever photos the user picked (one or several) and parse
+  // them together into a fresh draft.
   const handleFile = async (e) => {
-    const file = e.target.files?.[0]
+    const picked = Array.from(e.target.files || [])
     e.target.value = '' // allow re-selecting the same file later
-    if (!file) return
+    if (!picked.length) return
     setError(null)
     setSavedNote(null)
     setStatus('reading')
     try {
-      const result = await parseFoodLabel({ file })
-      setFactsFile(file)
+      const result = await parseFoodLabel({ files: picked })
+      setFiles(picked)
       setDraft(result)
       setCost('')
       setAliasText('')
@@ -62,17 +71,20 @@ export default function FoodLabelScanner({ onSave }) {
     }
   }
 
-  // Optional second photo: the FRONT of the package, used only to fill a missing
-  // product name/brand. Re-runs the read with both images and merges just the
-  // name fields (never the numbers), leaving the user's other edits intact.
-  const handleFront = async (e) => {
-    const front = e.target.files?.[0]
+  // Add more photos mid-review (e.g. the front of the package to recover a
+  // missing name/brand, or a second close-up of the panel). Re-reads every
+  // image together but merges only the name/brand fields, leaving the user's
+  // numeric edits intact.
+  const handleAdd = async (e) => {
+    const more = Array.from(e.target.files || [])
     e.target.value = ''
-    if (!front || !factsFile) return
+    if (!more.length) return
+    const next = [...files, ...more]
     setError(null)
-    setFrontBusy(true)
+    setAddBusy(true)
     try {
-      const result = await parseFoodLabel({ file: factsFile, frontFile: front })
+      const result = await parseFoodLabel({ files: next })
+      setFiles(next)
       setDraft((d) => ({
         ...d,
         product: d.product?.trim() ? d.product : result.product,
@@ -80,11 +92,13 @@ export default function FoodLabelScanner({ onSave }) {
       }))
     } catch (err) {
       setError(err.message)
-      reportError(err, { step: 'parseFoodLabelFront', rawResponse: err.rawResponse })
+      reportError(err, { step: 'parseFoodLabelAdd', rawResponse: err.rawResponse })
     } finally {
-      setFrontBusy(false)
+      setAddBusy(false)
     }
   }
+
+  const removePhoto = (i) => setFiles((fs) => fs.filter((_, idx) => idx !== i))
 
   const setField = (field, value) => setDraft((d) => ({ ...d, [field]: value }))
 
@@ -131,7 +145,10 @@ export default function FoodLabelScanner({ onSave }) {
         .map((a) => a.trim())
         .filter(Boolean)
       await onSave({
-        name: draft.brand.trim() ? `${product} (${draft.brand.trim()})` : product,
+        // Keep the product name clean and store the maker in its own `brand`
+        // column (migration 0024) so the UI can show it on a separate line.
+        name: product,
+        brand: draft.brand.trim() || null,
         servingDesc: draft.servingSize.trim() || '1 serving',
         calories: Number(draft.calories) || 0,
         protein: Number(draft.protein) || 0,
@@ -145,7 +162,7 @@ export default function FoodLabelScanner({ onSave }) {
       })
       setSavedNote(`Saved ${product} — log it from any meal below.`)
       setDraft(null)
-      setFactsFile(null)
+      setFiles([])
       setStatus('idle')
     } catch (err) {
       setError(err.message)
@@ -156,7 +173,7 @@ export default function FoodLabelScanner({ onSave }) {
 
   const cancel = () => {
     setDraft(null)
-    setFactsFile(null)
+    setFiles([])
     setStatus('idle')
     setError(null)
   }
@@ -170,9 +187,9 @@ export default function FoodLabelScanner({ onSave }) {
 
   return (
     <div>
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
-      <input ref={uploadRef} type="file" accept="image/*,application/pdf" onChange={handleFile} className="hidden" />
-      <input ref={frontRef} type="file" accept="image/*" capture="environment" onChange={handleFront} className="hidden" />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple onChange={handleFile} className="hidden" />
+      <input ref={uploadRef} type="file" accept="image/*,application/pdf" multiple onChange={handleFile} className="hidden" />
+      <input ref={addRef} type="file" accept="image/*,application/pdf" multiple onChange={handleAdd} className="hidden" />
 
       {status !== 'review' && (
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -180,6 +197,7 @@ export default function FoodLabelScanner({ onSave }) {
             <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Scan a food label</h4>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Photograph the Nutrition Facts panel — I’ll read the serving size, macros, and vitamins for you to check.
+              You can add more than one photo of the same product (e.g. the panel and the front).
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
@@ -236,16 +254,42 @@ export default function FoodLabelScanner({ onSave }) {
             </Field>
           </div>
 
-          {!draft.product.trim() && (
-            <button
-              type="button"
-              onClick={() => frontRef.current?.click()}
-              disabled={frontBusy}
-              className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-60"
-            >
-              {frontBusy ? 'Reading front…' : '📷 Add a front-of-package photo to fill the name'}
-            </button>
-          )}
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              {previews.map((p, i) => (
+                <div key={p.url} className="relative">
+                  <img
+                    src={p.url}
+                    alt={`Label photo ${i + 1}`}
+                    className="h-16 w-16 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(i)}
+                    title="Remove this photo"
+                    className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-slate-800/90 text-white text-xs leading-none flex items-center justify-center hover:bg-red-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => addRef.current?.click()}
+                disabled={addBusy}
+                className="h-16 w-16 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 text-xs hover:border-emerald-400 hover:text-emerald-500 disabled:opacity-60 flex flex-col items-center justify-center gap-0.5"
+              >
+                {addBusy ? '…' : <><span className="text-lg leading-none">＋</span><span>photo</span></>}
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+              {addBusy
+                ? 'Re-reading with the new photo…'
+                : !draft.product.trim()
+                  ? 'Add a front-of-package photo to fill the name/brand.'
+                  : 'Add another photo of the same product if a number is cut off.'}
+            </p>
+          </div>
 
           {detected.length > 0 && (
             <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30 px-3 py-2.5">
@@ -287,12 +331,15 @@ export default function FoodLabelScanner({ onSave }) {
             )}
             <div className="space-y-2">
               {draft.nutrients.map((n, i) => (
-                <div key={i} className="flex items-center gap-2">
+                // CSS grid (not flex) so the name column keeps a real width: the
+                // shared inputCls carries `w-full`, which would otherwise override
+                // a fixed `w-20`/`w-16` and collapse a flex name column to nothing.
+                <div key={i} className="grid grid-cols-[minmax(0,1fr)_4.5rem_3.5rem_auto] items-center gap-2">
                   <input
                     value={n.name}
                     onChange={(e) => updateNutrient(i, { name: e.target.value })}
                     placeholder="Nutrient (e.g. Vitamin D, Calcium, Iron)"
-                    className={`flex-1 min-w-0 ${inputCls}`}
+                    className={inputCls}
                   />
                   <input
                     type="number"
@@ -302,14 +349,14 @@ export default function FoodLabelScanner({ onSave }) {
                     onChange={(e) => updateNutrient(i, { amount: e.target.value })}
                     placeholder="amt"
                     title="Amount"
-                    className={`w-20 ${inputCls}`}
+                    className={inputCls}
                   />
                   <input
                     value={n.unit}
                     onChange={(e) => updateNutrient(i, { unit: e.target.value })}
                     placeholder="unit"
                     title="Unit"
-                    className={`w-16 ${inputCls}`}
+                    className={inputCls}
                   />
                   <button
                     onClick={() => removeNutrient(i)}

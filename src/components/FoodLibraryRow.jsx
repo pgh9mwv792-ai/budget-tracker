@@ -61,6 +61,9 @@ export default function FoodLibraryRow({ food: f, onDeleteFood, onUpdateFood, on
               {f.serving_desc && <span className="text-slate-400 dark:text-slate-500"> · {f.serving_desc}</span>}
               {f.source === 'estimate' ? <EstBadge /> : <SourceBadge source={f.source} />}
             </span>
+            {f.brand && (
+              <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{f.brand}</span>
+            )}
             <span className="block text-xs text-slate-400 dark:text-slate-500">
               {Math.round(Number(f.calories))} cal · {Math.round(Number(f.protein))}g P · {Math.round(Number(f.carbs))}g C ·{' '}
               {Math.round(Number(f.fat))}g F

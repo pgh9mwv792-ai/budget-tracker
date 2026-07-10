@@ -290,6 +290,7 @@ export async function createFood({
   source,
   sourceRef,
   aliases,
+  brand,
   isStack,
 }) {
   const {
@@ -318,6 +319,9 @@ export async function createFood({
       // Short spoken names ("eggs", "my eggs") the assistant/search resolve on
       // (migration 0023). Only send when provided so the DB default ('{}') stands.
       ...(Array.isArray(aliases) && aliases.length ? { aliases: normalizeAliases(aliases) } : {}),
+      // The maker, kept separate from `name` so the UI can show it on its own
+      // line (migration 0024). Omit when blank so the column stays null.
+      ...(brand && String(brand).trim() ? { brand: String(brand).trim() } : {}),
       // Only send is_stack when the caller opts in, so the DB default (false)
       // stands otherwise.
       ...(isStack ? { is_stack: true } : {}),
