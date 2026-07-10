@@ -3,6 +3,7 @@ import { addDays, todayISO } from '../lib/dateHelpers'
 import { costPerDay, costPerProtein } from '../lib/foodCost'
 import { itemsFromLogs, plannedTemplatesForDate, templateTotals } from '../lib/mealTemplates'
 import { MACRO_KEYS, MACRO_META, OVER_BAR, macroContributors } from '../lib/macros'
+import { pluralizeLast } from '../lib/pluralize'
 import FoodSearchSheet from './FoodSearchSheet'
 import FoodImport from './FoodImport'
 import MicronutrientSection from './MicronutrientSection'
@@ -34,6 +35,25 @@ function totalsFor(logs) {
     },
     { calories: 0, protein: 0, carbs: 0, fat: 0, cost: 0 }
   )
+}
+
+// Turn a food's serving_desc ("1 large egg (50 g)") plus the logged servings
+// into a household-terms total ("6 large eggs · 300 g") so a 2x gram slip is
+// obvious on the row. Returns null for weight-only servings (g/oz) or when no
+// gram weight is present — the task only wants this when a real portion exists.
+function householdTotal(servingDesc, servings) {
+  const m = String(servingDesc ?? '').match(/^([\d.]+)\s+(.+?)\s*\(([\d.]+)\s*g\)\s*$/i)
+  if (!m) return null
+  const count = Number(m[1])
+  const unit = m[2].trim()
+  const grams = Number(m[3])
+  const s = Number(servings) || 0
+  if (!(count > 0) || !(grams > 0) || !(s > 0)) return null
+  if (/^(oz|ounce|g|gram)s?$/i.test(unit)) return null // weight unit, not household
+  const totalCount = Math.round(count * s * 100) / 100
+  return {
+    text: `${totalCount} ${pluralizeLast(unit, totalCount)} · ${Math.round(grams * s)} g`,
+  }
 }
 
 // Friendly label for the date-nav center button.
@@ -95,6 +115,13 @@ export default function MealTracker({
   // food_id — logs themselves don't store a brand.
   const brandByFoodId = useMemo(
     () => new Map(foods.filter((f) => f.brand).map((f) => [f.id, f.brand])),
+    [foods]
+  )
+
+  // Each library food's serving_desc, so a logged row can show the total in
+  // household terms ("6 large eggs · 300 g") when the food has a real portion.
+  const servingByFoodId = useMemo(
+    () => new Map(foods.filter((f) => f.serving_desc).map((f) => [f.id, f.serving_desc])),
     [foods]
   )
 
@@ -288,6 +315,7 @@ export default function MealTracker({
           onSaveMeal={onSaveTemplate ? (sectionLogs) => saveSectionAsTemplate(meal.key, sectionLogs) : null}
           estimateFoodIds={estimateFoodIds}
           brandByFoodId={brandByFoodId}
+          servingByFoodId={servingByFoodId}
         />
       ))}
 
@@ -302,6 +330,7 @@ export default function MealTracker({
           onDeleteLog={onDeleteLog}
           estimateFoodIds={estimateFoodIds}
           brandByFoodId={brandByFoodId}
+          servingByFoodId={servingByFoodId}
         />
       )}
 
@@ -501,7 +530,7 @@ function MacroRow({ macroKey, value, target, fallbackPct = 0, logs, foodsById })
   )
 }
 
-function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDeleteLog, onSaveMeal, estimateFoodIds, brandByFoodId }) {
+function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDeleteLog, onSaveMeal, estimateFoodIds, brandByFoodId, servingByFoodId }) {
   const t = totalsFor(logs)
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -541,6 +570,7 @@ function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDe
               log={l}
               isEstimate={!!(l.food_id && estimateFoodIds?.has(l.food_id))}
               brand={l.food_id ? brandByFoodId?.get(l.food_id) : null}
+              servingDesc={l.food_id ? servingByFoodId?.get(l.food_id) : null}
               onUpdateLog={onUpdateLog}
               onDeleteLog={onDeleteLog}
             />
@@ -744,9 +774,10 @@ export function EstBadge() {
   )
 }
 
-function LogRow({ log, isEstimate, brand, onUpdateLog, onDeleteLog }) {
+function LogRow({ log, isEstimate, brand, servingDesc, onUpdateLog, onDeleteLog }) {
   const [editing, setEditing] = useState(false)
   const s = Number(log.servings) || 0
+  const household = householdTotal(servingDesc, s)
 
   if (editing) {
     return (
@@ -770,6 +801,11 @@ function LogRow({ log, isEstimate, brand, onUpdateLog, onDeleteLog }) {
           {isEstimate && <EstBadge />}
         </p>
         {brand && <p className="truncate text-xs text-slate-500 dark:text-slate-400">{brand}</p>}
+        {household && (
+          <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+            {household.text} · {Math.round(Number(log.calories) * s)} kcal
+          </p>
+        )}
         <p className="text-xs text-slate-400 dark:text-slate-500">
           {Math.round(Number(log.calories) * s)} cal · {Math.round(Number(log.protein) * s)}g P
           {log.cost != null && ` · $${(Number(log.cost) * s).toFixed(2)}`}

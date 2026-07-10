@@ -43,7 +43,10 @@ export default function MicronutrientSection({
       }
     : undefined
 
-  const anyLogged = rows.some((r) => r.amount > 0)
+  // Header state tracks whether the day has any logged foods — NOT whether any
+  // micro row is non-zero. A day with foods that simply don't report micros
+  // still has rows below, so "no micros logged yet" would contradict them.
+  const anyLogged = logs.length > 0
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">

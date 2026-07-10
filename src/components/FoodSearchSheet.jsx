@@ -4,6 +4,7 @@ import FoodLabelScanner from './FoodLabelScanner'
 import BarcodeScanner from './BarcodeScanner'
 import EnrichmentModal from './EnrichmentModal'
 import { normalizeFoodNutrients } from '../lib/nutrients'
+import { pluralizeLast } from '../lib/pluralize'
 import { foodMatchesQuery } from '../lib/foodResolve'
 import { findFoodByUpc, plausibleMacros, normalizeUpc } from '../lib/barcode'
 import {
@@ -13,6 +14,8 @@ import {
   gradeSearchTerm,
   rankResultsForGrade,
   nutrientsForGrade,
+  householdHintForText,
+  unitNounForText,
 } from '../lib/gradeProfiles'
 
 // Rounds to one decimal for tidy macro fields.
@@ -113,12 +116,21 @@ export default function FoodSearchSheet({
     if (gradeById(activeGrade)?.family !== gradeFamily?.id) setActiveGrade(null)
   }, [gradeFamily, activeGrade])
 
-  // USDA results deduped against the library by fdc_id, then re-ranked for a
-  // chosen Tier-1 grade so the matching entry (grass-fed, wild…) floats up.
-  const dbMatches = useMemo(() => {
-    const deduped = results.filter((r) => !libraryFdc.has(String(r.fdcId)))
+  // USDA results deduped against the library by fdc_id and split into the two
+  // labeled groups the edge function tags each row with. "Common" (Foundation /
+  // SR Legacy) renders first and is re-ranked for a chosen Tier-1 grade so the
+  // matching entry (grass-fed, wild…) floats up; "Branded" always renders below
+  // it so packaged products never out-rank the canonical foods.
+  const dbCommon = useMemo(() => {
+    const deduped = results.filter(
+      (r) => r.group !== 'branded' && !libraryFdc.has(String(r.fdcId))
+    )
     return activeGrade ? rankResultsForGrade(deduped, activeGrade) : deduped
   }, [results, libraryFdc, activeGrade])
+  const dbBranded = useMemo(
+    () => results.filter((r) => r.group === 'branded' && !libraryFdc.has(String(r.fdcId))),
+    [results, libraryFdc]
+  )
 
   // Recent/frequent foods (empty-query state), derived from the user's logs —
   // grouped by food, ranked by how often they're logged then recency.
@@ -239,6 +251,11 @@ export default function FoodSearchSheet({
 
   const selectedPortion =
     portions.find((p) => p.grams === grams) ?? portions[0] ?? { label: '100 g', grams: 100 }
+  // The picked food's family gives us a natural single-unit noun ("egg") so a
+  // named portion reads "1 large egg", and a plain-language weight hint to show
+  // when USDA lists no household portions at all.
+  const unitNoun = useMemo(() => unitNounForText(picked?.name), [picked])
+  const noPortionHint = useMemo(() => householdHintForText(picked?.name), [picked])
   const qty = Number(amount) || 0
   const factor = base ? (grams / 100) * qty : 0
   const liveMacros = base
@@ -256,20 +273,29 @@ export default function FoodSearchSheet({
   const bcPlausible =
     pickedSource === 'barcode' && base ? plausibleMacros(base) : { ok: true, reason: null }
 
+  // "large" + noun "egg" → "large egg"; skip when the portion already names it.
+  function withNoun(unit) {
+    if (!unitNoun || unit.toLowerCase().includes(unitNoun)) return unit
+    return `${unit} ${unitNoun}`
+  }
+
   function amountLabel() {
     const p = selectedPortion
     const totalG = round1(grams * qty)
     if (p.label === 'g' || p.label === '100 g') return `${totalG} g`
     if (p.label === 'oz') return `${round1(qty)} oz (${totalG} g)`
-    const unit = p.label.replace(/^1\s+/, '')
-    return `${round1(qty)} ${unit} (${totalG} g)`
+    const unit = withNoun(p.label.replace(/^1\s+/, ''))
+    // Only pluralize when we appended a real noun ("large eggs"), never the bare
+    // portion word ("large") — pluralizing that would read "larges".
+    const shown = unitNoun ? pluralizeLast(unit, qty) : unit
+    return `${round1(qty)} ${shown} (${totalG} g)`
   }
 
   function portionOptionLabel(p) {
     if (p.label === 'g') return 'gram (g)'
     if (p.label === 'oz') return 'ounce (28 g)'
     if (p.label === '100 g') return '100 g'
-    const unit = p.label.replace(/^1\s+/, '')
+    const unit = withNoun(p.label.replace(/^1\s+/, ''))
     return `${unit} — ${round1(p.grams)} g`
   }
 
@@ -512,6 +538,7 @@ export default function FoodSearchSheet({
               portionOptionLabel={portionOptionLabel}
               loadingPortions={loadingPortions}
               hasNamedPortion={hasNamedPortion}
+              noPortionHint={noPortionHint}
               liveMacros={liveMacros}
               amountLabel={amountLabel}
               pCost={pCost}
@@ -596,19 +623,34 @@ export default function FoodSearchSheet({
                     )}
                   </ResultGroup>
 
-                  <ResultGroup title="USDA database">
+                  <ResultGroup title="Common foods">
                     {!onSearchFoods ? (
                       <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
                         Database search is unavailable.
                       </p>
                     ) : searching ? (
                       <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">searching…</p>
-                    ) : dbMatches.length === 0 ? (
+                    ) : dbCommon.length === 0 ? (
                       <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
-                        {query.trim().length < 2 ? 'Keep typing…' : 'No database matches.'}
+                        {query.trim().length < 2 ? 'Keep typing…' : 'No common-food matches.'}
                       </p>
                     ) : (
-                      dbMatches.map((r) => (
+                      dbCommon.map((r) => (
+                        <ResultRow
+                          key={r.fdcId}
+                          onClick={() => pickUsda(r)}
+                          title={r.name}
+                          subtitle={`per 100g: ${Math.round(r.calories)} cal · ${round1(r.protein)}g P · ${round1(
+                            r.carbs
+                          )}g C · ${round1(r.fat)}g F`}
+                        />
+                      ))
+                    )}
+                  </ResultGroup>
+
+                  {onSearchFoods && !searching && dbBranded.length > 0 && (
+                    <ResultGroup title="Branded">
+                      {dbBranded.map((r) => (
                         <ResultRow
                           key={r.fdcId}
                           onClick={() => pickUsda(r)}
@@ -617,9 +659,9 @@ export default function FoodSearchSheet({
                             r.carbs
                           )}g C · ${round1(r.fat)}g F`}
                         />
-                      ))
-                    )}
-                  </ResultGroup>
+                      ))}
+                    </ResultGroup>
+                  )}
                 </>
               )}
 
@@ -1016,6 +1058,7 @@ function UsdaCreateStep({
   portionOptionLabel,
   loadingPortions,
   hasNamedPortion,
+  noPortionHint,
   liveMacros,
   amountLabel,
   pCost,
@@ -1097,6 +1140,7 @@ function UsdaCreateStep({
       {!loadingPortions && !hasNamedPortion && (
         <p className="text-xs text-slate-400 dark:text-slate-500">
           USDA has no preset portions for this food — log it by weight (grams or ounces).
+          {noPortionHint ? <span className="text-slate-500 dark:text-slate-400"> As a guide, {noPortionHint}.</span> : ''}
         </p>
       )}
 

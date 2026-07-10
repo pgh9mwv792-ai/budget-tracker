@@ -126,26 +126,43 @@ Deno.serve(async (req) => {
       })
     }
 
-    const resp = await fetch(`${SEARCH_URL}?api_key=${encodeURIComponent(USDA_API_KEY)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: q,
-        pageSize: 15,
-        // Foundation + SR Legacy are the clean generic entries; Branded adds
-        // packaged products (which carry a brand name).
-        dataType: ['Foundation', 'SR Legacy', 'Branded'],
-      }),
-    })
+    // Query the two dataType tiers separately so branded products can never
+    // out-rank the clean generic entries: Foundation + SR Legacy are the
+    // canonical "common" foods; Branded is packaged products. Running them as
+    // two requests (rather than one mixed dataType call) keeps the groups
+    // labeled and lets us rank within each on its own terms.
+    const doSearch = (dataType: string[], pageSize: number) =>
+      fetch(`${SEARCH_URL}?api_key=${encodeURIComponent(USDA_API_KEY)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, pageSize, dataType }),
+      })
 
-    if (resp.status === 429) return rateLimited()
+    const [commonResp, brandedResp] = await Promise.all([
+      doSearch(['Foundation', 'SR Legacy'], 12),
+      doSearch(['Branded'], 10),
+    ])
 
-    const data = await resp.json()
-    if (!resp.ok) {
-      throw new Error(data?.error?.message ?? `USDA API error (${resp.status})`)
+    if (commonResp.status === 429 || brandedResp.status === 429) return rateLimited()
+
+    const commonData = await commonResp.json()
+    if (!commonResp.ok) {
+      throw new Error(commonData?.error?.message ?? `USDA API error (${commonResp.status})`)
     }
+    // A branded-tier hiccup shouldn't sink the whole search — the common group is
+    // what matters most, so degrade to an empty branded list on its failure.
+    const brandedData = brandedResp.ok ? await brandedResp.json() : { foods: [] }
 
-    const foods = (data.foods ?? []).map((f) => {
+    const ql = q.toLowerCase()
+    const qTokens = ql.match(/[a-z0-9]+/g) ?? []
+    // Egg whole-vs-part disambiguation: a bare "egg"/"eggs" query means the WHOLE
+    // egg, so float the whole-egg entry above the white/yolk entries. Only kicks
+    // in when the user hasn't explicitly asked for white or yolk.
+    const eggQuery =
+      qTokens.some((t) => t === 'egg' || t === 'eggs') &&
+      !qTokens.some((t) => ['white', 'whites', 'yolk', 'yolks'].includes(t))
+
+    const mapFood = (f, group) => {
       const byNumber = new Map(
         (f.foodNutrients ?? []).map((n) => [String(n.nutrientNumber), Number(n.value) || 0])
       )
@@ -159,8 +176,61 @@ Deno.serve(async (req) => {
         protein: byNumber.get(NUTRIENT.protein) ?? 0,
         carbs: byNumber.get(NUTRIENT.carbs) ?? 0,
         fat: byNumber.get(NUTRIENT.fat) ?? 0,
+        group,
       }
-    })
+    }
+
+    const scoreCommon = (f) => {
+      const desc = String(f.description ?? '').toLowerCase()
+      const dTokens = desc.match(/[a-z0-9]+/g) ?? []
+      let s = 0
+      if (desc === ql) s += 100
+      if (dTokens[0] && dTokens[0] === qTokens[0]) s += 40 // first word matches
+      if (desc.startsWith(ql)) s += 30
+      if (qTokens.every((t) => dTokens.includes(t)))
+        s += 15 // every query token present as a whole word
+      else if (qTokens.some((t) => dTokens.includes(t))) s += 5 // partial match
+      // Shorter descriptions are usually the canonical base food, not a variant.
+      s -= Math.min(dTokens.length, 12) * 0.5
+      if (eggQuery) {
+        if (dTokens.includes('whole')) s += 50
+        if (['white', 'whites', 'yolk', 'yolks'].some((w) => dTokens.includes(w))) s -= 40
+      }
+      return s
+    }
+
+    // Categories where a matching query word is almost always incidental (Milky
+    // Way "EGGS" is a candy, not an egg). These sink to the bottom of Branded.
+    const CONFECTIONERY =
+      /cand(y|ies)|confection|chocolate|cookie|biscuit|dessert|sweet|gum\b|ice cream|frozen dessert|snack.*bar|granola|pastr/i
+    const scoreBranded = (f) => {
+      const desc = String(f.description ?? '').toLowerCase()
+      const cat = String(f.brandedFoodCategory ?? '').toLowerCase()
+      const dTokens = desc.match(/[a-z0-9]+/g) ?? []
+      let s = 0
+      if (desc.startsWith(ql)) s += 20
+      if (qTokens.every((t) => dTokens.includes(t))) s += 10
+      else if (qTokens.some((t) => dTokens.includes(t))) s += 3
+      // Brand-collision guard: rank confectionery/snack categories last within
+      // Branded, using USDA's own category rather than a keyword blacklist.
+      if (CONFECTIONERY.test(cat)) s -= 1000
+      return s
+    }
+
+    // Stable descending sort by score (ties keep USDA's original order).
+    const rankBy = (arr, score) =>
+      arr
+        .map((f, i) => ({ f, i, s: score(f) }))
+        .sort((a, b) => b.s - a.s || a.i - b.i)
+        .map((x) => x.f)
+
+    const common = rankBy(commonData.foods ?? [], scoreCommon).map((f) => mapFood(f, 'common'))
+    const branded = rankBy(brandedData.foods ?? [], scoreBranded).map((f) => mapFood(f, 'branded'))
+
+    // Flattened common-first list (each row tagged with its `group`) so the sheet
+    // can render "Common foods" then "Branded" and branded never interleaves
+    // above common. Other callers that read the flat list just get better order.
+    const foods = [...common, ...branded]
 
     return new Response(JSON.stringify({ foods }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

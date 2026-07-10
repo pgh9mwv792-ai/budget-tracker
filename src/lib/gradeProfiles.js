@@ -35,6 +35,11 @@ export const GRADE_FAMILIES = [
     id: 'eggs',
     label: 'Eggs',
     keywords: ['egg', 'eggs'],
+    // `unitNoun` names the natural single unit so a portion reads "1 large egg";
+    // `household` is a plain-language weight approximation shown when USDA lists
+    // no preset portions for the food. Both are family-level facts, not per-food.
+    unitNoun: 'egg',
+    household: 'a large egg is about 50 g',
     grades: [
       { id: 'egg_conventional', label: 'Conventional', tier: 3 },
       {
@@ -73,6 +78,8 @@ export const GRADE_FAMILIES = [
     id: 'beef',
     label: 'Ground beef',
     keywords: ['beef', 'ground beef', 'hamburger'],
+    unitNoun: 'patty',
+    household: 'a quarter-pound patty is about 113 g',
     grades: [
       {
         id: 'beef_conventional',
@@ -96,6 +103,8 @@ export const GRADE_FAMILIES = [
     id: 'salmon',
     label: 'Salmon',
     keywords: ['salmon'],
+    unitNoun: 'fillet',
+    household: 'a fillet is about 170 g',
     grades: [
       {
         id: 'salmon_wild',
@@ -119,6 +128,8 @@ export const GRADE_FAMILIES = [
     id: 'milk',
     label: 'Milk',
     keywords: ['milk'],
+    unitNoun: 'cup',
+    household: 'a cup of milk is about 240 g',
     grades: [
       {
         id: 'milk_whole',
@@ -210,6 +221,19 @@ export function familyForText(text) {
 // The selectable grades for a query (empty when it matches no family).
 export function gradesForText(text) {
   return familyForText(text)?.grades ?? []
+}
+
+// A plain-language weight approximation for the food family (e.g. eggs → "a
+// large egg is about 50 g"), or null. Shown as a hint when USDA has no preset
+// household portions, so the user can sanity-check a weight-only entry.
+export function householdHintForText(text) {
+  return familyForText(text)?.household ?? null
+}
+
+// The natural single-unit noun for the family (eggs → "egg"), or null. Used to
+// spell a named portion as "1 large egg" instead of the bare "1 large".
+export function unitNounForText(text) {
+  return familyForText(text)?.unitNoun ?? null
 }
 
 export function gradeById(id) {
