@@ -27,6 +27,8 @@ const ChatWidget = lazy(() => import('./components/ChatWidget'))
 const PlaidLinkButton = lazy(() => import('./components/PlaidLinkButton'))
 const ReceiptScanner = lazy(() => import('./components/ReceiptScanner'))
 const Onboarding = lazy(() => import('./components/Onboarding'))
+// Signed-out sample-data explorer: loads only when a visitor opens the demo.
+const DemoMode = lazy(() => import('./components/DemoMode'))
 import * as api from './lib/api'
 import { supabase } from './lib/supabaseClient'
 import { merchantKey, matchRules } from './lib/analysis'
@@ -688,6 +690,7 @@ function AppShell() {
             }}
             onSearchFoods={api.searchFoods}
             onFoodDetails={api.getFoodDetails}
+            onBarcodeLookup={api.lookupBarcode}
           />
         )}
 
@@ -796,19 +799,32 @@ function SignedOut() {
   const [view, setView] = useState(hasAuthParams() ? 'login' : 'landing')
   const [loginMode, setLoginMode] = useState('signin')
 
+  const openLogin = (mode) => {
+    setLoginMode(mode)
+    setView('login')
+  }
+
+  if (view === 'demo') {
+    return (
+      <Suspense fallback={<FullScreenMessage text="Loading demo…" />}>
+        <DemoMode onExit={() => setView('landing')} onSignUp={() => openLogin('signup')} />
+      </Suspense>
+    )
+  }
   if (view === 'login') {
-    return <Login initialMode={loginMode} onBack={() => setView('landing')} />
+    return (
+      <Login
+        initialMode={loginMode}
+        onBack={() => setView('landing')}
+        onExploreDemo={() => setView('demo')}
+      />
+    )
   }
   return (
     <Landing
-      onGetStarted={() => {
-        setLoginMode('signup')
-        setView('login')
-      }}
-      onSignIn={() => {
-        setLoginMode('signin')
-        setView('login')
-      }}
+      onGetStarted={() => openLogin('signup')}
+      onSignIn={() => openLogin('signin')}
+      onExploreDemo={() => setView('demo')}
     />
   )
 }

@@ -25,7 +25,7 @@ function generatePassword(length = 16) {
   return chars.join('')
 }
 
-export default function Login({ initialMode = 'signin', onBack }) {
+export default function Login({ initialMode = 'signin', onBack, onExploreDemo }) {
   const [mode, setMode] = useState(initialMode) // 'signin' | 'signup' | 'magic'
   const [email, setEmail] = useState(() => localStorage.getItem(LAST_EMAIL_KEY) || '')
   const [password, setPassword] = useState('')
@@ -150,7 +150,17 @@ export default function Login({ initialMode = 'signin', onBack }) {
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
           Budget Tracker
         </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Sign in to sync your data across devices.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">Sign in to sync your data across devices.</p>
+
+        {onExploreDemo && (
+          <button
+            type="button"
+            onClick={onExploreDemo}
+            className="mb-6 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+          >
+            Or explore with sample data — no account needed →
+          </button>
+        )}
 
         <div className="grid grid-cols-3 gap-1 mb-4 text-sm p-1 rounded-lg bg-slate-100 dark:bg-slate-800">
           {[

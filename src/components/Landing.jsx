@@ -60,7 +60,7 @@ function ScreenshotPlaceholder({ label }) {
   )
 }
 
-export default function Landing({ onGetStarted, onSignIn }) {
+export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       {/* Top bar */}
@@ -100,6 +100,14 @@ export default function Landing({ onGetStarted, onSignIn }) {
             Sign in
           </button>
         </div>
+        {onExploreDemo && (
+          <button
+            onClick={onExploreDemo}
+            className="mt-4 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+          >
+            Explore with sample data — no account needed →
+          </button>
+        )}
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Free to start. No ads, ever.</p>
       </section>
 

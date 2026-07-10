@@ -293,6 +293,7 @@ export async function createFood({
   brand,
   isStack,
   grade,
+  upc,
 }) {
   const {
     data: { user },
@@ -329,6 +330,9 @@ export async function createFood({
       // Quality tier of the base food (grass-fed, pasture-raised, wild…) —
       // migration 0026. Nullable free-text id from src/lib/gradeProfiles.js.
       ...(grade ? { grade } : {}),
+      // Product barcode for scanned foods (migration 0027), so a re-scan finds
+      // this row instead of creating a duplicate. Omit when absent.
+      ...(upc && String(upc).trim() ? { upc: String(upc).trim() } : {}),
     })
     .select()
     .single()
@@ -400,6 +404,32 @@ export async function getFoodDetails(fdcId) {
     throw new Error(message)
   }
   return data?.food ?? null
+}
+
+// Resolve a scanned product barcode (UPC/EAN) to a food via the `barcode-lookup`
+// edge function (Open Food Facts first, then USDA branded by gtinUpc). Returns
+// { found, source, product } — product has per-100g macros + a per-100g
+// `nutrients` array + serving info, mirroring getFoodDetails so the verify-
+// before-save UI can reuse the same scaling. Returns { found: false } on a miss.
+export async function lookupBarcode(upc) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const { data, error } = await supabase.functions.invoke('barcode-lookup', {
+    body: { upc },
+    headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+  })
+  if (error) {
+    let message = error.message
+    try {
+      const body = await error.context.json()
+      if (body?.error) message = body.error
+    } catch {
+      // fall back to the generic message
+    }
+    throw new Error(message)
+  }
+  return data ?? { found: false }
 }
 
 export async function updateFood(id, updates) {

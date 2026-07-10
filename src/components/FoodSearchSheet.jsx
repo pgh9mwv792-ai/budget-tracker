@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import SupplementScanner from './SupplementScanner'
 import FoodLabelScanner from './FoodLabelScanner'
+import BarcodeScanner from './BarcodeScanner'
 import EnrichmentModal from './EnrichmentModal'
 import { normalizeFoodNutrients } from '../lib/nutrients'
 import { foodMatchesQuery } from '../lib/foodResolve'
+import { findFoodByUpc, plausibleMacros, normalizeUpc } from '../lib/barcode'
 import {
   familyForText,
   gradesForText,
@@ -40,6 +42,7 @@ export default function FoodSearchSheet({
   onUpdateFood,
   onSearchFoods,
   onFoodDetails,
+  onBarcodeLookup,
   onClose,
 }) {
   // 'search' → results/recents. 'usda' → USDA amount+serving create card.
@@ -55,10 +58,19 @@ export default function FoodSearchSheet({
   const [showScan, setShowScan] = useState(false)
   // The just-saved food we're offering to auto-enrich (scanned/web only), or null.
   const [enrichTarget, setEnrichTarget] = useState(null)
-  // Which label the scanner reads: 'food' (Nutrition Facts) or 'supplement'
-  // (Supplement Facts). Defaults to food since this is the meal tracker.
+  // Which scanner is showing: 'food' (Nutrition Facts), 'supplement' (Supplement
+  // Facts), or 'barcode' (camera UPC/EAN scan). Defaults to food.
   const [scanKind, setScanKind] = useState('food')
   const [busy, setBusy] = useState(false)
+  // Barcode sub-flow: 'scan' (camera live) → 'looking' (resolving the UPC) →
+  // 'miss' (no product found — offer label/manual) → 'manual' (type the number).
+  const [bcPhase, setBcPhase] = useState('scan')
+  const [bcError, setBcError] = useState(null)
+  const [bcUpc, setBcUpc] = useState('') // the last scanned/typed code, remembered
+  const [manualUpc, setManualUpc] = useState('')
+  // When a scanned UPC has no product match and the user falls back to manual
+  // entry, we carry the code onto the created food so a future scan finds it.
+  const [manualCreateUpc, setManualCreateUpc] = useState('')
   // The quality grade chosen for what's being added (grass-fed, wild, whole…).
   // Null = no grade. Reset whenever the query moves to a different food family.
   const [activeGrade, setActiveGrade] = useState(null)
@@ -209,7 +221,12 @@ export default function FoodSearchSheet({
     }
   }
 
-  // ---- USDA create step (Cronometer-style amount + serving size) ----
+  // ---- USDA / barcode create step (Cronometer-style amount + serving size) ----
+  // The same serving-scaling UI serves both a picked USDA food and a scanned
+  // barcode product; `pickedSource` says which, and `pickedMeta` carries the
+  // barcode-only provenance (upc, source page, plausibility) used at save.
+  const [pickedSource, setPickedSource] = useState('usda') // 'usda' | 'barcode'
+  const [pickedMeta, setPickedMeta] = useState(null)
   const [picked, setPicked] = useState(null) // { fdcId, name, brand }
   const [base, setBase] = useState(null)
   const [portions, setPortions] = useState([])
@@ -233,6 +250,12 @@ export default function FoodSearchSheet({
       }
     : null
 
+  // Open Food Facts is community-edited, so a scanned product's per-100g macros
+  // are sanity-checked before we let the user save. An implausible set blocks
+  // the save and steers them to the label scanner / manual entry instead.
+  const bcPlausible =
+    pickedSource === 'barcode' && base ? plausibleMacros(base) : { ok: true, reason: null }
+
   function amountLabel() {
     const p = selectedPortion
     const totalG = round1(grams * qty)
@@ -251,6 +274,8 @@ export default function FoodSearchSheet({
   }
 
   async function pickUsda(r) {
+    setPickedSource('usda')
+    setPickedMeta(null)
     setPicked({ fdcId: String(r.fdcId), name: r.name, brand: r.brand })
     setPName(r.brand ? `${r.name} (${r.brand})` : r.name)
     setPCost('')
@@ -282,6 +307,63 @@ export default function FoodSearchSheet({
     }
   }
 
+  // A scanned barcode arrived. Dedupe against the library first (a re-scan should
+  // re-log the saved food, never create a second row); otherwise resolve the UPC
+  // via Open Food Facts / USDA and open the verify-before-save card on a hit, or
+  // the graceful miss screen (offer label scan / manual) on a miss.
+  async function handleBarcode(upc) {
+    setBcError(null)
+    setBcUpc(upc)
+    const existing = findFoodByUpc(foods, upc)
+    if (existing) {
+      openQuantity(existing)
+      return
+    }
+    if (!onBarcodeLookup) {
+      setBcPhase('miss')
+      return
+    }
+    setBcPhase('looking')
+    try {
+      const res = await onBarcodeLookup(upc)
+      if (res?.found && res.product) {
+        pickBarcode(res.source, res.product)
+      } else {
+        setBcPhase('miss')
+      }
+    } catch (err) {
+      setBcError(err.message || 'Lookup failed')
+      setBcPhase('miss')
+    }
+  }
+
+  // Load a resolved barcode product into the shared serving-scaling create step.
+  // Macros come per 100 g; the serving picker defaults to the package serving
+  // (from the source) so one "serving" logs the printed amount.
+  function pickBarcode(source, product) {
+    const grams = Number(product.servingGrams) > 0 ? Number(product.servingGrams) : 100
+    setPickedSource('barcode')
+    setPickedMeta({
+      upc: product.upc || bcUpc,
+      sourceUrl: product.sourceUrl || null,
+      dataSource: source, // 'off' | 'usda' — for the provenance line
+    })
+    setPicked({ fdcId: product.fdcId || null, name: product.name, brand: product.brand || null })
+    setPName(product.name)
+    setPCost('')
+    setBase({ calories: product.calories, protein: product.protein, carbs: product.carbs, fat: product.fat })
+    setNutrients(product.nutrients ?? [])
+    const label = product.servingSize?.trim() || '1 serving'
+    setPortions([{ label, grams }, ...WEIGHT_UNITS])
+    setGrams(grams)
+    setAmount('1')
+    // Reset the scanner UI so re-opening the tab starts fresh.
+    setShowScan(false)
+    setScanKind('food')
+    setBcPhase('scan')
+    setStep('usda')
+  }
+
   // Create the library row from the picked USDA food, then move to the quantity
   // prompt so it logs into this meal (existing 3.0 create flow → same prompt).
   async function createUsdaThenLog() {
@@ -292,16 +374,25 @@ export default function FoodSearchSheet({
       // (grams/100 × amount) is exactly the per-100g→serving scale, so the
       // normalized micros already reflect the portion the user is logging. The
       // two live side by side in the same jsonb; normalized rows carry an `id`.
+      // Both USDA and barcode products carry per-100g rows; `factor` scales them
+      // to the logged serving. OFF rows are name-only and USDA rows carry a
+      // number — normalizeNutrient falls back from number to alias, so a single
+      // 'usda' pass normalizes either source correctly.
       const rawNutrients = nutrients ?? []
       const normalized = normalizeFoodNutrients(rawNutrients, { source: 'usda', servingScale: factor })
       const servingDesc = amountLabel()
+      const isBarcode = pickedSource === 'barcode'
       let merged = [...rawNutrients, ...normalized]
-      // A Tier-2 grade (e.g. grass-fed milk) overrides specific micros with its
-      // cited values, scaled to this serving. Tier-1/3 grades leave nutrients as
-      // is — nutrientsForGrade returns the same rows and we just store the grade.
-      if (activeGrade) merged = nutrientsForGrade({ serving_desc: servingDesc, nutrients: merged }, activeGrade)
+      // Grades are chosen on the search step (USDA path only); a scanned barcode
+      // never carries one, so only apply for USDA.
+      if (!isBarcode && activeGrade) {
+        merged = nutrientsForGrade({ serving_desc: servingDesc, nutrients: merged }, activeGrade)
+      }
       const created = await onAddFood({
         name: pName.trim(),
+        // A scanned product keeps its brand in the dedicated column; the USDA
+        // path folds it into the editable name (unchanged behavior).
+        ...(isBarcode ? { brand: picked?.brand || null } : {}),
         servingDesc,
         calories: Math.round(liveMacros.calories),
         protein: round1(liveMacros.protein),
@@ -310,8 +401,9 @@ export default function FoodSearchSheet({
         cost: pCost === '' ? null : Number(pCost),
         fdcId: picked?.fdcId || null,
         nutrients: merged,
-        source: 'usda',
-        grade: activeGrade || null,
+        source: isBarcode ? 'barcode' : 'usda',
+        grade: isBarcode ? null : activeGrade || null,
+        ...(isBarcode ? { upc: pickedMeta?.upc || null, sourceRef: pickedMeta?.sourceUrl || null } : {}),
       })
       openQuantity(created)
     } finally {
@@ -364,7 +456,9 @@ export default function FoodSearchSheet({
 
   const title =
     step === 'usda'
-      ? 'Add from USDA'
+      ? pickedSource === 'barcode'
+        ? 'Check the scanned product'
+        : 'Add from USDA'
       : step === 'quantity'
         ? `Log to ${meal.label}`
         : `Add to ${meal.label}`
@@ -425,6 +519,7 @@ export default function FoodSearchSheet({
               qty={qty}
               busy={busy}
               meal={meal}
+              barcode={pickedSource === 'barcode' ? { meta: pickedMeta, brand: picked?.brand, plausible: bcPlausible } : null}
               onConfirm={createUsdaThenLog}
               onBack={() => setStep('search')}
             />
@@ -531,20 +626,27 @@ export default function FoodSearchSheet({
               {/* Manual create + supplement scanner stay reachable here. */}
               <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-2">
                 {!showManual && !showScan && (
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowManual(true)}
-                      className="flex-1 rounded-md border border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                      onClick={() => { setManualCreateUpc(''); setShowManual(true) }}
+                      className="rounded-md border border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
                     >
-                      ＋ Create food
+                      ＋ Create
                     </button>
                     <button
                       type="button"
-                      onClick={() => setShowScan(true)}
-                      className="flex-1 rounded-md border border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                      onClick={() => { setScanKind('food'); setShowScan(true) }}
+                      className="rounded-md border border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
                     >
-                      📋 Scan label
+                      📋 Label
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setBcPhase('scan'); setBcError(null); setScanKind('barcode'); setShowScan(true) }}
+                      className="rounded-md border border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                    >
+                      📷 Barcode
                     </button>
                   </div>
                 )}
@@ -552,6 +654,7 @@ export default function FoodSearchSheet({
                 {showManual && (
                   <ManualCreate
                     busy={busy}
+                    defaultUpc={manualCreateUpc}
                     onCancel={() => setShowManual(false)}
                     onCreate={createManualThenLog}
                   />
@@ -583,6 +686,17 @@ export default function FoodSearchSheet({
                         >
                           💊 Supplement
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => { setBcPhase('scan'); setBcError(null); setScanKind('barcode') }}
+                          className={`px-2.5 py-1 rounded-md transition ${
+                            scanKind === 'barcode'
+                              ? 'bg-emerald-600 text-white'
+                              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          📷 Barcode
+                        </button>
                       </div>
                       <button
                         type="button"
@@ -592,14 +706,27 @@ export default function FoodSearchSheet({
                         Close scanner
                       </button>
                     </div>
-                    {scanKind === 'food' ? (
-                      <FoodLabelScanner onSave={addFoodWithEnrichPrompt} />
-                    ) : (
-                      <SupplementScanner onSave={onAddFood} />
+                    {scanKind === 'food' && <FoodLabelScanner onSave={addFoodWithEnrichPrompt} />}
+                    {scanKind === 'supplement' && <SupplementScanner onSave={onAddFood} />}
+                    {scanKind === 'barcode' && (
+                      <BarcodeFlow
+                        phase={bcPhase}
+                        error={bcError}
+                        upc={bcUpc}
+                        manualUpc={manualUpc}
+                        setManualUpc={setManualUpc}
+                        onDetected={handleBarcode}
+                        onManual={() => setBcPhase('manual')}
+                        onRescan={() => { setBcPhase('scan'); setBcError(null) }}
+                        onScanLabel={() => setScanKind('food')}
+                        onManualCreate={() => { setManualCreateUpc(bcUpc); setShowScan(false); setShowManual(true) }}
+                      />
                     )}
-                    <p className="text-xs text-slate-400 dark:text-slate-500">
-                      Saved items appear under “My foods” — search for one above to log it.
-                    </p>
+                    {scanKind !== 'barcode' && (
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        Saved items appear under “My foods” — search for one above to log it.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -662,6 +789,112 @@ function GradeChips({ family, options, active, onPick }) {
       )}
     </div>
   )
+}
+
+// The barcode sub-flow inside the scanner panel: live camera scan → looking up →
+// (miss: offer label/manual) with a type-the-number fallback throughout.
+function BarcodeFlow({
+  phase,
+  error,
+  upc,
+  manualUpc,
+  setManualUpc,
+  onDetected,
+  onManual,
+  onRescan,
+  onScanLabel,
+  onManualCreate,
+}) {
+  if (phase === 'looking') {
+    return (
+      <div className="py-6 text-center">
+        <p className="text-sm text-slate-600 dark:text-slate-300">Looking up barcode…</p>
+        {upc && <p className="mt-1 text-xs tabular-nums text-slate-400 dark:text-slate-500">#{upc}</p>}
+      </div>
+    )
+  }
+
+  if (phase === 'manual') {
+    const submit = (e) => {
+      e.preventDefault()
+      const code = normalizeUpc(manualUpc)
+      if (code) onDetected(code)
+    }
+    const valid = !!normalizeUpc(manualUpc)
+    return (
+      <form onSubmit={submit} className="space-y-2">
+        <p className="text-sm text-slate-600 dark:text-slate-300">Type the barcode number (the digits under the bars).</p>
+        <input
+          autoFocus
+          inputMode="numeric"
+          value={manualUpc}
+          onChange={(e) => setManualUpc(e.target.value)}
+          placeholder="e.g. 016000275287"
+          className={`w-full ${inputCls}`}
+        />
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={!valid}
+            className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-2 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          >
+            Look it up
+          </button>
+          <button
+            type="button"
+            onClick={onRescan}
+            className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          >
+            Use camera
+          </button>
+        </div>
+        {!valid && manualUpc.trim() !== '' && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">That isn’t a valid 8–14 digit barcode.</p>
+        )}
+      </form>
+    )
+  }
+
+  if (phase === 'miss') {
+    return (
+      <div className="space-y-2">
+        <div className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 px-3 py-2.5">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+            No product found{upc ? <span className="tabular-nums"> for #{upc}</span> : ''}.
+          </p>
+          <p className="text-[11px] text-amber-700/90 dark:text-amber-400/80">
+            {error || 'Neither Open Food Facts nor USDA had this barcode. Add it another way — we’ll remember the number.'}
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={onScanLabel}
+            className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          >
+            📋 Scan label
+          </button>
+          <button
+            type="button"
+            onClick={onManualCreate}
+            className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          >
+            ＋ Enter by hand
+          </button>
+          <button
+            type="button"
+            onClick={onRescan}
+            className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          >
+            📷 Scan again
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // phase === 'scan'
+  return <BarcodeScanner onDetected={onDetected} onManual={onManual} />
 }
 
 function ResultGroup({ title, children }) {
@@ -790,11 +1023,40 @@ function UsdaCreateStep({
   qty,
   busy,
   meal,
+  barcode,
   onConfirm,
   onBack,
 }) {
+  const blocked = barcode ? !barcode.plausible?.ok : false
+  const provenance =
+    barcode?.meta?.dataSource === 'off'
+      ? 'From Open Food Facts (community-maintained) — please check the numbers.'
+      : barcode
+        ? 'From the USDA branded database.'
+        : null
   return (
     <div className="space-y-3">
+      {barcode && (
+        <div className="rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/30 px-3 py-2 space-y-1">
+          <p className="text-xs text-sky-800 dark:text-sky-300">
+            📷 Scanned {barcode.meta?.upc ? <span className="tabular-nums">#{barcode.meta.upc}</span> : 'barcode'}
+            {barcode.brand ? ` · ${barcode.brand}` : ''}
+          </p>
+          {provenance && <p className="text-[11px] text-sky-700/80 dark:text-sky-400/70">{provenance}</p>}
+        </div>
+      )}
+
+      {blocked && (
+        <div className="rounded-lg border border-amber-300 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
+          <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+            These numbers look off ({barcode.plausible.reason}).
+          </p>
+          <p className="text-[11px] text-amber-700/90 dark:text-amber-400/80">
+            Rather than trust them, scan the Nutrition Facts label or add this food by hand.
+          </p>
+        </div>
+      )}
+
       <input
         value={pName}
         onChange={(e) => setPName(e.target.value)}
@@ -871,7 +1133,7 @@ function UsdaCreateStep({
         <button
           type="button"
           onClick={onConfirm}
-          disabled={busy || !pName.trim() || !(qty > 0)}
+          disabled={busy || !pName.trim() || !(qty > 0) || blocked}
           className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-2 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
         >
           Add & log to {meal.label}
@@ -889,7 +1151,7 @@ function UsdaCreateStep({
   )
 }
 
-function ManualCreate({ busy, onCancel, onCreate }) {
+function ManualCreate({ busy, onCancel, onCreate, defaultUpc }) {
   const empty = { name: '', servingDesc: '', calories: '', protein: '', carbs: '', fat: '', cost: '' }
   const [form, setForm] = useState(empty)
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
@@ -907,13 +1169,17 @@ function ManualCreate({ busy, onCancel, onCreate }) {
       cost: form.cost === '' ? null : Number(form.cost),
       fdcId: null,
       source: 'manual',
+      // Carry a scanned-but-unmatched barcode onto the food so a re-scan finds it.
+      ...(defaultUpc ? { upc: defaultUpc } : {}),
     })
   }
 
   return (
     <form onSubmit={submit} className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Create a food</span>
+        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          Create a food{defaultUpc ? <span className="ml-1 font-normal tabular-nums text-slate-400">· barcode #{defaultUpc}</span> : ''}
+        </span>
         <button
           type="button"
           onClick={onCancel}

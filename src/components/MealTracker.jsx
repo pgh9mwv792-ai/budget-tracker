@@ -60,6 +60,7 @@ export default function MealTracker({
   onSetTargets,
   onSearchFoods,
   onFoodDetails,
+  onBarcodeLookup,
 }) {
   const [date, setDate] = useState(today())
   // Which meal's search sheet is open ({ key, label }), or null.
@@ -224,6 +225,7 @@ export default function MealTracker({
           onUpdateFood={onUpdateFood}
           onSearchFoods={onSearchFoods}
           onFoodDetails={onFoodDetails}
+          onBarcodeLookup={onBarcodeLookup}
           onClose={() => setSheetMeal(null)}
         />
       )}
