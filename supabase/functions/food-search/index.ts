@@ -166,6 +166,20 @@ Deno.serve(async (req) => {
       const byNumber = new Map(
         (f.foodNutrients ?? []).map((n) => [String(n.nutrientNumber), Number(n.value) || 0])
       )
+      // Carry the FULL per-100g nutrient profile through the search response, not
+      // just the four macros. USDA's detail endpoint 404s for some Foundation
+      // foods (e.g. whole egg fdcId 748967) even though search returns all ~95
+      // nutrients — so search is the reliable micro source and detail is only a
+      // bonus for real-world portions. Same shape the detail mode emits, so the
+      // client normalizes either identically. Search rows use nutrientNumber/value.
+      const nutrients = []
+      for (const n of f.foodNutrients ?? []) {
+        const name = n.nutrientName
+        const amount = Number(n.value)
+        if (!name || !Number.isFinite(amount)) continue
+        const usdaNumber = n.nutrientNumber != null ? String(n.nutrientNumber) : null
+        nutrients.push({ name, amount, unit: n.unitName ?? '', per: '100g', usda_number: usdaNumber })
+      }
       return {
         fdcId: String(f.fdcId),
         name: f.description ?? 'Unknown food',
@@ -176,6 +190,7 @@ Deno.serve(async (req) => {
         protein: byNumber.get(NUTRIENT.protein) ?? 0,
         carbs: byNumber.get(NUTRIENT.carbs) ?? 0,
         fat: byNumber.get(NUTRIENT.fat) ?? 0,
+        nutrients,
         group,
       }
     }

@@ -309,7 +309,12 @@ export default function FoodSearchSheet({
     setPortions([...WEIGHT_UNITS])
     setGrams(100)
     setAmount('1')
-    setNutrients(null)
+    // Seed the micro profile from the SEARCH result. USDA's detail endpoint 404s
+    // for some Foundation foods (e.g. whole egg) even though search carries all
+    // ~95 nutrients — so search is the reliable source and the detail fetch below
+    // only upgrades portions and overrides micros when it actually returns some.
+    const searchNutrients = Array.isArray(r.nutrients) && r.nutrients.length ? r.nutrients : null
+    setNutrients(searchNutrients)
     setStep('usda')
 
     if (!onFoodDetails) return
@@ -318,7 +323,11 @@ export default function FoodSearchSheet({
       const detail = await onFoodDetails(r.fdcId)
       if (detail) {
         setBase({ calories: detail.calories, protein: detail.protein, carbs: detail.carbs, fat: detail.fat })
-        setNutrients(detail.nutrients ?? null)
+        // Only let detail replace the search micros if it actually returned some;
+        // a 404/empty detail must not wipe the profile search already gave us.
+        if (Array.isArray(detail.nutrients) && detail.nutrients.length) {
+          setNutrients(detail.nutrients)
+        }
         const named = detail.portions ?? []
         setPortions([...named, ...WEIGHT_UNITS])
         if (named.length) {
@@ -327,7 +336,7 @@ export default function FoodSearchSheet({
         }
       }
     } catch {
-      // keep the weight-unit fallback already shown
+      // keep the weight-unit fallback and the search-seeded micros already shown
     } finally {
       setLoadingPortions(false)
     }
@@ -396,6 +405,7 @@ export default function FoodSearchSheet({
     if (!liveMacros || !pName.trim() || !(qty > 0)) return
     setBusy(true)
     try {
+      const isBarcode = pickedSource === 'barcode'
       // Store the raw per-100g USDA rows AND a canonical per-serving set. `factor`
       // (grams/100 × amount) is exactly the per-100g→serving scale, so the
       // normalized micros already reflect the portion the user is logging. The
@@ -404,10 +414,12 @@ export default function FoodSearchSheet({
       // to the logged serving. OFF rows are name-only and USDA rows carry a
       // number — normalizeNutrient falls back from number to alias, so a single
       // 'usda' pass normalizes either source correctly.
+      // `nutrients` is seeded from the search result in pickUsda and only replaced
+      // by the detail fetch when detail actually returns rows — so it stays
+      // populated even when USDA's detail endpoint 404s. No refetch needed here.
       const rawNutrients = nutrients ?? []
       const normalized = normalizeFoodNutrients(rawNutrients, { source: 'usda', servingScale: factor })
       const servingDesc = amountLabel()
-      const isBarcode = pickedSource === 'barcode'
       let merged = [...rawNutrients, ...normalized]
       // Grades are chosen on the search step (USDA path only); a scanned barcode
       // never carries one, so only apply for USDA.
