@@ -17,7 +17,7 @@ export function existingMicroIds(food) {
 }
 
 // Pull a gram weight from a serving description ("1 bar (60 g)", "150 g").
-function parseServingGrams(desc) {
+export function parseServingGrams(desc) {
   const s = String(desc ?? '')
   const paren = s.match(/\(([\d.]+)\s*g\)/i)
   if (paren) return Number(paren[1])

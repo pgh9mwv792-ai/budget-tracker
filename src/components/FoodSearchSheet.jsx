@@ -1,8 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import SupplementScanner from './SupplementScanner'
 import FoodLabelScanner from './FoodLabelScanner'
+import EnrichmentModal from './EnrichmentModal'
 import { normalizeFoodNutrients } from '../lib/nutrients'
 import { foodMatchesQuery } from '../lib/foodResolve'
+import {
+  familyForText,
+  gradesForText,
+  gradeById,
+  gradeSearchTerm,
+  rankResultsForGrade,
+  nutrientsForGrade,
+} from '../lib/gradeProfiles'
 
 // Rounds to one decimal for tidy macro fields.
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
@@ -44,10 +53,15 @@ export default function FoodSearchSheet({
 
   const [showManual, setShowManual] = useState(false)
   const [showScan, setShowScan] = useState(false)
+  // The just-saved food we're offering to auto-enrich (scanned/web only), or null.
+  const [enrichTarget, setEnrichTarget] = useState(null)
   // Which label the scanner reads: 'food' (Nutrition Facts) or 'supplement'
   // (Supplement Facts). Defaults to food since this is the meal tracker.
   const [scanKind, setScanKind] = useState('food')
   const [busy, setBusy] = useState(false)
+  // The quality grade chosen for what's being added (grass-fed, wild, whole…).
+  // Null = no grade. Reset whenever the query moves to a different food family.
+  const [activeGrade, setActiveGrade] = useState(null)
 
   // Close on Escape.
   useEffect(() => {
@@ -74,11 +88,25 @@ export default function FoodSearchSheet({
     return foods.filter((f) => foodMatchesQuery(f, q)).slice(0, 12)
   }, [foods, query])
 
-  // USDA results deduped against the library by fdc_id.
-  const dbMatches = useMemo(
-    () => results.filter((r) => !libraryFdc.has(String(r.fdcId))),
-    [results, libraryFdc]
-  )
+  // Which grade family (eggs, beef, milk…) the current query belongs to, so we
+  // can offer the quality chips. Null when the query matches no family.
+  const gradeFamily = useMemo(() => familyForText(query), [query])
+  const gradeOptions = useMemo(() => gradesForText(query), [query])
+
+  // Drop the chosen grade when the query moves off its family (typing a new food
+  // shouldn't silently keep an old grade). Comparing family ids keeps the chip
+  // stable while the user refines within the same family.
+  useEffect(() => {
+    if (!activeGrade) return
+    if (gradeById(activeGrade)?.family !== gradeFamily?.id) setActiveGrade(null)
+  }, [gradeFamily, activeGrade])
+
+  // USDA results deduped against the library by fdc_id, then re-ranked for a
+  // chosen Tier-1 grade so the matching entry (grass-fed, wild…) floats up.
+  const dbMatches = useMemo(() => {
+    const deduped = results.filter((r) => !libraryFdc.has(String(r.fdcId)))
+    return activeGrade ? rankResultsForGrade(deduped, activeGrade) : deduped
+  }, [results, libraryFdc, activeGrade])
 
   // Recent/frequent foods (empty-query state), derived from the user's logs —
   // grouped by food, ranked by how often they're logged then recency.
@@ -266,17 +294,24 @@ export default function FoodSearchSheet({
       // two live side by side in the same jsonb; normalized rows carry an `id`.
       const rawNutrients = nutrients ?? []
       const normalized = normalizeFoodNutrients(rawNutrients, { source: 'usda', servingScale: factor })
+      const servingDesc = amountLabel()
+      let merged = [...rawNutrients, ...normalized]
+      // A Tier-2 grade (e.g. grass-fed milk) overrides specific micros with its
+      // cited values, scaled to this serving. Tier-1/3 grades leave nutrients as
+      // is — nutrientsForGrade returns the same rows and we just store the grade.
+      if (activeGrade) merged = nutrientsForGrade({ serving_desc: servingDesc, nutrients: merged }, activeGrade)
       const created = await onAddFood({
         name: pName.trim(),
-        servingDesc: amountLabel(),
+        servingDesc,
         calories: Math.round(liveMacros.calories),
         protein: round1(liveMacros.protein),
         carbs: round1(liveMacros.carbs),
         fat: round1(liveMacros.fat),
         cost: pCost === '' ? null : Number(pCost),
         fdcId: picked?.fdcId || null,
-        nutrients: [...rawNutrients, ...normalized],
+        nutrients: merged,
         source: 'usda',
+        grade: activeGrade || null,
       })
       openQuantity(created)
     } finally {
@@ -295,6 +330,36 @@ export default function FoodSearchSheet({
     }
   }
 
+  // Save wrapper handed to the scanners: after a scanned/web food lands, offer to
+  // auto-fill the micronutrients it doesn't list from a generic USDA equivalent
+  // (supplements are excluded — their label IS the whole profile). The user's
+  // skip is remembered per food, so we don't re-prompt one they already declined.
+  async function addFoodWithEnrichPrompt(values) {
+    // Carry the chosen grade onto a scanned food. A Tier-2 grade also merges its
+    // cited overrides into the scanned nutrients (scaled to the label serving);
+    // Tier-1/3 leave them untouched and just record the grade.
+    let payload = values
+    if (activeGrade) {
+      const graded = nutrientsForGrade(
+        { serving_desc: values.servingDesc, nutrients: values.nutrients ?? [] },
+        activeGrade
+      )
+      payload = { ...values, nutrients: graded, grade: activeGrade }
+    }
+    const created = await onAddFood(payload)
+    if (
+      created &&
+      (created.source === 'label_scan' || created.source === 'web') &&
+      !created.enrich_skipped &&
+      onUpdateFood &&
+      onSearchFoods &&
+      onFoodDetails
+    ) {
+      setEnrichTarget(created)
+    }
+    return created
+  }
+
   const hasNamedPortion = portions.some((p) => !['g', 'oz', '100 g'].includes(p.label))
 
   const title =
@@ -305,6 +370,7 @@ export default function FoodSearchSheet({
         : `Add to ${meal.label}`
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm"
       onClick={onClose}
@@ -382,6 +448,15 @@ export default function FoodSearchSheet({
               </div>
 
               {searchError && <p className="text-xs text-amber-600 dark:text-amber-400">{searchError}</p>}
+
+              {gradeFamily && gradeOptions.length > 0 && (
+                <GradeChips
+                  family={gradeFamily}
+                  options={gradeOptions}
+                  active={activeGrade}
+                  onPick={setActiveGrade}
+                />
+              )}
 
               {!query.trim() && (
                 <ResultGroup title="Recent foods">
@@ -518,7 +593,7 @@ export default function FoodSearchSheet({
                       </button>
                     </div>
                     {scanKind === 'food' ? (
-                      <FoodLabelScanner onSave={onAddFood} />
+                      <FoodLabelScanner onSave={addFoodWithEnrichPrompt} />
                     ) : (
                       <SupplementScanner onSave={onAddFood} />
                     )}
@@ -532,6 +607,59 @@ export default function FoodSearchSheet({
           )}
         </div>
       </div>
+    </div>
+    {enrichTarget && (
+      <EnrichmentModal
+        food={enrichTarget}
+        searchTerm={gradeSearchTerm(enrichTarget.grade) || undefined}
+        onUpdateFood={onUpdateFood}
+        onSearchFoods={onSearchFoods}
+        onFoodDetails={onFoodDetails}
+        onClose={() => setEnrichTarget(null)}
+      />
+    )}
+    </>
+  )
+}
+
+// Quality-grade picker shown when the query matches a food family. Picking a
+// Tier-1 grade re-ranks the USDA results toward the matching entry; a Tier-2
+// grade merges its cited micros on save. Clicking the active chip clears it.
+function GradeChips({ family, options, active, onPick }) {
+  const activeTier = active ? gradeById(active)?.tier : null
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2 space-y-1.5">
+      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+        {family.label} quality <span className="font-normal text-slate-400 dark:text-slate-500">(optional)</span>
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((g) => {
+          const on = g.id === active
+          return (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => onPick(on ? null : g.id)}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium border transition ${
+                on
+                  ? 'bg-emerald-600 border-emerald-600 text-white'
+                  : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'
+              }`}
+            >
+              {g.label}
+            </button>
+          )
+        })}
+      </div>
+      {active && (
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+          {activeTier === 1
+            ? 'Showing the matching USDA entry first.'
+            : activeTier === 2
+              ? 'Cited nutrient values will be applied when you add this food.'
+              : 'Saved as a label — no nutrition change.'}
+        </p>
+      )}
     </div>
   )
 }

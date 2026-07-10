@@ -292,6 +292,7 @@ export async function createFood({
   aliases,
   brand,
   isStack,
+  grade,
 }) {
   const {
     data: { user },
@@ -325,6 +326,9 @@ export async function createFood({
       // Only send is_stack when the caller opts in, so the DB default (false)
       // stands otherwise.
       ...(isStack ? { is_stack: true } : {}),
+      // Quality tier of the base food (grass-fed, pasture-raised, wild…) —
+      // migration 0026. Nullable free-text id from src/lib/gradeProfiles.js.
+      ...(grade ? { grade } : {}),
     })
     .select()
     .single()

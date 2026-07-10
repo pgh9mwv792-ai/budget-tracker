@@ -49,6 +49,18 @@ export const NUTRIENTS = [
   { id: 'fiber', name: 'Dietary Fiber', unit: 'g', usda_numbers: ['291'], aliases: ['dietary fiber', 'fiber', 'fibre', 'total dietary fiber', 'total fiber'] },
   { id: 'total_sugars', name: 'Total Sugars', unit: 'g', usda_numbers: ['269'], aliases: ['total sugars', 'sugars', 'total sugar'] },
   { id: 'added_sugars', name: 'Added Sugars', unit: 'g', kind: 'limit', usda_numbers: ['539'], aliases: ['added sugars', 'added sugar', 'includes added sugars'] },
+  // ---- omega-3 fatty acids ----
+  // Canonical unit is grams (USDA reports these in g); labels print mg, so the
+  // existing g↔mg conversion applies. `omega_3_total` is a catch-all bucket for a
+  // label that prints only a combined "Omega-3"/"fish oil" number (no breakdown);
+  // it has no dedicated USDA number. The three specific acids EPA/DHA/ALA carry
+  // their own USDA numbers. The section's Omega-3 *display* rollup (EPA+DHA+ALA)
+  // is computed at day-sum time — see micronutrients.js — not stored per food.
+  // `omega:true` marks a specific acid; `rollup:true` marks the generic bucket.
+  { id: 'omega_3_total', name: 'Omega-3 (total)', unit: 'g', rollup: true, usda_numbers: [], aliases: ['omega-3', 'omega 3', 'omega-3 fatty acids', 'total omega-3', 'n-3 fatty acids', 'fish oil', 'omega-3 (epa+dha)'] },
+  { id: 'epa', name: 'EPA', unit: 'g', omega: true, usda_numbers: ['629'], aliases: ['epa', 'eicosapentaenoic acid', '20:5 n-3', 'epa (20:5)'] },
+  { id: 'dha', name: 'DHA', unit: 'g', omega: true, usda_numbers: ['621'], aliases: ['dha', 'docosahexaenoic acid', '22:6 n-3', 'dha (22:6)'] },
+  { id: 'ala', name: 'ALA (Omega-3)', unit: 'g', omega: true, usda_numbers: ['851'], aliases: ['ala', 'alpha linolenic acid', 'alpha-linolenic acid', '18:3 n-3', 'ala (18:3)'] },
 ]
 
 // Display order for the curated micronutrient view (vitamins, then minerals).
@@ -315,6 +327,10 @@ const RDA = {
   fiber: { male: { target: 38, upper_limit: null }, female: { target: 25, upper_limit: null } },
   total_sugars: { male: { target: null, upper_limit: null }, female: { target: null, upper_limit: null } },
   added_sugars: { male: { target: null, upper_limit: 50 }, female: { target: null, upper_limit: 50 } },
+  // ALA is the only omega-3 with an established reference — an Adequate Intake
+  // (1.6 g male / 1.1 g female, no UL). EPA, DHA and the omega_3_total rollup
+  // have no RDA/AI, so they intentionally have no row here (→ null target, no bar).
+  ala: { male: { target: 1.6, upper_limit: null }, female: { target: 1.1, upper_limit: null } },
 }
 
 // Default { target, upper_limit } for one nutrient given the user's cohort.

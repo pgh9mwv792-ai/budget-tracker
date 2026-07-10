@@ -3,6 +3,7 @@ import { normalizeAliases } from '../lib/api'
 import { urlDomain } from '../lib/webNutrition'
 import { buildEnrichment, existingMicroIds } from '../lib/foodEnrich'
 import { EstBadge } from './MealTracker'
+import { gradeLabel, gradesForText, gradeById, nutrientsForGrade } from '../lib/gradeProfiles'
 
 // Human-readable provenance for a food's `source`, so every tier (hand-entered,
 // USDA, a scanned label, a web lookup, an estimate) is visible at a glance.
@@ -60,6 +61,7 @@ export default function FoodLibraryRow({ food: f, onDeleteFood, onUpdateFood, on
               {f.name}
               {f.serving_desc && <span className="text-slate-400 dark:text-slate-500"> · {f.serving_desc}</span>}
               {f.source === 'estimate' ? <EstBadge /> : <SourceBadge source={f.source} />}
+              <GradeBadge grade={f.grade} />
             </span>
             {f.brand && (
               <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{f.brand}</span>
@@ -98,11 +100,77 @@ export default function FoodLibraryRow({ food: f, onDeleteFood, onUpdateFood, on
       {open && (
         <div className="px-4 pb-3 pl-9 space-y-3">
           <ProvenanceLine food={f} enrichedCount={enrichedCount} />
+          {onUpdateFood && <GradeEditor food={f} onUpdateFood={onUpdateFood} />}
           {onUpdateFood && <AliasEditor food={f} aliases={aliases} onUpdateFood={onUpdateFood} />}
           {onUpdateFood && onSearchFoods && onFoodDetails && f.source !== 'usda' && (
             <EnrichPanel food={f} onUpdateFood={onUpdateFood} onSearchFoods={onSearchFoods} onFoodDetails={onFoodDetails} />
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+// The quality-grade chip on the collapsed row (grass-fed, wild, pasture-raised…).
+function GradeBadge({ grade }) {
+  const label = gradeLabel(grade)
+  if (!label) return null
+  return (
+    <span className="ml-1.5 align-middle rounded px-1 py-px text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+      {label}
+    </span>
+  )
+}
+
+// Set / switch / clear a food's quality grade. Shown only for foods whose name
+// belongs to a grade family. Switching re-derives the nutrients (a Tier-2 grade's
+// cited micros are merged; a prior grade's overrides are stripped first), so the
+// change is always reversible and never double-counts.
+function GradeEditor({ food: f, onUpdateFood }) {
+  const [busy, setBusy] = useState(false)
+  const options = gradesForText(f.name)
+  if (!options.length) return null
+
+  async function pick(id) {
+    const next = id === f.grade ? null : id
+    setBusy(true)
+    try {
+      await onUpdateFood(f.id, { grade: next, nutrients: nutrientsForGrade(f, next) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const activeTier = f.grade ? gradeById(f.grade)?.tier : null
+  return (
+    <div>
+      <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Quality grade</p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((g) => {
+          const on = g.id === f.grade
+          return (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => pick(g.id)}
+              disabled={busy}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium border transition disabled:opacity-50 ${
+                on
+                  ? 'bg-emerald-600 border-emerald-600 text-white'
+                  : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              {g.label}
+            </button>
+          )
+        })}
+      </div>
+      {f.grade && (
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+          {activeTier === 2
+            ? 'Cited nutrient values are applied to this food. Click the chip again to remove.'
+            : 'Saved as a label — no nutrition change. Click the chip again to remove.'}
+        </p>
       )}
     </div>
   )

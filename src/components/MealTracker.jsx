@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { addDays, todayISO } from '../lib/dateHelpers'
 import { costPerDay, costPerProtein } from '../lib/foodCost'
-import { MACRO_KEYS, MACRO_META, OVER_BAR } from '../lib/macros'
+import { MACRO_KEYS, MACRO_META, OVER_BAR, macroContributors } from '../lib/macros'
 import FoodSearchSheet from './FoodSearchSheet'
 import MicronutrientSection from './MicronutrientSection'
+import ContributorDropdown from './ContributorDropdown'
 import FoodLibraryRow from './FoodLibraryRow'
 
 const MEALS = [
@@ -69,6 +70,7 @@ export default function MealTracker({
 
   const dayLogs = useMemo(() => logs.filter((l) => l.date === date), [logs, date])
   const totals = useMemo(() => totalsFor(dayLogs), [dayLogs])
+  const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods])
   const uncategorized = useMemo(() => dayLogs.filter((l) => !MEAL_KEYS.has(l.meal)), [dayLogs])
   // Foods whose macros are the assistant's estimate of a named chain item — a
   // log referencing one shows an "est." marker so approximate numbers are clear.
@@ -129,6 +131,8 @@ export default function MealTracker({
         setDate={setDate}
         totals={totals}
         targets={targets}
+        dayLogs={dayLogs}
+        foodsById={foodsById}
         editingTargets={editingTargets}
         onToggleTargets={() => setEditingTargets((v) => !v)}
       />
@@ -161,7 +165,15 @@ export default function MealTracker({
         </div>
       )}
 
-      <MicronutrientSection logs={dayLogs} foods={foods} targets={targets} onSetTargets={onSetTargets} />
+      <MicronutrientSection
+        logs={dayLogs}
+        foods={foods}
+        targets={targets}
+        onSetTargets={onSetTargets}
+        onUpdateFood={onUpdateFood}
+        onSearchFoods={onSearchFoods}
+        onFoodDetails={onFoodDetails}
+      />
 
       <WeeklyStrip transactions={transactions} logs={logs} />
 
@@ -221,7 +233,7 @@ export default function MealTracker({
 
 // Sticky summary for the selected day: date nav, one bar per macro (stable
 // color, warning color past 100%), and the "food cost today" differentiator.
-function TargetsHeader({ date, setDate, totals, targets, editingTargets, onToggleTargets }) {
+function TargetsHeader({ date, setDate, totals, targets, dayLogs, foodsById, editingTargets, onToggleTargets }) {
   const hasTargets = targets != null
 
   // When no targets are set there's no denominator for a true progress bar, so
@@ -271,7 +283,15 @@ function TargetsHeader({ date, setDate, totals, targets, editingTargets, onToggl
 
         <div className="space-y-2.5">
           {MACRO_KEYS.map((k) => (
-            <MacroRow key={k} macroKey={k} value={totals[k]} target={targets?.[k]} fallbackPct={splitPct[k]} />
+            <MacroRow
+              key={k}
+              macroKey={k}
+              value={totals[k]}
+              target={targets?.[k]}
+              fallbackPct={splitPct[k]}
+              logs={dayLogs}
+              foodsById={foodsById}
+            />
           ))}
         </div>
         {!hasTargets && (
@@ -310,36 +330,61 @@ function TargetsHeader({ date, setDate, totals, targets, editingTargets, onToggl
   )
 }
 
-function MacroRow({ macroKey, value, target, fallbackPct = 0 }) {
+function MacroRow({ macroKey, value, target, fallbackPct = 0, logs, foodsById }) {
   const meta = MACRO_META[macroKey]
+  const [open, setOpen] = useState(false)
   const hasTarget = target != null && Number(target) > 0
   const isEnergy = macroKey === 'calories'
   // With a target the bar is true progress (consumed/target); without one it
   // falls back to the macro's share of today's calories.
   const pct = hasTarget ? (value / Number(target)) * 100 : fallbackPct
   const over = hasTarget && pct > 100
+
+  // Per-food breakdown, only computed while the row is expanded.
+  const breakdown = useMemo(
+    () => (open ? macroContributors(macroKey, logs ?? [], foodsById) : null),
+    [open, macroKey, logs, foodsById]
+  )
+
   return (
     <div>
-      <div className="flex items-baseline justify-between text-sm">
-        <span className="text-slate-600 dark:text-slate-300">{meta.label}</span>
-        <span className="text-slate-500 dark:text-slate-400 tabular-nums">
-          <span className="font-semibold text-slate-900 dark:text-slate-100">{Math.round(value)}</span>
-          {hasTarget && ` / ${Math.round(Number(target))}`} {meta.unit}
-          {hasTarget ? (
-            <span className={`ml-1 ${over ? 'text-red-500 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
-              {Math.round(pct)}%
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full text-left" aria-expanded={open}>
+        <div className="flex items-baseline justify-between gap-2 text-sm">
+          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+            <span
+              className={`shrink-0 text-slate-300 dark:text-slate-600 transition-transform ${open ? 'rotate-90' : ''}`}
+              aria-hidden
+            >
+              ›
             </span>
-          ) : (
-            !isEnergy && <span className="ml-1 text-slate-400 dark:text-slate-500">{Math.round(fallbackPct)}%</span>
-          )}
-        </span>
-      </div>
-      <div className="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-        <div
-          className={`h-full ${over ? OVER_BAR : meta.bar} transition-all`}
-          style={{ width: `${Math.min(100, pct)}%` }}
+            {meta.label}
+          </span>
+          <span className="text-slate-500 dark:text-slate-400 tabular-nums">
+            <span className="font-semibold text-slate-900 dark:text-slate-100">{Math.round(value)}</span>
+            {hasTarget && ` / ${Math.round(Number(target))}`} {meta.unit}
+            {hasTarget ? (
+              <span className={`ml-1 ${over ? 'text-red-500 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                {Math.round(pct)}%
+              </span>
+            ) : (
+              !isEnergy && <span className="ml-1 text-slate-400 dark:text-slate-500">{Math.round(fallbackPct)}%</span>
+            )}
+          </span>
+        </div>
+        <div className="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+          <div
+            className={`h-full ${over ? OVER_BAR : meta.bar} transition-all`}
+            style={{ width: `${Math.min(100, pct)}%` }}
+          />
+        </div>
+      </button>
+      {open && breakdown && (
+        <ContributorDropdown
+          contributors={breakdown.contributors}
+          unit={meta.unit}
+          format={(n) => String(Math.round(Number(n) || 0))}
         />
-      </div>
+      )}
     </div>
   )
 }

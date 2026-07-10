@@ -41,7 +41,8 @@ Respond with ONLY a JSON object — no prose, no markdown code fences. Use exact
 Rules — follow exactly:
 1. Put EVERY non-macro nutrient row into "nutrients", PER SERVING. This includes BOTH:
    (a) the upper-panel sub-rows that sit under the calorie/fat/carb totals — specifically Saturated Fat, Trans Fat, Cholesterol, Sodium, Dietary Fiber, Total Sugars, and "Includes … Added Sugars" — whenever the label prints them (use amount 0 for a row printed as 0); AND
-   (b) EVERY vitamin/mineral row in the lower part of the panel — at minimum the four the US label mandates (Vitamin D, Calcium, Iron, Potassium) whenever they appear, plus any others the label lists (magnesium, zinc, folate, the B vitamins, vitamin A/C/E, etc.).
+   (b) EVERY vitamin/mineral row in the lower part of the panel — at minimum the four the US label mandates (Vitamin D, Calcium, Iron, Potassium) whenever they appear, plus any others the label lists (magnesium, zinc, folate, the B vitamins, vitamin A/C/E, etc.); AND
+   (c) any omega-3 row the label prints — a combined "Omega-3" or "Fish Oil" total, or the specific acids "EPA", "DHA", "ALA" — each as its own row with the name exactly as printed.
    Use the name exactly as printed (e.g. "Saturated Fat", "Cholesterol", "Dietary Fiber", "Total Sugars", "Added Sugars").
 2. The ONLY numbers that go in the macro fields are the panel's four top-line totals: calories, total Protein, total Carbohydrate (carbs), and total Fat. Do NOT duplicate those four as rows in "nutrients". But their sub-rows DO belong in "nutrients": Saturated Fat and Trans Fat (sub-rows of total fat), and Dietary Fiber and Total/Added Sugars (sub-rows of total carbohydrate), plus Cholesterol and Sodium.
 3. ALWAYS include the base nutrient name exactly as printed. Never return an empty "name".

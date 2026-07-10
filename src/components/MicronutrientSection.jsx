@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
-import { micronutrientRows } from '../lib/micronutrients'
+import { micronutrientRows, nutrientContributors } from '../lib/micronutrients'
 import { NUTRIENTS, defaultTargets } from '../lib/nutrients'
+import ContributorDropdown from './ContributorDropdown'
+import EnrichmentModal from './EnrichmentModal'
 
 // Collapsible micronutrient tracker for the selected day. Sits below the macro
 // targets on the Meals tab. Sums each food's canonical per-serving micros across
@@ -13,12 +15,33 @@ import { NUTRIENTS, defaultTargets } from '../lib/nutrients'
 //   foods:       the food library (to read normalized micros by food_id).
 //   targets:     the nutrition_targets row ({ sex, micro_targets, ... }) or null.
 //   onSetTargets: async (values) => save. Passes { microTargets, sex } through.
-export default function MicronutrientSection({ logs, foods, targets, onSetTargets }) {
+export default function MicronutrientSection({
+  logs,
+  foods,
+  targets,
+  onSetTargets,
+  onUpdateFood,
+  onSearchFoods,
+  onFoodDetails,
+}) {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
+  // The food a low-coverage "fix" tap is enriching, or null.
+  const [enrichTarget, setEnrichTarget] = useState(null)
 
   const foodsById = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods])
   const rows = useMemo(() => micronutrientRows(logs, foodsById, targets), [logs, foodsById, targets])
+
+  // The low-coverage "fix" affordance is only wired when the enrichment callbacks
+  // are present (they are on the Meals tab). Tapping a missing food opens the
+  // same auto-enrichment modal used on save, resolved to its full library row.
+  const canFix = !!(onUpdateFood && onSearchFoods && onFoodDetails)
+  const onFix = canFix
+    ? (f) => {
+        const full = foodsById.get(f.foodId)
+        if (full) setEnrichTarget(full)
+      }
+    : undefined
 
   const anyLogged = rows.some((r) => r.amount > 0)
 
@@ -53,7 +76,7 @@ export default function MicronutrientSection({ logs, foods, targets, onSetTarget
             <>
               <div className="space-y-2.5">
                 {rows.map((r) => (
-                  <MicroRow key={r.id} row={r} />
+                  <MicroRow key={r.id} row={r} logs={logs} foodsById={foodsById} onFix={onFix} />
                 ))}
               </div>
               <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3">
@@ -71,6 +94,15 @@ export default function MicronutrientSection({ logs, foods, targets, onSetTarget
           )}
         </div>
       )}
+      {enrichTarget && (
+        <EnrichmentModal
+          food={enrichTarget}
+          onUpdateFood={onUpdateFood}
+          onSearchFoods={onSearchFoods}
+          onFoodDetails={onFoodDetails}
+          onClose={() => setEnrichTarget(null)}
+        />
+      )}
     </div>
   )
 }
@@ -83,10 +115,81 @@ export default function MicronutrientSection({ logs, foods, targets, onSetTarget
 //     so it never goes emerald.
 // A "~" prefix flags low coverage; a nutrient with no reference just shows its
 // running total (e.g. total sugars).
-function MicroRow({ row }) {
-  const { name, unit, amount, target, upperLimit, lowCoverage, overUL, kind } = row
+function MicroRow({ row, logs, foodsById, onFix }) {
+  const { id, name, unit, amount, upperLimit, lowCoverage, overUL, kind, informational } = row
+  const [open, setOpen] = useState(false)
   const shown = formatAmount(amount, unit)
   const isLimit = kind === 'limit'
+
+  // The per-food breakdown is only computed when the row is actually expanded.
+  const breakdown = useMemo(
+    () => (open ? nutrientContributors(id, logs, foodsById) : null),
+    [open, id, logs, foodsById]
+  )
+
+  const chevron = (
+    <span
+      className={`shrink-0 text-slate-300 dark:text-slate-600 transition-transform ${open ? 'rotate-90' : ''}`}
+      aria-hidden
+    >
+      ›
+    </span>
+  )
+
+  // Informational rollups (Omega-3 total, EPA+DHA) have no reference intake, so
+  // they show just the running amount — no denominator, percent, or bar.
+  const header = informational ? (
+    <div className="flex items-baseline justify-between gap-2 text-sm">
+      <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+        {chevron}
+        {name}
+      </span>
+      <span className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">
+        {lowCoverage && amount > 0 ? '~' : ''}
+        {shown} {unit}
+      </span>
+    </div>
+  ) : (
+    <BarHeader
+      row={row}
+      shown={shown}
+      isLimit={isLimit}
+      chevron={chevron}
+    />
+  )
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-left"
+        aria-expanded={open}
+      >
+        {header}
+      </button>
+      {!informational && overUL && (
+        <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
+          Over the {isLimit ? 'recommended limit' : 'safe upper limit'} ({formatAmount(upperLimit, unit)} {unit}).
+        </p>
+      )}
+      {open && breakdown && (
+        <ContributorDropdown
+          contributors={breakdown.contributors}
+          notReported={breakdown.notReported}
+          unit={unit}
+          format={(n) => formatAmount(n, unit)}
+          onFix={lowCoverage ? onFix : undefined}
+        />
+      )}
+    </div>
+  )
+}
+
+// The bar + numbers for a target/limit nutrient (the informational rollups skip
+// this — they have no reference to measure against).
+function BarHeader({ row, shown, isLimit, chevron }) {
+  const { name, unit, amount, target, upperLimit, lowCoverage, overUL } = row
   // What the bar (and the "/ x" denominator) is measured against.
   const scale = isLimit ? upperLimit : target
   const pct = scale != null && scale > 0 ? (amount / scale) * 100 : 0
@@ -98,9 +201,12 @@ function MicroRow({ row }) {
       : 'bg-sky-500'
 
   return (
-    <div>
-      <div className="flex items-baseline justify-between text-sm">
-        <span className="text-slate-600 dark:text-slate-300">{name}</span>
+    <>
+      <div className="flex items-baseline justify-between gap-2 text-sm">
+        <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+          {chevron}
+          {name}
+        </span>
         <span className="text-slate-500 dark:text-slate-400 tabular-nums">
           <span className="font-semibold text-slate-900 dark:text-slate-100">
             {lowCoverage && amount > 0 ? '~' : ''}
@@ -117,12 +223,7 @@ function MicroRow({ row }) {
       <div className="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
         <div className={`h-full ${barColor} transition-all`} style={{ width: `${barPct}%` }} />
       </div>
-      {overUL && (
-        <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
-          Over the {isLimit ? 'recommended limit' : 'safe upper limit'} ({formatAmount(upperLimit, unit)} {unit}).
-        </p>
-      )}
-    </div>
+    </>
   )
 }
 

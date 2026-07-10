@@ -25,6 +25,47 @@ describe('normalizeNutrient — USDA number mapping', () => {
   })
 })
 
+describe('normalizeNutrient — omega-3 fatty acids', () => {
+  it('maps the USDA fatty-acid numbers to EPA/DHA/ALA (grams)', () => {
+    expect(normalizeNutrient('629', 0.5, 'G', 'usda')).toEqual({ id: 'epa', amount: 0.5, unit: 'g' })
+    expect(normalizeNutrient('621', 1.2, 'G', 'usda')).toEqual({ id: 'dha', amount: 1.2, unit: 'g' })
+    expect(normalizeNutrient('851', 0.1, 'G', 'usda')).toEqual({ id: 'ala', amount: 0.1, unit: 'g' })
+  })
+
+  it('matches the specific-acid label spellings', () => {
+    expect(normalizeNutrient('EPA', 500, 'mg', 'label').id).toBe('epa')
+    expect(normalizeNutrient('Eicosapentaenoic Acid', 500, 'mg', 'label').id).toBe('epa')
+    expect(normalizeNutrient('DHA', 500, 'mg', 'label').id).toBe('dha')
+    expect(normalizeNutrient('Docosahexaenoic Acid', 500, 'mg', 'label').id).toBe('dha')
+    expect(normalizeNutrient('ALA', 500, 'mg', 'label').id).toBe('ala')
+    expect(normalizeNutrient('Alpha-Linolenic Acid', 500, 'mg', 'label').id).toBe('ala')
+  })
+
+  it('routes a generic omega-3 / fish-oil label to the omega_3_total bucket', () => {
+    expect(normalizeNutrient('Omega-3', 900, 'mg', 'label').id).toBe('omega_3_total')
+    expect(normalizeNutrient('Omega 3', 900, 'mg', 'label').id).toBe('omega_3_total')
+    expect(normalizeNutrient('Omega-3 Fatty Acids', 900, 'mg', 'label').id).toBe('omega_3_total')
+    expect(normalizeNutrient('Fish Oil', 1000, 'mg', 'label').id).toBe('omega_3_total')
+  })
+
+  it('converts label mg into the gram-canonical unit (500 mg → 0.5 g)', () => {
+    expect(normalizeNutrient('DHA', 500, 'mg', 'label').amount).toBeCloseTo(0.5, 6)
+  })
+})
+
+describe('defaultTarget — omega-3', () => {
+  it('gives ALA an AI target with no upper limit', () => {
+    expect(defaultTarget('ala', 'male')).toEqual({ target: 1.6, upper_limit: null })
+    expect(defaultTarget('ala', 'female')).toEqual({ target: 1.1, upper_limit: null })
+  })
+
+  it('gives EPA, DHA and the omega_3_total rollup no target (informational)', () => {
+    for (const id of ['epa', 'dha', 'omega_3_total']) {
+      expect(defaultTarget(id, 'male')).toEqual({ target: null, upper_limit: null })
+    }
+  })
+})
+
 describe('normalizeNutrient — label alias matching', () => {
   it('converges three B12 spellings to the same id', () => {
     const a = normalizeNutrient('Vitamin B-12', 500, 'mcg', 'label')
@@ -177,6 +218,21 @@ describe('normalizeFoodNutrients', () => {
     ]
     const out = normalizeFoodNutrients(raw, { source: 'usda', servingScale: 2 })
     expect(out).toEqual([{ id: 'vitamin_a', amount: 100, unit: 'mcg', per: 'serving' }])
+  })
+
+  it('backfills omega-3 ids from an existing USDA food’s raw fatty-acid rows', () => {
+    // Mirrors what the one-time backfill does: re-normalize a salmon whose raw
+    // USDA rows already carry EPA/DHA/ALA (per 100 g), scaled to a 150 g serving.
+    const rawSalmon = [
+      { name: 'PUFA 20:5 n-3 (EPA)', amount: 0.69, unit: 'G', per: '100g', usda_number: '629' },
+      { name: 'PUFA 22:6 n-3 (DHA)', amount: 0.82, unit: 'G', per: '100g', usda_number: '621' },
+      { name: 'PUFA 18:3 n-3 (ALA)', amount: 0.1, unit: 'G', per: '100g', usda_number: '851' },
+    ]
+    const out = normalizeFoodNutrients(rawSalmon, { source: 'usda', servingScale: 1.5 })
+    const byId = Object.fromEntries(out.map((e) => [e.id, e]))
+    expect(byId.epa).toEqual({ id: 'epa', amount: expect.closeTo(1.035, 3), unit: 'g', per: 'serving' })
+    expect(byId.dha.amount).toBeCloseTo(1.23, 3)
+    expect(byId.ala.amount).toBeCloseTo(0.15, 3)
   })
 
   it('is idempotent — already-normalized (id) rows are skipped', () => {
