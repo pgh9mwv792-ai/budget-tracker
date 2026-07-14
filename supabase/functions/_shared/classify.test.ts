@@ -36,6 +36,26 @@ describe('classifyKind — transfers from Plaid category fields', () => {
     expect(classifyKind(txn({ amount: -500, ...pfc('TRANSFER_IN') }))).toBe('transfer')
   })
 
+  it('treats a payroll deposit Plaid tagged TRANSFER_IN as income, not a transfer', () => {
+    // Real-world: banks/Plaid often label a direct deposit TRANSFER_IN. The
+    // payroll descriptor + incoming amount must override the transfer rule.
+    expect(
+      classifyKind(txn({ amount: -2400, name: 'ACME CORP DIRECT DEP', ...pfc('TRANSFER_IN') })),
+    ).toBe('income')
+  })
+
+  it('treats an INCOME_WAGES deposit as income even when primary says TRANSFER_IN', () => {
+    expect(
+      classifyKind(txn({ amount: -2400, name: 'SOME MERCHANT', ...pfc('TRANSFER_IN', 'INCOME_WAGES') })),
+    ).toBe('income')
+  })
+
+  it('does NOT treat an outgoing "payroll"-named debit as income', () => {
+    // Positive amount = money out. A payroll-processor fee debit must stay an
+    // expense, not flip to income on the descriptor alone.
+    expect(classifyKind(txn({ amount: 45, name: 'PAYROLL SERVICE FEE' }))).toBe('expense')
+  })
+
   it('classifies the detailed LOAN_PAYMENTS_CREDIT_CARD_PAYMENT on both legs', () => {
     // Paying leg (money out of checking).
     expect(
