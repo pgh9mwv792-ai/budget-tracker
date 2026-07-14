@@ -22,6 +22,17 @@
   --color-chart-1: #60a5fa;
   --color-chart-2: #93c5fd;
 
+  /* Categorical navy ramp for the spend-by-category pie: six distinct steps of
+     the brand navy (deep → light) so arbitrary categories stay on-palette and
+     never borrow the success-green / danger-red semantics used elsewhere.
+     Legible on the light surface (#ffffff). */
+  --color-cat-1: #1e3a8a;
+  --color-cat-2: #2754c6;
+  --color-cat-3: #3b82f6;
+  --color-cat-4: #60a5fa;
+  --color-cat-5: #93c5fd;
+  --color-cat-6: #c3dafe;
+
   /* === NEUTRALS === */
   --color-bg: #f5f7fa;
   --color-surface: #ffffff;        /* cards, panels */
@@ -46,6 +57,16 @@
   --color-primary-tint: #1e3a8a;   /* navy becomes the tint */
   --color-chart-1: #60a5fa;
   --color-chart-2: #3b82f6;
+
+  /* Categorical navy ramp (dark mode): brighter blues that read on the dark
+     surface (#1e293b), stepping light → deep. Kept distinct enough for a
+     six-slice pie to stay legible without the near-black end of the ramp. */
+  --color-cat-1: #bfdbfe;
+  --color-cat-2: #93c5fd;
+  --color-cat-3: #60a5fa;
+  --color-cat-4: #3b82f6;
+  --color-cat-5: #2563eb;
+  --color-cat-6: #1d4ed8;
 
   /* === NEUTRALS (navy-based, not pure black) === */
   --color-bg: #0f172a;             /* deep navy background */

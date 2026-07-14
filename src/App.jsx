@@ -298,7 +298,13 @@ function AppShell() {
   const assignCategory = async (id, categoryId) => {
     const category = categories.find((c) => c.id === categoryId)
     const tx = transactions.find((t) => t.id === id)
-    const updated = await api.updateTransaction(id, { category_id: categoryId, kind: category.kind })
+    // Mark this as a deliberate human choice so a later sync / auto-rule leaves
+    // it alone (see matchRules and the Plaid sync's payroll auto-categorization).
+    const updated = await api.updateTransaction(id, {
+      category_id: categoryId,
+      kind: category.kind,
+      user_categorized: true,
+    })
 
     const key = merchantKey(tx?.note)
     let savedRule = null
@@ -758,7 +764,12 @@ function AppShell() {
                 setTransactions((prev) => [created, ...prev])
               }}
               onUpdate={async (id, updates) => {
-                const updated = await api.updateTransaction(id, updates)
+                // The edit sheet always carries the category the user confirmed,
+                // so any save through it counts as a deliberate categorization —
+                // flag it so sync / auto-rules never overwrite the choice.
+                const patch =
+                  'category_id' in updates ? { ...updates, user_categorized: true } : updates
+                const updated = await api.updateTransaction(id, patch)
                 setTransactions((prev) => prev.map((t) => (t.id === id ? updated : t)))
               }}
               onDelete={async (id) => {

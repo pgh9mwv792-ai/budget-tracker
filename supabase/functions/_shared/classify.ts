@@ -102,3 +102,20 @@ export function classifyKind(
   // negative amount = money in (income/credit).
   return t.amount >= 0 ? 'expense' : 'income'
 }
+
+// Payroll / direct-deposit indicators for the string-match fallback (only used
+// when Plaid gives us no INCOME_WAGES signal). "DD" is matched as a whole token
+// so it can't fire on unrelated words. Case-insensitive.
+const PAYROLL_NAME_RE = /\bPAYROLL\b|\bDIRECT\s*DEP(?:OSIT)?\b|\bDIR\s*DEP\b|\bDD\b/
+
+// True when a transaction is an incoming paycheck we can safely auto-categorize
+// as Income. Prefers Plaid's own personal_finance_category (INCOME_WAGES is the
+// payroll bucket); falls back to a payroll-descriptor match. Both paths still
+// require the money to be classified as income (a deposit), never a transfer or
+// an expense, so this can only ever tag genuine incoming pay.
+export function isPayrollIncome(t: PlaidTxnLike, account?: AccountLike | null): boolean {
+  if (classifyKind(t, account) !== 'income') return false
+  const pfc = t.personal_finance_category ?? {}
+  if (typeof pfc.detailed === 'string' && pfc.detailed.startsWith('INCOME_WAGES')) return true
+  return PAYROLL_NAME_RE.test(String(t.name ?? '').toUpperCase())
+}

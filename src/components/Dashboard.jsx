@@ -21,6 +21,18 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useThemeColors } from '../lib/colors'
 import ShareCard from './ShareCard'
 
+// Currency formatting for every chart label/axis/tooltip, so nothing ever
+// renders raw float arithmetic like "400000000000006".
+const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+const USD_COMPACT = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+const usd = (n) => USD.format(Number(n) || 0)
+const usdCompact = (n) => USD_COMPACT.format(Number(n) || 0)
+
 export default function Dashboard({
   transactions,
   budgets = [],
@@ -42,17 +54,6 @@ export default function Dashboard({
   // theme change so Recharts recolors when the user toggles light/dark.
   const { theme } = useTheme()
   const colors = useThemeColors(theme)
-  // Categorical palette for the by-category pie, drawn from the brand + semantic
-  // tokens (not raw hexes) so it stays on-theme in both modes.
-  const chartColors = [
-    colors.primary,
-    colors.interactive,
-    colors.warning,
-    colors.success,
-    colors.danger,
-    colors.chart1,
-    colors.chart2,
-  ]
 
   const outlook = useMemo(() => computeMonthOutlook(transactions, budgets), [transactions, budgets])
   const insights = useMemo(
@@ -74,15 +75,39 @@ export default function Dashboard({
   const totalExpenses = sum(currentMonthTx.filter((t) => t.kind === 'expense'))
   const net = totalIncome - totalExpenses
 
+  // Sum each category in integer cents, then convert back to dollars once, so a
+  // month of expenses can't accumulate binary-float drift (the source of the
+  // "$400000000000006" label). Zero-value categories are dropped.
   const categoryBreakdown = useMemo(() => {
-    const byCategory = new Map()
+    const cents = new Map()
     for (const t of currentMonthTx) {
       if (t.kind !== 'expense') continue
       const name = t.category?.name ?? 'Uncategorized'
-      byCategory.set(name, (byCategory.get(name) ?? 0) + Number(t.amount))
+      cents.set(name, (cents.get(name) ?? 0) + Math.round(Number(t.amount) * 100))
     }
-    return [...byCategory.entries()].map(([name, value]) => ({ name, value }))
+    return [...cents.entries()]
+      .map(([name, c]) => ({ name, value: c / 100 }))
+      .filter((e) => e.value > 0)
   }, [currentMonthTx])
+
+  // Slices actually drawn: the top 5 spending categories on the navy ramp, the
+  // long tail folded into a single "Other" slice, and Uncategorized always on
+  // its own muted-gray slice (never the navy ramp, so it reads as "needs a
+  // category" rather than a real bucket).
+  const pieData = useMemo(() => {
+    const UNCAT = 'Uncategorized'
+    const ramp = [colors.cat1, colors.cat2, colors.cat3, colors.cat4, colors.cat5]
+    const uncat = categoryBreakdown.find((e) => e.name === UNCAT) || null
+    const named = categoryBreakdown.filter((e) => e.name !== UNCAT).sort((a, b) => b.value - a.value)
+    const slices = named.slice(0, 5).map((e, i) => ({ ...e, color: ramp[i] }))
+    const rest = named.slice(5)
+    if (rest.length > 0) {
+      const otherVal = Math.round(rest.reduce((s, e) => s + e.value, 0) * 100) / 100
+      if (otherVal > 0) slices.push({ name: 'Other', value: otherVal, color: colors.cat6 })
+    }
+    if (uncat) slices.push({ name: UNCAT, value: uncat.value, color: colors.textMuted })
+    return slices
+  }, [categoryBreakdown, colors])
 
   const rollingIncome = useMemo(() => {
     const keys = trailingMonthKeys(3)
@@ -94,6 +119,9 @@ export default function Dashboard({
 
   const rollingAverage =
     rollingIncome.length > 0 ? rollingIncome.reduce((acc, m) => acc + m.income, 0) / rollingIncome.length : 0
+  // Below a cent of income across the whole window, a bar chart just scales its
+  // axis to noise — show a helpful empty state instead.
+  const hasIncome = rollingIncome.some((m) => m.income >= 0.01)
 
   const recurring = useMemo(() => detectRecurring(transactions).slice(0, 6), [transactions])
 
@@ -130,26 +158,33 @@ export default function Dashboard({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
           <h3 className="text-sm font-semibold text-text mb-2">Spending by category (this month)</h3>
-          {categoryBreakdown.length === 0 ? (
+          {pieData.length === 0 ? (
             <p className="text-sm text-text-muted">No expenses recorded this month yet.</p>
           ) : (
             <ResponsiveContainer width="100%" height={isMobile ? 280 : 260}>
               <PieChart>
-                {/* On mobile, drop the slice labels (they overlap at 375px) and
-                    rely on the legend below the chart instead. */}
+                {/* No outside labels or callout lines — the dollar value for each
+                    slice lives in the legend and tooltip instead, which keeps the
+                    chart readable at every width. */}
                 <Pie
-                  data={categoryBreakdown}
+                  data={pieData}
                   dataKey="value"
                   nameKey="name"
                   outerRadius={isMobile ? 70 : 90}
-                  label={!isMobile}
+                  label={false}
+                  labelLine={false}
+                  isAnimationActive={false}
                 >
-                  {categoryBreakdown.map((entry, i) => (
-                    <Cell key={entry.name} fill={chartColors[i % chartColors.length]} />
+                  {pieData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v) => `$${Number(v).toFixed(2)}`} />
-                <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: isMobile ? 11 : 12 }} />
+                <Tooltip formatter={(v, name) => [usd(v), name]} />
+                <Legend
+                  verticalAlign="bottom"
+                  wrapperStyle={{ fontSize: isMobile ? 11 : 12 }}
+                  formatter={(value, entry) => `${value} — ${usd(entry?.payload?.value)}`}
+                />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -157,16 +192,25 @@ export default function Dashboard({
 
         <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
           <h3 className="text-sm font-semibold text-text mb-1">Trailing 3-month average income</h3>
-          <p className="text-2xl font-semibold text-text mb-3">${rollingAverage.toFixed(2)}</p>
-          <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
-            <BarChart data={rollingIncome} margin={isMobile ? { top: 8, right: 4, bottom: 0, left: -12 } : undefined}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border" />
-              <XAxis dataKey="month" tick={{ fontSize: isMobile ? 11 : 12, fill: 'currentColor' }} className="text-text-muted" />
-              <YAxis tick={{ fontSize: isMobile ? 11 : 12, fill: 'currentColor' }} tickCount={isMobile ? 4 : 6} width={isMobile ? 44 : 60} className="text-text-muted" />
-              <Tooltip formatter={(v) => `$${Number(v).toFixed(2)}`} />
-              <Bar dataKey="income" fill={colors.interactive} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <p className="text-2xl font-semibold text-text mb-3">{usd(rollingAverage)}</p>
+          {hasIncome ? (
+            <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
+              <BarChart data={rollingIncome} margin={isMobile ? { top: 8, right: 4, bottom: 0, left: -12 } : undefined}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border" />
+                <XAxis dataKey="month" tick={{ fontSize: isMobile ? 11 : 12, fill: 'currentColor' }} className="text-text-muted" />
+                <YAxis tickFormatter={usdCompact} tick={{ fontSize: isMobile ? 11 : 12, fill: 'currentColor' }} tickCount={isMobile ? 4 : 6} width={isMobile ? 48 : 64} className="text-text-muted" />
+                <Tooltip formatter={(v) => [usd(v), 'Income']} />
+                <Bar dataKey="income" fill={colors.interactive} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center text-center rounded-lg border border-dashed border-border bg-bg/50" style={{ height: isMobile ? 180 : 200 }}>
+              <p className="text-sm text-text-muted px-6">
+                No income recorded yet — categorize deposits as Income (or add an income transaction) to see your
+                trailing average here.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

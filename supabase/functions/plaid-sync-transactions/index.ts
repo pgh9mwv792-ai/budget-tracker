@@ -1,8 +1,33 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { getUserId, getServiceClient } from '../_shared/auth.ts'
-import { plaidFetch, syncAccounts, classifyKind, resolveAccessToken } from '../_shared/plaid.ts'
+import {
+  plaidFetch,
+  syncAccounts,
+  classifyKind,
+  isPayrollIncome,
+  resolveAccessToken,
+} from '../_shared/plaid.ts'
 import { getPlan, paywallResponse } from '../_shared/entitlements.ts'
 import { logError } from '../_shared/log-error.ts'
+
+// Picks the category a payroll deposit should land in. Prefers a category the
+// user literally named "Income", then "Salary", then any income-kind category —
+// returns null (leave uncategorized) when the user has no income category at
+// all, so we never invent one or guess wrong.
+async function resolveIncomeCategoryId(
+  supabase: any,
+  userId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('categories')
+    .select('id, name')
+    .eq('user_id', userId)
+    .eq('kind', 'income')
+  const cats = data ?? []
+  if (cats.length === 0) return null
+  const byName = (re: RegExp) => cats.find((c: any) => re.test(String(c.name ?? '')))
+  return (byName(/^income$/i) ?? byName(/salary/i) ?? cats[0]).id
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -57,19 +82,30 @@ Deno.serve(async (req) => {
       let cursor = full ? undefined : (item.cursor ?? undefined)
       let hasMore = true
       const added: any[] = []
+      const modified: any[] = []
+      const removedIds: string[] = []
 
       while (hasMore) {
         const page = await plaidFetch('/transactions/sync', {
           access_token: accessToken,
           cursor,
         })
-        added.push(...page.added)
+        added.push(...(page.added ?? []))
+        modified.push(...(page.modified ?? []))
+        for (const r of page.removed ?? []) {
+          if (r.transaction_id) removedIds.push(r.transaction_id)
+        }
         cursor = page.next_cursor
         hasMore = page.has_more
       }
 
-      if (added.length > 0) {
-        const rows = added.map((t) => ({
+      // Both new and updated transactions are upserted. category_id is
+      // deliberately omitted from the row shape so on-conflict updates only
+      // refresh the Plaid-derived fields and never touch a category the user
+      // (or a rule) assigned.
+      const changed = [...added, ...modified]
+      if (changed.length > 0) {
+        const rows = changed.map((t) => ({
           user_id: userId,
           date: t.date,
           amount: Math.abs(t.amount),
@@ -78,16 +114,69 @@ Deno.serve(async (req) => {
           source: 'plaid',
           plaid_transaction_id: t.transaction_id,
           account_id: t.account_id ?? null,
-          // NOTE: category_id is deliberately omitted so re-syncing never wipes
-          // a category the user assigned — on conflict we only refresh the
-          // Plaid-derived fields below and leave category_id untouched.
         }))
 
         const { error: upsertError } = await supabase
           .from('transactions')
           .upsert(rows, { onConflict: 'plaid_transaction_id' })
         if (upsertError) throw upsertError
-        imported += rows.length
+        imported += added.length
+      }
+
+      // Carry categorization across the pending→posted handoff. When a pending
+      // transaction posts, Plaid sends the posted row in `added` (with a NEW
+      // transaction_id) referencing the pending one via pending_transaction_id,
+      // and lists the pending row in `removed`. Copy the user's category and its
+      // override flag onto the freshly-inserted posted row BEFORE the pending
+      // row is deleted below, so a manual "Income" edit survives posting.
+      for (const t of changed) {
+        if (!t.pending_transaction_id) continue
+        const { data: pred } = await supabase
+          .from('transactions')
+          .select('category_id, user_categorized')
+          .eq('user_id', userId)
+          .eq('plaid_transaction_id', t.pending_transaction_id)
+          .maybeSingle()
+        if (pred?.category_id) {
+          await supabase
+            .from('transactions')
+            .update({ category_id: pred.category_id, user_categorized: pred.user_categorized ?? false })
+            .eq('user_id', userId)
+            .eq('plaid_transaction_id', t.transaction_id)
+            .is('category_id', null)
+        }
+      }
+
+      // Auto-categorize brand-new payroll/direct-deposit income as Income. The
+      // `is('category_id', null)` + `user_categorized = false` guards mean this
+      // only ever fills a still-blank, never-hand-edited row — so it categorizes
+      // new paychecks without clobbering anything a human set.
+      const payrollIds = added
+        .filter((t) => isPayrollIncome(t, accountsById.get(t.account_id)))
+        .map((t) => t.transaction_id)
+      if (payrollIds.length > 0) {
+        const incomeCatId = await resolveIncomeCategoryId(supabase, userId)
+        if (incomeCatId) {
+          await supabase
+            .from('transactions')
+            .update({ category_id: incomeCatId })
+            .eq('user_id', userId)
+            .in('plaid_transaction_id', payrollIds)
+            .is('category_id', null)
+            .eq('user_categorized', false)
+        }
+      }
+
+      // Drop transactions Plaid no longer reports (including pending rows now
+      // superseded by their posted successor above). Scoped to this user's
+      // plaid_transaction_ids; manual rows have none and are never matched.
+      if (removedIds.length > 0) {
+        const { error: delError } = await supabase
+          .from('transactions')
+          .delete()
+          .eq('user_id', userId)
+          .in('plaid_transaction_id', removedIds)
+        if (delError) throw delError
       }
 
       await supabase.from('plaid_items').update({ cursor }).eq('id', item.id)

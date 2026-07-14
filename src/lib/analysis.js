@@ -22,6 +22,10 @@ export function matchRules(transactions, rulesByKey) {
   const matches = []
   for (const t of transactions) {
     if (t.category_id) continue
+    // A row a human deliberately categorized is off-limits to auto-rules (it's
+    // also normally already categorized, but stay explicit — the flag is the
+    // contract that a manual edit is never overwritten).
+    if (t.user_categorized) continue
     // Never auto-categorize a transfer — assigning a category would flip its
     // kind back to income/expense and re-pollute the totals.
     if (t.kind === 'transfer') continue

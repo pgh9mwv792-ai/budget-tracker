@@ -5,7 +5,7 @@ import { decodeBase64, encodeBase64 } from 'jsr:@std/encoding/base64'
 
 // Pure classifier lives in its own Deno-free module so vitest can unit-test it.
 // Re-exported here so callers keep importing classifyKind from '_shared/plaid.ts'.
-export { classifyKind } from './classify.ts'
+export { classifyKind, isPayrollIncome } from './classify.ts'
 export type { PlaidTxnLike, AccountLike } from './classify.ts'
 
 const PLAID_ENV = Deno.env.get('PLAID_ENV') ?? 'sandbox'
