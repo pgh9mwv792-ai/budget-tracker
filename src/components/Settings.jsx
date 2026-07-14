@@ -4,12 +4,15 @@ import { useAuth } from '../contexts/AuthContext'
 import { downloadBackup } from '../lib/backup'
 import { startCheckout, openBillingPortal } from '../lib/billing'
 import { fetchNotificationPrefs, upsertNotificationPrefs } from '../lib/api'
+import { ConnectedBanksSkeleton } from './Skeletons'
+import { useTheme } from '../contexts/ThemeContext'
 
 export default function Settings({ data, entitlements, onSetTargets }) {
   const plan = entitlements?.plan ?? 'free'
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Settings</h2>
+      <h2 className="text-lg font-semibold text-text">Settings</h2>
+      <AppearanceSection />
       <PlanBillingSection entitlements={entitlements} />
       <NotificationsSection plan={plan} />
       <ProfileSection />
@@ -26,10 +29,10 @@ export default function Settings({ data, entitlements, onSetTargets }) {
 
 function Card({ title, description, children }) {
   return (
-    <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-4">
+    <section className="bg-surface rounded-xl border border-border shadow-sm p-5 space-y-4">
       <div>
-        <h3 className="font-semibold text-slate-800 dark:text-slate-100">{title}</h3>
-        {description && <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>}
+        <h3 className="font-semibold text-text">{title}</h3>
+        {description && <p className="text-sm text-text-muted mt-0.5">{description}</p>}
       </div>
       {children}
     </section>
@@ -39,9 +42,55 @@ function Card({ title, description, children }) {
 function Notice({ status }) {
   if (!status) return null
   return (
-    <p className={`text-sm ${status.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+    <p className={`text-sm ${status.type === 'error' ? 'text-danger' : 'text-success'}`}>
       {status.text}
     </p>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Appearance: Light / Dark / System theme control. Written with the new design
+// tokens (bg-surface, border-border, text-text*, bg-primary) as a reference for
+// the palette migration — no dark: color prefixes needed; the .dark token block
+// in index.css handles both modes.
+// ---------------------------------------------------------------------------
+function AppearanceSection() {
+  const { mode, setMode } = useTheme()
+  const options = [
+    { key: 'light', label: 'Light' },
+    { key: 'dark', label: 'Dark' },
+    { key: 'system', label: 'System' },
+  ]
+  return (
+    <section className="bg-surface rounded-xl border border-border shadow-sm p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-text">Appearance</h3>
+        <p className="text-sm text-text-muted mt-0.5">
+          Choose a theme. “System” follows your device’s light/dark setting.
+        </p>
+      </div>
+      <div className="flex gap-2" role="radiogroup" aria-label="Theme">
+        {options.map((opt) => {
+          const active = mode === opt.key
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => setMode(opt.key)}
+              className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+                active
+                  ? 'bg-primary text-on-primary'
+                  : 'border border-border text-text-muted hover:bg-primary-tint'
+              }`}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
@@ -80,26 +129,26 @@ function PlanBillingSection({ entitlements }) {
   return (
     <Card title="Plan & billing" description="Manage your subscription.">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-slate-700 dark:text-slate-200">You're on the</span>
+        <span className="text-sm text-text">You're on the</span>
         <span
           className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
             isPro
-              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+              ? 'bg-success/10 text-success'
+              : 'bg-border text-text-muted'
           }`}
         >
           {isPro ? 'Pro' : 'Free'}
         </span>
-        <span className="text-sm text-slate-700 dark:text-slate-200">plan.</span>
+        <span className="text-sm text-text">plan.</span>
       </div>
       {isPro ? (
         <>
-          {renewLine() && <p className="text-sm text-slate-500 dark:text-slate-400">{renewLine()}</p>}
+          {renewLine() && <p className="text-sm text-text-muted">{renewLine()}</p>}
           {status !== 'grandfathered' && (
             <button
               onClick={() => go(openBillingPortal)}
               disabled={busy}
-              className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-4 py-2 disabled:opacity-50"
+              className="rounded-md border border-border text-text hover:bg-primary-tint transition text-sm px-4 py-2 disabled:opacity-50"
             >
               {busy ? 'Opening…' : 'Manage billing'}
             </button>
@@ -107,19 +156,19 @@ function PlanBillingSection({ entitlements }) {
         </>
       ) : (
         <>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-text-muted">
             Pro ($6/mo) adds automatic bank &amp; credit-card import and the AI assistant. Cancel anytime.
           </p>
           <button
             onClick={() => go(startCheckout)}
             disabled={busy}
-            className="rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 font-medium transition disabled:opacity-50"
+            className="rounded-md bg-primary hover:bg-primary-hover text-on-primary text-sm px-4 py-2 font-medium transition disabled:opacity-50"
           >
             {busy ? 'Opening checkout…' : 'Upgrade to Pro'}
           </button>
         </>
       )}
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </Card>
   )
 }
@@ -179,11 +228,11 @@ function NotificationsSection({ plan }) {
       description="A once-a-week email recap of your money and food — spending vs. your average, cost per protein, upcoming bills, and goal pace."
     >
       {loading ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
+        <p className="text-sm text-text-muted">Loading…</p>
       ) : (
         <>
           {!isPro && (
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-text-muted">
               The weekly digest is a Pro feature. Your preference is saved and takes effect when you upgrade.
             </p>
           )}
@@ -195,7 +244,7 @@ function NotificationsSection({ plan }) {
               onClick={toggle}
               disabled={busy}
               className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition ${
-                enabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+                enabled ? 'bg-primary' : 'bg-border'
               } disabled:opacity-50`}
             >
               <span
@@ -204,7 +253,7 @@ function NotificationsSection({ plan }) {
                 }`}
               />
             </button>
-            <span className="text-sm text-slate-700 dark:text-slate-200">
+            <span className="text-sm text-text">
               Send me the weekly digest email
             </span>
           </label>
@@ -221,12 +270,12 @@ function NotificationsSection({ plan }) {
               placeholder="Send to a different email (optional)"
               value={emailOverride}
               onChange={(e) => setEmailOverride(e.target.value)}
-              className="w-full sm:flex-1 sm:min-w-[14rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              className="w-full sm:flex-1 sm:min-w-[14rem] rounded-md border border-border bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
             />
             <button
               type="submit"
               disabled={busy}
-              className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+              className="rounded-md bg-primary text-on-primary text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-primary-hover transition disabled:opacity-50"
             >
               Save
             </button>
@@ -298,8 +347,8 @@ function NutritionProfileSection({ targets, onSetTargets }) {
             onClick={() => save(opt.key)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition disabled:opacity-60 ${
               sex === opt.key
-                ? 'bg-slate-900 dark:bg-emerald-600 text-white'
-                : 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                ? 'bg-primary text-on-primary'
+                : 'border border-border text-text-muted hover:bg-primary-tint'
             }`}
           >
             {opt.label}
@@ -384,19 +433,19 @@ function ProfileSection() {
     <Card title="Profile" description="Your display name and picture. Shown in the top bar.">
       <div className="flex items-center gap-4">
         {avatarUrl ? (
-          <img src={avatarUrl} alt="Avatar" className="w-16 h-16 rounded-full object-cover border border-slate-200 dark:border-slate-700" />
+          <img src={avatarUrl} alt="Avatar" className="w-16 h-16 rounded-full object-cover border border-border" />
         ) : (
-          <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 grid place-items-center text-xl font-semibold">
+          <div className="w-16 h-16 rounded-full bg-primary-tint text-interactive grid place-items-center text-xl font-semibold">
             {initialsOf(name || user?.email)}
           </div>
         )}
         <div className="flex flex-col gap-2">
-          <label className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-3 py-1.5 cursor-pointer w-fit">
+          <label className="rounded-md border border-border text-text hover:bg-primary-tint transition text-sm px-3 py-1.5 cursor-pointer w-fit">
             {uploading ? 'Uploading…' : avatarUrl ? 'Change picture' : 'Upload picture'}
             <input type="file" accept="image/*" onChange={uploadAvatar} disabled={uploading} className="hidden" />
           </label>
           {avatarUrl && (
-            <button onClick={removeAvatar} disabled={uploading} className="text-sm text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 w-fit">
+            <button onClick={removeAvatar} disabled={uploading} className="text-sm text-text-muted hover:text-danger w-fit">
               Remove
             </button>
           )}
@@ -409,12 +458,12 @@ function ProfileSection() {
           placeholder="Display name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full sm:flex-1 sm:min-w-[12rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="w-full sm:flex-1 sm:min-w-[12rem] rounded-md border border-border bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
         />
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="rounded-md bg-primary text-on-primary text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-primary-hover transition disabled:opacity-50"
         >
           Save
         </button>
@@ -461,12 +510,12 @@ function EmailSection() {
           placeholder="new@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full sm:flex-1 sm:min-w-[12rem] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="w-full sm:flex-1 sm:min-w-[12rem] rounded-md border border-border bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
         />
         <button
           type="submit"
           disabled={busy}
-          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="rounded-md bg-primary text-on-primary text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-primary-hover transition disabled:opacity-50"
         >
           Update email
         </button>
@@ -518,19 +567,19 @@ function PasswordSection() {
           placeholder="New password"
           value={pw}
           onChange={(e) => setPw(e.target.value)}
-          className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="w-full rounded-md border border-border bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
         />
         <input
           type="password"
           placeholder="Confirm new password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="w-full rounded-md border border-border bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
         />
         <button
           type="submit"
           disabled={busy}
-          className="w-full sm:w-auto rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="w-full sm:w-auto rounded-md bg-primary text-on-primary text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-primary-hover transition disabled:opacity-50"
         >
           Update password
         </button>
@@ -635,48 +684,48 @@ function TwoFactorSection() {
       description="Require a code from an authenticator app (Google Authenticator, 1Password, Authy, etc.) in addition to your password."
     >
       {loading ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Checking…</p>
+        <p className="text-sm text-text-muted">Checking…</p>
       ) : enrolling ? (
         <form onSubmit={confirmEnroll} className="space-y-3">
-          <p className="text-sm text-slate-600 dark:text-slate-300">
+          <p className="text-sm text-text-muted">
             1. Scan this QR code with your authenticator app (or enter the key manually).
           </p>
           <div className="flex items-center gap-4 flex-wrap">
             {/* qr_code is an SVG data URI returned by Supabase */}
             <img src={enrolling.qr} alt="2FA QR code" className="w-40 h-40 bg-white rounded-md p-1" />
-            <div className="text-xs text-slate-500 dark:text-slate-400 break-all max-w-[12rem]">
+            <div className="text-xs text-text-muted break-all max-w-[12rem]">
               <span className="block mb-1 font-medium">Manual key:</span>
-              <code className="text-slate-700 dark:text-slate-200">{enrolling.secret}</code>
+              <code className="text-text">{enrolling.secret}</code>
             </div>
           </div>
-          <p className="text-sm text-slate-600 dark:text-slate-300">2. Enter the 6-digit code it shows:</p>
+          <p className="text-sm text-text-muted">2. Enter the 6-digit code it shows:</p>
           <div className="flex flex-wrap gap-2 items-center">
             <input
               inputMode="numeric"
               placeholder="123456"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="flex-1 sm:flex-none rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              className="flex-1 sm:flex-none rounded-md border border-border bg-surface text-text px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-interactive/40"
             />
             <button
               type="submit"
               disabled={busy || code.length < 6}
-              className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 sm:py-0 min-h-11 sm:min-h-0 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+              className="rounded-md bg-primary text-on-primary text-sm px-4 py-2 sm:py-0 min-h-11 sm:min-h-0 font-medium hover:bg-primary-hover transition disabled:opacity-50"
             >
               {busy ? 'Verifying…' : 'Confirm'}
             </button>
-            <button type="button" onClick={cancelEnroll} className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 px-2 py-2 sm:py-0">
+            <button type="button" onClick={cancelEnroll} className="text-sm text-text-muted hover:text-text px-2 py-2 sm:py-0">
               Cancel
             </button>
           </div>
         </form>
       ) : enabled ? (
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">✓ 2FA is on</span>
+          <span className="text-sm text-success font-medium">✓ 2FA is on</span>
           <button
             onClick={disable}
             disabled={busy}
-            className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-3 py-1.5 disabled:opacity-50"
+            className="rounded-md border border-border text-text hover:bg-primary-tint transition text-sm px-3 py-1.5 disabled:opacity-50"
           >
             Turn off
           </button>
@@ -685,12 +734,12 @@ function TwoFactorSection() {
         <button
           onClick={startEnroll}
           disabled={busy}
-          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-4 py-2 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="rounded-md bg-primary text-on-primary text-sm px-4 py-2 font-medium hover:bg-primary-hover transition disabled:opacity-50"
         >
           Enable 2FA
         </button>
       )}
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </Card>
   )
 }
@@ -757,21 +806,21 @@ function ConnectedBanksSection() {
       description="Banks you've linked through Plaid. Disconnecting one stops new transactions from importing; your existing history is kept."
     >
       {banks === null ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
+        <ConnectedBanksSkeleton />
       ) : banks.length === 0 ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p className="text-sm text-text-muted">
           No banks connected. You can link one from the Transactions tab with “Connect a bank.”
         </p>
       ) : (
-        <ul className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-slate-200 dark:border-slate-800">
+        <ul className="divide-y divide-border rounded-lg border border-border">
           {banks.map((bank) => (
             <li key={bank.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+                <p className="text-sm font-medium text-text truncate">
                   🏦 {bank.institution_name || 'Linked bank'}
                 </p>
                 {bank.created_at && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-text-muted">
                     Connected {new Date(bank.created_at).toLocaleDateString()}
                   </p>
                 )}
@@ -779,7 +828,7 @@ function ConnectedBanksSection() {
               <button
                 onClick={() => remove(bank)}
                 disabled={removingId === bank.id}
-                className="shrink-0 rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-red-50 hover:border-red-300 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:border-red-800 dark:hover:text-red-400 transition text-sm px-3 py-1.5 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-border text-text hover:bg-danger/10 hover:border-danger/30 hover:text-danger transition text-sm px-3 py-1.5 disabled:opacity-50"
               >
                 {removingId === bank.id ? 'Removing…' : 'Disconnect'}
               </button>
@@ -803,7 +852,7 @@ function DataSection({ data }) {
     >
       <button
         onClick={() => downloadBackup(data)}
-        className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-4 py-2"
+        className="rounded-md border border-border text-text hover:bg-primary-tint transition text-sm px-4 py-2"
       >
         Export all my data
       </button>
@@ -850,10 +899,10 @@ function DangerZone() {
   const canDelete = confirm.trim().toLowerCase() === 'delete'
 
   return (
-    <section className="bg-white dark:bg-slate-900 rounded-xl border border-red-200 dark:border-red-900/60 shadow-sm p-5 space-y-4">
+    <section className="bg-surface rounded-xl border border-danger/30 shadow-sm p-5 space-y-4">
       <div>
-        <h3 className="font-semibold text-red-700 dark:text-red-400">Delete account</h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+        <h3 className="font-semibold text-danger">Delete account</h3>
+        <p className="text-sm text-text-muted mt-0.5">
           Permanently deletes your account ({user?.email}) and all of your data — transactions, budgets, goals,
           meals, and assistant memory. This cannot be undone. Consider exporting your data first.
         </p>
@@ -863,17 +912,17 @@ function DangerZone() {
           placeholder='Type "delete" to confirm'
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          className="w-full sm:w-auto rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40"
+          className="w-full sm:w-auto rounded-md border border-border bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-danger/40"
         />
         <button
           onClick={deleteAccount}
           disabled={!canDelete || busy}
-          className="w-full sm:w-auto rounded-md bg-red-600 text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-red-500 transition disabled:opacity-50"
+          className="w-full sm:w-auto rounded-md bg-danger text-white text-sm px-4 py-2 min-h-11 sm:min-h-0 font-medium hover:bg-danger/90 transition disabled:opacity-50"
         >
           {busy ? 'Deleting…' : 'Delete my account'}
         </button>
       </div>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </section>
   )
 }

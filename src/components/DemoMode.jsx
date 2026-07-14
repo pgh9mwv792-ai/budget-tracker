@@ -2,6 +2,13 @@ import { useMemo, useState, lazy, Suspense } from 'react'
 import NavBar from './NavBar'
 import Subscriptions from './Subscriptions'
 import { buildDemoData } from '../lib/demoData'
+import { Delayed } from './ui/Skeleton'
+import {
+  DashboardSkeleton,
+  TransactionListSkeleton,
+  BudgetManagerSkeleton,
+  MealTrackerSkeleton,
+} from './Skeletons'
 
 // Signed-out "Explore with sample data" experience. Renders the real app
 // components against an in-memory sample month (src/lib/demoData.js) so a visitor
@@ -38,6 +45,16 @@ export default function DemoMode({ onExit, onSignUp }) {
   const { categories } = initial
 
   const goTab = (tab) => setActiveTab(DEMO_TABS.has(tab) ? tab : 'Dashboard')
+
+  // Per-tab skeleton shown while a lazy tab chunk loads — matches the signed-in
+  // app so the demo looks identical during the brief chunk fetch.
+  const tabSkeleton =
+    {
+      Dashboard: <DashboardSkeleton />,
+      Transactions: <TransactionListSkeleton />,
+      Budgets: <BudgetManagerSkeleton />,
+      Meals: <MealTrackerSkeleton />,
+    }[activeTab] ?? <TabSkeleton />
 
   // Local-only handlers: they keep the demo interactive without any DB write.
   const addFood = (values) => {
@@ -83,7 +100,7 @@ export default function DemoMode({ onExit, onSignUp }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-bg">
       <DemoBanner onExit={onExit} onSignUp={onSignUp} />
 
       <NavBar
@@ -94,7 +111,7 @@ export default function DemoMode({ onExit, onSignUp }) {
       />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6 pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] md:pb-6">
-        <Suspense fallback={<TabSkeleton />}>
+        <Suspense fallback={<Delayed>{tabSkeleton}</Delayed>}>
           {activeTab === 'Dashboard' && (
             <Dashboard
               transactions={transactions}
@@ -184,24 +201,24 @@ export default function DemoMode({ onExit, onSignUp }) {
 
 function DemoBanner({ onExit, onSignUp }) {
   return (
-    <div className="sticky top-0 z-40 bg-emerald-600 text-white">
+    <div className="sticky top-0 z-40 bg-primary text-on-primary">
       <div className="max-w-5xl mx-auto px-4 py-2 flex items-center justify-between gap-3 text-sm">
         <span className="font-medium">
           Demo — sample data, nothing is saved.{' '}
-          <span className="hidden sm:inline font-normal text-emerald-100">
+          <span className="hidden sm:inline font-normal text-on-primary/80">
             Sign up to start tracking your own.
           </span>
         </span>
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={onExit}
-            className="rounded-md px-3 py-1.5 text-xs font-semibold text-emerald-50 hover:bg-emerald-500/60 transition"
+            className="rounded-md px-3 py-1.5 text-xs font-semibold text-on-primary/90 hover:bg-primary-hover/60 transition"
           >
             Exit demo
           </button>
           <button
             onClick={onSignUp}
-            className="rounded-md bg-white text-emerald-700 px-3 py-1.5 text-xs font-semibold hover:bg-emerald-50 transition"
+            className="rounded-md bg-surface text-primary px-3 py-1.5 text-xs font-semibold hover:bg-primary-tint transition"
           >
             Sign up free
           </button>
@@ -214,8 +231,8 @@ function DemoBanner({ onExit, onSignUp }) {
 function TabSkeleton() {
   return (
     <div className="animate-pulse space-y-4" aria-hidden="true">
-      <div className="h-32 rounded-xl bg-slate-200 dark:bg-slate-800" />
-      <div className="h-48 rounded-xl bg-slate-200 dark:bg-slate-800" />
+      <div className="h-32 rounded-xl bg-border" />
+      <div className="h-48 rounded-xl bg-border" />
     </div>
   )
 }

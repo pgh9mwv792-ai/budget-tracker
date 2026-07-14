@@ -3,15 +3,96 @@
 /* Enable class-based dark mode (toggle by adding `.dark` on <html>). */
 @custom-variant dark (&:where(.dark, .dark *));
 
-body {
-  margin: 0;
-  background: #f8fafc;
-  color: #0f172a;
+/* ===========================================================================
+   DESIGN TOKENS — the single source of truth for the app's color palette.
+   Change these two blocks and the whole UI recolors; nothing else needs editing.
+   `:root` is the light theme, `.dark` is the dark theme (applied by toggling the
+   `.dark` class on <html>, see ThemeContext + the no-flash script in index.html).
+   Components use the semantic Tailwind utilities generated from these below
+   (bg-primary, bg-surface, text-text-muted, …) and never raw hues, so they need
+   NO dark: color prefixes — the .dark block re-points the variables.
+   =========================================================================== */
+:root {
+  /* === BRAND (Deep Navy theme - light mode) === */
+  --color-primary: #1e3a8a;        /* deep navy - primary buttons, nav, headers */
+  --color-primary-hover: #1e40af;
+  --color-on-primary: #ffffff;     /* text/icons ON a primary fill (WCAG AA: 10.4:1 here) */
+  --color-interactive: #3b82f6;    /* links, active states, focus rings */
+  --color-primary-tint: #eff6ff;   /* selected rows, info banners */
+  --color-chart-1: #60a5fa;
+  --color-chart-2: #93c5fd;
+
+  /* === NEUTRALS === */
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;        /* cards, panels */
+  --color-border: #e2e8f0;
+  --color-text: #1e293b;
+  --color-text-muted: #64748b;
+  --color-nav: #0f172a;            /* dark header/nav bar */
+  --color-nav-text: #e2e8f0;
+
+  /* === SEMANTIC === */
+  --color-success: #16a34a;        /* under budget, positive amounts */
+  --color-danger: #dc2626;         /* overspent, errors, negative amounts */
+  --color-warning: #d97706;        /* approaching budget limit */
 }
 
-.dark body {
-  background: #0b1120;
-  color: #e2e8f0;
+.dark {
+  /* === BRAND (dark mode - lighter blues so they read on navy) === */
+  --color-primary: #3b82f6;        /* buttons brighten in dark mode */
+  --color-primary-hover: #60a5fa;
+  --color-on-primary: #0f172a;     /* dark text on the bright-blue fill (AA: 4.9:1; white would be 3.7:1) */
+  --color-interactive: #60a5fa;
+  --color-primary-tint: #1e3a8a;   /* navy becomes the tint */
+  --color-chart-1: #60a5fa;
+  --color-chart-2: #3b82f6;
+
+  /* === NEUTRALS (navy-based, not pure black) === */
+  --color-bg: #0f172a;             /* deep navy background */
+  --color-surface: #1e293b;        /* cards sit slightly lighter than bg */
+  --color-border: #334155;
+  --color-text: #e2e8f0;
+  --color-text-muted: #94a3b8;
+  --color-nav: #020617;
+  --color-nav-text: #e2e8f0;
+
+  /* === SEMANTIC (brightened for dark backgrounds) === */
+  --color-success: #4ade80;
+  --color-danger: #f87171;
+  --color-warning: #fbbf24;
+}
+
+/* Expose the tokens above to Tailwind so utilities like `bg-primary`,
+   `bg-surface`, `text-text-muted`, `border-border`, `text-success`, etc. are
+   generated. `@theme inline` makes each utility reference the live CSS variable
+   (var(--color-…)) instead of copying its value, so overriding a variable in the
+   `.dark` block above automatically recolors every utility — no rebuild needed. */
+@theme inline {
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-on-primary: var(--color-on-primary);
+  --color-interactive: var(--color-interactive);
+  --color-primary-tint: var(--color-primary-tint);
+  --color-chart-1: var(--color-chart-1);
+  --color-chart-2: var(--color-chart-2);
+
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-border: var(--color-border);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-nav: var(--color-nav);
+  --color-nav-text: var(--color-nav-text);
+
+  --color-success: var(--color-success);
+  --color-danger: var(--color-danger);
+  --color-warning: var(--color-warning);
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 /* On mobile widths, force form controls to a ≥16px font size. Below 16px, iOS

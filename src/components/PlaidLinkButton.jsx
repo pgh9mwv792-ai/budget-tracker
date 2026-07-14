@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { supabase } from '../lib/supabaseClient'
+import { BankSyncSkeleton } from './Skeletons'
 
 async function callFunction(name, body) {
   const {
@@ -30,6 +31,7 @@ async function callFunction(name, body) {
 export default function PlaidLinkButton({ onLinked, onSync }) {
   const [linkToken, setLinkToken] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState(null)
   const [status, setStatus] = useState(null)
 
@@ -75,6 +77,7 @@ export default function PlaidLinkButton({ onLinked, onSync }) {
 
   async function handleSync(full = false) {
     setBusy(true)
+    setSyncing(true)
     setError(null)
     setStatus(null)
     try {
@@ -91,6 +94,7 @@ export default function PlaidLinkButton({ onLinked, onSync }) {
       setError(e.message)
     } finally {
       setBusy(false)
+      setSyncing(false)
     }
   }
 
@@ -99,14 +103,14 @@ export default function PlaidLinkButton({ onLinked, onSync }) {
       <button
         onClick={() => open()}
         disabled={!ready || busy}
-        className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm px-3 py-1.5 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+        className="rounded-md bg-primary text-on-primary text-sm px-3 py-1.5 font-medium hover:bg-primary-hover transition disabled:opacity-50"
       >
         Connect a bank or credit card
       </button>
       <button
         onClick={() => handleSync(false)}
         disabled={busy}
-        className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-3 py-1.5 disabled:opacity-50"
+        className="rounded-md border border-border text-text hover:bg-primary-tint transition text-sm px-3 py-1.5 disabled:opacity-50"
       >
         {busy ? 'Working…' : 'Sync transactions'}
       </button>
@@ -114,13 +118,14 @@ export default function PlaidLinkButton({ onLinked, onSync }) {
         onClick={() => handleSync(true)}
         disabled={busy}
         title="Re-import your full history and re-classify it — use this once to fix transfers that were counted as income."
-        className="rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition text-sm px-2 py-1.5 disabled:opacity-50 underline decoration-dotted"
+        className="rounded-md text-text-muted hover:text-text transition text-sm px-2 py-1.5 disabled:opacity-50 underline decoration-dotted"
       >
         Re-import &amp; fix
       </button>
-      {status && <span className="text-sm text-slate-600 dark:text-slate-300 w-full sm:w-auto">{status}</span>}
-      {error && <span className="text-sm text-red-600 dark:text-red-400 w-full sm:w-auto">{error}</span>}
-      <p className="w-full text-xs text-slate-500 dark:text-slate-400">
+      {status && <span className="text-sm text-text-muted w-full sm:w-auto">{status}</span>}
+      {error && <span className="text-sm text-danger w-full sm:w-auto">{error}</span>}
+      {syncing && <BankSyncSkeleton />}
+      <p className="w-full text-xs text-text-muted">
         To add a credit card, click <span className="font-medium">Connect a bank or credit card</span> and
         sign in to the company that issued the card (like Chase, Capital One, or Amex). Your card — with its
         balance and limit — gets added automatically along with any checking or savings accounts there.

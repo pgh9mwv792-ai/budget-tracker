@@ -17,9 +17,9 @@ import { detectRecurring } from '../lib/analysis'
 import { computeMonthOutlook, computeInsights, computeWeeklySummary } from '../lib/forecast'
 import { computeFoodCost } from '../lib/foodCost'
 import { useIsMobile } from '../lib/useMediaQuery'
+import { useTheme } from '../contexts/ThemeContext'
+import { useThemeColors } from '../lib/colors'
 import ShareCard from './ShareCard'
-
-const COLORS = ['#0f172a', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#84cc16', '#06b6d4']
 
 export default function Dashboard({
   transactions,
@@ -38,6 +38,21 @@ export default function Dashboard({
 }) {
   const currentMonth = monthKey(todayISO())
   const isMobile = useIsMobile()
+  // Chart colors come from the CSS design tokens (index.css), re-read on every
+  // theme change so Recharts recolors when the user toggles light/dark.
+  const { theme } = useTheme()
+  const colors = useThemeColors(theme)
+  // Categorical palette for the by-category pie, drawn from the brand + semantic
+  // tokens (not raw hexes) so it stays on-theme in both modes.
+  const chartColors = [
+    colors.primary,
+    colors.interactive,
+    colors.warning,
+    colors.success,
+    colors.danger,
+    colors.chart1,
+    colors.chart2,
+  ]
 
   const outlook = useMemo(() => computeMonthOutlook(transactions, budgets), [transactions, budgets])
   const insights = useMemo(
@@ -113,10 +128,10 @@ export default function Dashboard({
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Spending by category (this month)</h3>
+        <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-text mb-2">Spending by category (this month)</h3>
           {categoryBreakdown.length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">No expenses recorded this month yet.</p>
+            <p className="text-sm text-text-muted">No expenses recorded this month yet.</p>
           ) : (
             <ResponsiveContainer width="100%" height={isMobile ? 280 : 260}>
               <PieChart>
@@ -130,7 +145,7 @@ export default function Dashboard({
                   label={!isMobile}
                 >
                   {categoryBreakdown.map((entry, i) => (
-                    <Cell key={entry.name} fill={COLORS[i % COLORS.length]} />
+                    <Cell key={entry.name} fill={chartColors[i % chartColors.length]} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v) => `$${Number(v).toFixed(2)}`} />
@@ -140,16 +155,16 @@ export default function Dashboard({
           )}
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Trailing 3-month average income</h3>
-          <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-3">${rollingAverage.toFixed(2)}</p>
+        <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-text mb-1">Trailing 3-month average income</h3>
+          <p className="text-2xl font-semibold text-text mb-3">${rollingAverage.toFixed(2)}</p>
           <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
             <BarChart data={rollingIncome} margin={isMobile ? { top: 8, right: 4, bottom: 0, left: -12 } : undefined}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-slate-200 dark:text-slate-700" />
-              <XAxis dataKey="month" tick={{ fontSize: isMobile ? 11 : 12, fill: 'currentColor' }} className="text-slate-500 dark:text-slate-400" />
-              <YAxis tick={{ fontSize: isMobile ? 11 : 12, fill: 'currentColor' }} tickCount={isMobile ? 4 : 6} width={isMobile ? 44 : 60} className="text-slate-500 dark:text-slate-400" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border" />
+              <XAxis dataKey="month" tick={{ fontSize: isMobile ? 11 : 12, fill: 'currentColor' }} className="text-text-muted" />
+              <YAxis tick={{ fontSize: isMobile ? 11 : 12, fill: 'currentColor' }} tickCount={isMobile ? 4 : 6} width={isMobile ? 44 : 60} className="text-text-muted" />
               <Tooltip formatter={(v) => `$${Number(v).toFixed(2)}`} />
-              <Bar dataKey="income" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="income" fill={colors.interactive} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -177,13 +192,13 @@ function AccountsPanel({ accounts }) {
   const cash = depository.reduce((sum, a) => sum + (Number(a.current_balance) || 0), 0)
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+    <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Accounts</h3>
+        <h3 className="text-sm font-semibold text-text">Accounts</h3>
         {depository.length > 0 && (
-          <span className="text-xs text-slate-500 dark:text-slate-400">
+          <span className="text-xs text-text-muted">
             Cash on hand:{' '}
-            <span className="font-semibold text-slate-700 dark:text-slate-200">{fmt(cash)}</span>
+            <span className="font-semibold text-text">{fmt(cash)}</span>
           </span>
         )}
       </div>
@@ -195,36 +210,36 @@ function AccountsPanel({ accounts }) {
           const bal = Number(a.current_balance)
           const util = isCredit && limit > 0 ? Math.round((bal / limit) * 100) : null
           return (
-            <div key={a.account_id} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+            <div key={a.account_id} className="rounded-lg border border-border p-3">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-medium uppercase tracking-wide text-text-muted">
                   {label(a)}
                 </span>
-                {a.mask && <span className="text-xs text-slate-400 dark:text-slate-500">••{a.mask}</span>}
+                {a.mask && <span className="text-xs text-text-muted">••{a.mask}</span>}
               </div>
-              <p className="text-sm text-slate-600 dark:text-slate-300 truncate" title={a.name || 'Account'}>
+              <p className="text-sm text-text-muted truncate" title={a.name || 'Account'}>
                 {a.name || 'Account'}
               </p>
-              <p className={`text-xl font-semibold mt-1 ${owed ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-100'}`}>
+              <p className={`text-xl font-semibold mt-1 ${owed ? 'text-danger' : 'text-text'}`}>
                 {fmt(a.current_balance)}
               </p>
               {isCredit ? (
                 <>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                  <p className="text-xs text-text-muted">
                     {owed ? 'owed' : ' '}
                     {limit > 0 && ` · limit ${fmt(limit)}`}
                   </p>
                   {util != null && (
                     <div className="mt-1.5">
                       <div className="flex items-center justify-between text-xs mb-0.5">
-                        <span className="text-slate-500 dark:text-slate-400">Utilization</span>
-                        <span className={util > 30 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-slate-500 dark:text-slate-400'}>
+                        <span className="text-text-muted">Utilization</span>
+                        <span className={util > 30 ? 'text-warning font-medium' : 'text-text-muted'}>
                           {util}%
                         </span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                      <div className="h-1.5 rounded-full bg-border overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${util > 30 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                          className={`h-full rounded-full ${util > 30 ? 'bg-warning' : 'bg-success'}`}
                           style={{ width: `${Math.min(100, util)}%` }}
                         />
                       </div>
@@ -232,7 +247,7 @@ function AccountsPanel({ accounts }) {
                   )}
                 </>
               ) : (
-                <p className="text-xs text-slate-400 dark:text-slate-500">
+                <p className="text-xs text-text-muted">
                   {owed
                     ? 'owed'
                     : a.available_balance != null && Number(a.available_balance) !== Number(a.current_balance)
@@ -271,18 +286,18 @@ function QuickAsk({ onAsk }) {
         className="flex gap-2"
       >
         <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden>💬</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" aria-hidden>💬</span>
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Tell your budget what happened…"
-            className="w-full rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+            className="w-full rounded-full border border-border bg-surface text-text pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
           />
         </div>
         <button
           type="submit"
           disabled={!text.trim()}
-          className="rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-5 font-medium transition disabled:opacity-50"
+          className="rounded-full bg-primary hover:bg-primary-hover text-on-primary text-sm px-5 font-medium transition disabled:opacity-50"
         >
           Ask
         </button>
@@ -292,7 +307,7 @@ function QuickAsk({ onAsk }) {
           <button
             key={ex}
             onClick={() => submit(ex)}
-            className="text-xs rounded-full border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 px-2.5 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            className="text-xs rounded-full border border-border text-text-muted px-2.5 py-1 hover:bg-primary-tint transition"
           >
             {ex}
           </button>
@@ -303,9 +318,9 @@ function QuickAsk({ onAsk }) {
 }
 
 const INSIGHT_TONE = {
-  bad: 'border-red-200 dark:border-red-900/60 bg-red-50/70 dark:bg-red-950/20 text-red-800 dark:text-red-300',
-  warn: 'border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300',
-  info: 'border-sky-200 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/20 text-sky-800 dark:text-sky-300',
+  bad: 'border-danger/30 bg-danger/10 text-danger',
+  warn: 'border-warning/30 bg-warning/10 text-warning',
+  info: 'border-primary/30 bg-primary/10 text-interactive',
 }
 
 // Proactive "heads up" nudges. Each can offer a one-tap hand-off to the assistant.
@@ -347,22 +362,22 @@ function DigestCard({ digest, onDismiss }) {
     : null
 
   return (
-    <div className="relative rounded-2xl border border-sky-200 dark:border-sky-900/60 bg-sky-50/60 dark:bg-sky-950/20 shadow-sm p-5 sm:p-6">
+    <div className="relative rounded-2xl border border-primary/30 bg-primary-tint shadow-sm p-5 sm:p-6">
       {onDismiss && (
         <button
           onClick={onDismiss}
           aria-label="Dismiss digest"
-          className="absolute top-3 right-3 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg leading-none px-1"
+          className="absolute top-3 right-3 text-text-muted hover:text-text text-lg leading-none px-1"
         >
           ×
         </button>
       )}
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        <span className="inline-block w-2 h-2 rounded-full bg-sky-500" />
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+        <span className="inline-block w-2 h-2 rounded-full bg-interactive" />
         Weekly digest{weekOf ? ` · week of ${weekOf}` : ''}
       </div>
-      <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100 pr-6">{digest.subject}</p>
-      <div className="mt-2 space-y-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+      <p className="mt-2 text-lg font-semibold text-text pr-6">{digest.subject}</p>
+      <div className="mt-2 space-y-2 text-sm text-text-muted leading-relaxed">
         {paragraphs.length > 0 ? (
           paragraphs.map((p, i) => <p key={i}>{p}</p>)
         ) : (
@@ -379,26 +394,26 @@ function WeeklyCard({ weekly }) {
     weekly.delta == null
       ? null
       : weekly.delta > 0.05
-      ? { text: `${Math.round(weekly.delta * 100)}% more than last week`, cls: 'text-red-600 dark:text-red-400' }
+      ? { text: `${Math.round(weekly.delta * 100)}% more than last week`, cls: 'text-danger' }
       : weekly.delta < -0.05
-      ? { text: `${Math.round(Math.abs(weekly.delta) * 100)}% less than last week`, cls: 'text-emerald-600 dark:text-emerald-400' }
-      : { text: 'about the same as last week', cls: 'text-slate-500 dark:text-slate-400' }
+      ? { text: `${Math.round(Math.abs(weekly.delta) * 100)}% less than last week`, cls: 'text-success' }
+      : { text: 'about the same as last week', cls: 'text-text-muted' }
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Your week</h3>
-      <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100">${weekly.spend.toFixed(2)}</p>
-      <p className="text-xs text-slate-500 dark:text-slate-400">spent in the last 7 days</p>
+    <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
+      <h3 className="text-sm font-semibold text-text mb-1">Your week</h3>
+      <p className="text-2xl font-semibold text-text">${weekly.spend.toFixed(2)}</p>
+      <p className="text-xs text-text-muted">spent in the last 7 days</p>
       {trend && <p className={`mt-1 text-sm font-medium ${trend.cls}`}>{trend.text}</p>}
-      <div className="mt-3 space-y-1 text-sm text-slate-600 dark:text-slate-300">
+      <div className="mt-3 space-y-1 text-sm text-text-muted">
         {weekly.topCategory && (
           <p>
-            Most went to <b className="text-slate-800 dark:text-slate-100">{weekly.topCategory}</b> (${weekly.topAmount.toFixed(2)})
+            Most went to <b className="text-text">{weekly.topCategory}</b> (${weekly.topAmount.toFixed(2)})
           </p>
         )}
         <p>
           Net this week:{' '}
-          <b className={weekly.net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+          <b className={weekly.net >= 0 ? 'text-success' : 'text-danger'}>
             {weekly.net >= 0 ? '+' : '-'}${Math.abs(weekly.net).toFixed(2)}
           </b>
         </p>
@@ -480,16 +495,16 @@ function FoodMoneyHero({ food, onNavigate, displayName = '' }) {
     burn.delta == null
       ? null
       : burn.delta > 0.05
-      ? { text: `${Math.round(burn.delta * 100)}% above your 3-month average`, cls: 'text-amber-600 dark:text-amber-400' }
+      ? { text: `${Math.round(burn.delta * 100)}% above your 3-month average`, cls: 'text-warning' }
       : burn.delta < -0.05
-      ? { text: `${Math.round(Math.abs(burn.delta) * 100)}% below your 3-month average`, cls: 'text-emerald-600 dark:text-emerald-400' }
-      : { text: 'right around your 3-month average', cls: 'text-slate-500 dark:text-slate-400' }
+      ? { text: `${Math.round(Math.abs(burn.delta) * 100)}% below your 3-month average`, cls: 'text-interactive' }
+      : { text: 'right around your 3-month average', cls: 'text-text-muted' }
 
   return (
-    <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20 shadow-sm p-5 sm:p-6">
+    <div className="rounded-2xl border border-primary/30 bg-primary/10 shadow-sm p-5 sm:p-6">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+          <span className="inline-block w-2 h-2 rounded-full bg-primary" />
           Food &amp; money
         </div>
         {shareCards.length > 0 && (
@@ -497,7 +512,7 @@ function FoodMoneyHero({ food, onNavigate, displayName = '' }) {
             onClick={() => setSharing(true)}
             title="Share this"
             aria-label="Share this"
-            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-medium text-interactive hover:underline"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <circle cx="18" cy="5" r="3" />
@@ -517,15 +532,15 @@ function FoodMoneyHero({ food, onNavigate, displayName = '' }) {
 
       {!food.hasData ? (
         <div className="mt-2">
-          <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">See what your food really costs</p>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          <p className="text-lg font-semibold text-text">See what your food really costs</p>
+          <p className="mt-1 text-sm text-text-muted">
             Log a few meals with their cost, and tag grocery/restaurant spending, to unlock your cost per day and
             cost per 100g of protein right here.
           </p>
           {onNavigate && (
             <button
               onClick={() => onNavigate('Meals')}
-              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-interactive hover:underline"
             >
               Start logging meals →
             </button>
@@ -535,18 +550,18 @@ function FoodMoneyHero({ food, onNavigate, displayName = '' }) {
         <>
           <div className="mt-2 flex flex-wrap items-end gap-x-8 gap-y-3">
             <div>
-              <span className="text-4xl sm:text-5xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
+              <span className="text-4xl sm:text-5xl font-bold tracking-tight text-interactive">
                 {spend.hasData ? dollars(spend.perDay) : '—'}
               </span>
-              <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">/ day on food</span>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">last {spend.days} days</p>
+              <span className="ml-2 text-sm text-text-muted">/ day on food</span>
+              <p className="text-xs text-text-muted mt-0.5">last {spend.days} days</p>
             </div>
             <div>
-              <span className="text-2xl sm:text-3xl font-semibold text-slate-900 dark:text-slate-100">
+              <span className="text-2xl sm:text-3xl font-semibold text-text">
                 {protein.hasData ? dollars(protein.costPer100g) : '—'}
               </span>
-              <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">/ 100g protein</span>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+              <span className="ml-2 text-sm text-text-muted">/ 100g protein</span>
+              <p className="text-xs text-text-muted mt-0.5">
                 {protein.hasData
                   ? protein.coverage != null && protein.coverage < 0.999
                     ? `based on ${Math.round(protein.coverage * 100)}% of meals with a cost`
@@ -558,37 +573,37 @@ function FoodMoneyHero({ food, onNavigate, displayName = '' }) {
 
           {restPct != null && (
             <div className="mt-4">
-              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+              <div className="flex justify-between text-xs text-text-muted mb-1">
                 <span>Eating out {dollars(spend.restaurant)}</span>
                 <span>Groceries {dollars(spend.grocery)}</span>
               </div>
-              <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
-                <div className="bg-amber-500" style={{ width: `${restPct}%` }} />
-                <div className="bg-emerald-500" style={{ width: `${100 - restPct}%` }} />
+              <div className="h-2 rounded-full bg-border overflow-hidden flex">
+                <div className="bg-danger" style={{ width: `${restPct}%` }} />
+                <div className="bg-primary" style={{ width: `${100 - restPct}%` }} />
               </div>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                <b className="text-slate-800 dark:text-slate-100">{restPct}%</b> of your food spending was eating out.
+              <p className="mt-2 text-sm text-text-muted">
+                <b className="text-text">{restPct}%</b> of your food spending was eating out.
               </p>
             </div>
           )}
 
           {bulk && (
-            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+            <p className="mt-3 text-sm text-text-muted">
               Hitting your {Math.round(bulk.proteinTarget)}g protein goal every day runs about{' '}
-              <b className="text-slate-800 dark:text-slate-100">{dollars(bulk.monthlyCost)}/mo</b>
+              <b className="text-text">{dollars(bulk.monthlyCost)}/mo</b>
               {bulk.source === 'library' ? ' at your cheapest food' : ''}.
             </p>
           )}
 
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-text-muted">
             {burn.spentSoFar > 0 && (
               <span>
-                This month so far <b className="text-slate-700 dark:text-slate-200">{dollars(burn.spentSoFar)}</b>
+                This month so far <b className="text-text">{dollars(burn.spentSoFar)}</b>
               </span>
             )}
             {burn.average != null && (
               <span>
-                Projected <b className="text-slate-700 dark:text-slate-200">{dollars(burn.projected)}</b>
+                Projected <b className="text-text">{dollars(burn.projected)}</b>
                 {burnTrend && <span className={`ml-1 ${burnTrend.cls}`}>· {burnTrend.text}</span>}
               </span>
             )}
@@ -597,7 +612,7 @@ function FoodMoneyHero({ food, onNavigate, displayName = '' }) {
           {onNavigate && (
             <button
               onClick={() => onNavigate('Meals')}
-              className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+              className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-interactive hover:underline"
             >
               Open meal tracker →
             </button>
@@ -634,32 +649,32 @@ function ProteinValueCard({ efficiency, onLogFood, onNavigate }) {
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+    <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
       <div className="flex items-center justify-between mb-1">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Cheapest protein in your library</h3>
+        <h3 className="text-sm font-semibold text-text">Cheapest protein in your library</h3>
         {efficiency.coverage != null && efficiency.priced < efficiency.total && (
-          <span className="text-xs text-slate-400 dark:text-slate-500">
+          <span className="text-xs text-text-muted">
             {efficiency.priced} of {efficiency.total} foods priced
           </span>
         )}
       </div>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Ranked by cost per 30g of protein.</p>
-      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+      <p className="text-xs text-text-muted mb-3">Ranked by cost per 30g of protein.</p>
+      <div className="divide-y divide-border">
         {top.map((f) => (
           <div key={f.id} className="flex items-center justify-between gap-3 py-2 text-sm">
             <div className="min-w-0">
-              <p className="truncate text-slate-700 dark:text-slate-200">
+              <p className="truncate text-text">
                 {f.name}
-                {f.serving_desc && <span className="text-slate-400 dark:text-slate-500"> · {f.serving_desc}</span>}
+                {f.serving_desc && <span className="text-text-muted"> · {f.serving_desc}</span>}
               </p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+              <p className="text-xs text-text-muted">
                 ${f.costPer30g.toFixed(2)} / 30g P · {Math.round(f.protein)}g P for ${f.cost.toFixed(2)}
               </p>
             </div>
             {onLogFood && (
               <button
                 onClick={() => logOne(f)}
-                className="shrink-0 rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition"
+                className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-interactive hover:bg-primary-tint transition"
               >
                 {loggedId === f.id ? 'Logged ✓' : 'Log this'}
               </button>
@@ -670,7 +685,7 @@ function ProteinValueCard({ efficiency, onLogFood, onNavigate }) {
       {onNavigate && (
         <button
           onClick={() => onNavigate('Meals')}
-          className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-sky-600 dark:text-sky-400 hover:underline"
+          className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-interactive hover:underline"
         >
           Manage foods →
         </button>
@@ -681,24 +696,24 @@ function ProteinValueCard({ efficiency, onLogFood, onNavigate }) {
 
 const TONE = {
   good: {
-    card: 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20',
-    number: 'text-emerald-600 dark:text-emerald-400',
-    dot: 'bg-emerald-500',
+    card: 'border-success/30 bg-success/10',
+    number: 'text-success',
+    dot: 'bg-success',
   },
   warn: {
-    card: 'border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20',
-    number: 'text-amber-600 dark:text-amber-400',
-    dot: 'bg-amber-500',
+    card: 'border-warning/30 bg-warning/10',
+    number: 'text-warning',
+    dot: 'bg-warning',
   },
   bad: {
-    card: 'border-red-200 dark:border-red-900/60 bg-red-50/60 dark:bg-red-950/20',
-    number: 'text-red-600 dark:text-red-400',
-    dot: 'bg-red-500',
+    card: 'border-danger/30 bg-danger/10',
+    number: 'text-danger',
+    dot: 'bg-danger',
   },
   neutral: {
-    card: 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900',
-    number: 'text-slate-700 dark:text-slate-200',
-    dot: 'bg-slate-400',
+    card: 'border-border bg-surface',
+    number: 'text-text',
+    dot: 'bg-text-muted',
   },
 }
 
@@ -713,40 +728,40 @@ function VerdictCard({ outlook, onNavigate }) {
 
   return (
     <div className={`rounded-2xl border shadow-sm p-5 sm:p-6 ${tone.card}`}>
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-text-muted">
         <span className={`inline-block w-2 h-2 rounded-full ${tone.dot}`} />
         This month · {monthLabel(outlook.month)}
       </div>
 
       <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
         {showNumber && <span className={`text-4xl sm:text-5xl font-bold tracking-tight ${tone.number}`}>{signed}</span>}
-        <span className="text-sm text-slate-500 dark:text-slate-400 mb-1.5">{outlook.primary.label}</span>
+        <span className="text-sm text-text-muted mb-1.5">{outlook.primary.label}</span>
       </div>
 
-      <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">{outlook.verdict.headline}</p>
-      <p className="text-sm text-slate-600 dark:text-slate-300">{outlook.verdict.sub}</p>
+      <p className="mt-2 text-lg font-semibold text-text">{outlook.verdict.headline}</p>
+      <p className="text-sm text-text-muted">{outlook.verdict.sub}</p>
 
-      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-        <span>Spent <b className="text-slate-700 dark:text-slate-200">${outlook.spent.toFixed(2)}</b></span>
-        <span>Income <b className="text-slate-700 dark:text-slate-200">${outlook.income.toFixed(2)}</b></span>
+      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-text-muted">
+        <span>Spent <b className="text-text">${outlook.spent.toFixed(2)}</b></span>
+        <span>Income <b className="text-text">${outlook.income.toFixed(2)}</b></span>
         {outlook.hasBudget && (
-          <span>Budget <b className="text-slate-700 dark:text-slate-200">${outlook.budgetTotal.toFixed(2)}</b></span>
+          <span>Budget <b className="text-text">${outlook.budgetTotal.toFixed(2)}</b></span>
         )}
-        <span><b className="text-slate-700 dark:text-slate-200">{outlook.daysLeft}</b> days left</span>
+        <span><b className="text-text">{outlook.daysLeft}</b> days left</span>
       </div>
 
       {outlook.upcoming.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-slate-200/70 dark:border-slate-700/50">
-          <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">Still expected before month-end</p>
+        <div className="mt-4 pt-4 border-t border-border">
+          <p className="text-xs font-semibold text-text-muted mb-2">Still expected before month-end</p>
           <div className="space-y-1.5">
             {outlook.upcoming.slice(0, 5).map((r) => (
               <div key={r.key} className="flex items-center justify-between text-sm">
-                <span className="truncate text-slate-600 dark:text-slate-300">{r.label}</span>
+                <span className="truncate text-text-muted">{r.label}</span>
                 <span className="shrink-0 ml-3 tabular-nums">
-                  <span className={r.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : r.kind === 'transfer' ? 'text-slate-500 dark:text-slate-400' : 'text-slate-700 dark:text-slate-200'}>
+                  <span className={r.kind === 'income' ? 'text-success' : r.kind === 'transfer' ? 'text-text-muted' : 'text-text'}>
                     {r.kind === 'income' ? '+' : r.kind === 'transfer' ? '⇄ ' : '-'}${r.amount.toFixed(2)}
                   </span>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">{r.nextDate.slice(5)}</span>
+                  <span className="text-xs text-text-muted ml-2">{r.nextDate.slice(5)}</span>
                 </span>
               </div>
             ))}
@@ -757,7 +772,7 @@ function VerdictCard({ outlook, onNavigate }) {
       {!outlook.hasBudget && onNavigate && (
         <button
           onClick={() => onNavigate('Budgets')}
-          className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-sky-600 dark:text-sky-400 hover:underline"
+          className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-interactive hover:underline"
         >
           Set a budget for a clearer number →
         </button>
@@ -769,35 +784,35 @@ function VerdictCard({ outlook, onNavigate }) {
 function RecurringPanel({ items, onNavigate }) {
   if (items.length === 0) return null
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+    <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
       <div className="flex items-center justify-between gap-2 mb-1">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Recurring &amp; upcoming</h3>
+        <h3 className="text-sm font-semibold text-text">Recurring &amp; upcoming</h3>
         {onNavigate && (
           <button
             onClick={() => onNavigate('Transactions')}
-            className="shrink-0 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
+            className="shrink-0 text-xs font-medium text-interactive hover:underline"
           >
             View all subscriptions →
           </button>
         )}
       </div>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+      <p className="text-xs text-text-muted mb-3">
         Detected from repeating transactions — next date is an estimate.
       </p>
-      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+      <div className="divide-y divide-border">
         {items.map((r) => (
           <div key={r.key} className="flex items-center justify-between py-2 text-sm">
             <div className="min-w-0">
-              <p className="truncate text-slate-700 dark:text-slate-200">{r.label}</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+              <p className="truncate text-text">{r.label}</p>
+              <p className="text-xs text-text-muted">
                 {r.cadence} · seen {r.count}×
               </p>
             </div>
             <div className="text-right shrink-0 ml-3">
-              <p className={`font-medium ${r.kind === 'income' ? 'text-emerald-600 dark:text-emerald-400' : r.kind === 'transfer' ? 'text-slate-500 dark:text-slate-400' : 'text-red-600 dark:text-red-400'}`}>
+              <p className={`font-medium ${r.kind === 'income' ? 'text-success' : r.kind === 'transfer' ? 'text-text-muted' : 'text-danger'}`}>
                 {r.kind === 'income' ? '+' : r.kind === 'transfer' ? '⇄ ' : '-'}${r.amount.toFixed(2)}
               </p>
-              <p className={`text-xs ${r.overdue ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>
+              <p className={`text-xs ${r.overdue ? 'text-warning' : 'text-text-muted'}`}>
                 {r.overdue ? 'expected by ' : 'next ~ '}
                 {r.nextDate}
               </p>
@@ -814,10 +829,12 @@ function sum(txs) {
 }
 
 function StatCard({ label, value, tone }) {
-  const toneClass = tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+  const toneClass = tone === 'emerald' ? 'text-success' : 'text-danger'
+  // (tone prop values kept as 'emerald'/'red' for callers; they map to the
+  // success/danger semantic tokens here.)
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-      <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
+    <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
+      <p className="text-sm text-text-muted">{label}</p>
       <p className={`text-2xl font-semibold ${toneClass}`}>${value.toFixed(2)}</p>
     </div>
   )

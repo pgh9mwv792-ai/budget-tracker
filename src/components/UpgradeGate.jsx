@@ -29,16 +29,16 @@ export default function UpgradeGate({ plan, title, blurb, children }) {
   }
 
   return (
-    <section className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/20 p-5 space-y-3">
+    <section className="rounded-xl border border-primary/30 bg-primary/10 p-5 space-y-3">
       <div className="flex items-center gap-2">
         <span className="text-lg">✨</span>
-        <h3 className="font-semibold text-slate-900 dark:text-slate-100">{title || 'Upgrade to Pro'}</h3>
+        <h3 className="font-semibold text-text">{title || 'Upgrade to Pro'}</h3>
       </div>
-      {blurb && <p className="text-sm text-slate-600 dark:text-slate-300">{blurb}</p>}
+      {blurb && <p className="text-sm text-text-muted">{blurb}</p>}
       <ul className="space-y-1.5">
         {PRO_PERKS.map((p) => (
-          <li key={p} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-            <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+          <li key={p} className="flex items-start gap-2 text-sm text-text">
+            <span className="text-interactive">✓</span>
             <span>{p}</span>
           </li>
         ))}
@@ -47,13 +47,13 @@ export default function UpgradeGate({ plan, title, blurb, children }) {
         <button
           onClick={subscribe}
           disabled={busy}
-          className="rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 font-medium transition disabled:opacity-50"
+          className="rounded-md bg-primary hover:bg-primary-hover text-on-primary text-sm px-4 py-2 font-medium transition disabled:opacity-50"
         >
           {busy ? 'Opening checkout…' : 'Subscribe — $6/mo'}
         </button>
-        <span className="text-xs text-slate-500 dark:text-slate-400">Cancel anytime.</span>
+        <span className="text-xs text-text-muted">Cancel anytime.</span>
       </div>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </section>
   )
 }

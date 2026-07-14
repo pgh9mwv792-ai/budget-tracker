@@ -38,12 +38,12 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
   // targets. Used inside the mobile bottom sheets. The default grid layout is
   // the compact inline desktop quick-add.
   const field =
-    'w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
+    'w-full rounded-md border border-border bg-surface text-text px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40'
 
   if (stacked) {
     return (
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+        <label className="flex flex-col gap-1 text-xs font-medium text-text-muted">
           Type
           <select
             value={kind}
@@ -58,7 +58,7 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
             <option value="transfer">Transfer</option>
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+        <label className="flex flex-col gap-1 text-xs font-medium text-text-muted">
           Amount
           <input
             type="number"
@@ -72,11 +72,11 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
             className={field}
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+        <label className="flex flex-col gap-1 text-xs font-medium text-text-muted">
           Date
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required className={field} />
         </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+        <label className="flex flex-col gap-1 text-xs font-medium text-text-muted">
           Category
           <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={field}>
             <option value="">Uncategorized</option>
@@ -87,7 +87,7 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+        <label className="flex flex-col gap-1 text-xs font-medium text-text-muted">
           Note (optional)
           <input type="text" value={note} onChange={(e) => setNote(e.target.value)} className={field} />
         </label>
@@ -95,7 +95,7 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
           <button
             type="submit"
             disabled={submitting}
-            className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm min-h-11 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+            className="flex-1 rounded-md bg-primary hover:bg-primary-hover text-on-primary text-sm min-h-11 font-medium transition disabled:opacity-50"
           >
             {initial ? 'Save' : 'Add transaction'}
           </button>
@@ -103,7 +103,7 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
             <button
               type="button"
               onClick={onCancel}
-              className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-4 min-h-11"
+              className="rounded-md border border-border text-text hover:bg-bg transition text-sm px-4 min-h-11"
             >
               Cancel
             </button>
@@ -114,14 +114,14 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid grid-cols-2 sm:grid-cols-6 gap-2 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+    <form onSubmit={handleSubmit} className="grid grid-cols-2 sm:grid-cols-6 gap-2 bg-surface p-4 rounded-xl border border-border shadow-sm">
       <select
         value={kind}
         onChange={(e) => {
           setKind(e.target.value)
           setCategoryId('')
         }}
-        className="col-span-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+        className="col-span-1 rounded-md border border-border bg-surface text-text px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
       >
         <option value="expense">Expense</option>
         <option value="income">Income</option>
@@ -133,7 +133,7 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
         value={date}
         onChange={(e) => setDate(e.target.value)}
         required
-        className="col-span-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+        className="col-span-1 rounded-md border border-border bg-surface text-text px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
       />
 
       <input
@@ -144,13 +144,13 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
         required
-        className="col-span-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+        className="col-span-1 rounded-md border border-border bg-surface text-text px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
       />
 
       <select
         value={categoryId}
         onChange={(e) => setCategoryId(e.target.value)}
-        className="col-span-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+        className="col-span-1 rounded-md border border-border bg-surface text-text px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
       >
         <option value="">Uncategorized</option>
         {filteredCategories.map((c) => (
@@ -165,19 +165,19 @@ export default function TransactionForm({ categories, onSubmit, initial, onCance
         placeholder="Note (optional)"
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        className="col-span-2 sm:col-span-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+        className="col-span-2 sm:col-span-1 rounded-md border border-border bg-surface text-text px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
       />
 
       <div className="col-span-2 sm:col-span-1 flex gap-2">
         <button
           type="submit"
           disabled={submitting}
-          className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm py-1.5 font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="flex-1 rounded-md bg-primary hover:bg-primary-hover text-on-primary text-sm py-1.5 font-medium transition disabled:opacity-50"
         >
           {initial ? 'Save' : 'Add'}
         </button>
         {onCancel && (
-          <button type="button" onClick={onCancel} className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-3">
+          <button type="button" onClick={onCancel} className="rounded-md border border-border text-text hover:bg-bg transition text-sm px-3">
             Cancel
           </button>
         )}

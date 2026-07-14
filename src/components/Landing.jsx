@@ -61,32 +61,32 @@ function ProteinCostExample() {
   const max = Math.max(...ranked.map((r) => r.costPerPortion))
   return (
     <section className="max-w-3xl mx-auto px-4 pb-20">
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8">
+      <div className="rounded-2xl border border-border bg-surface p-6 sm:p-8">
         <h2 className="text-2xl font-semibold text-center">What does 30g of protein cost you?</h2>
-        <p className="mt-2 text-center text-slate-600 dark:text-slate-300 text-sm">
+        <p className="mt-2 text-center text-text-muted text-sm">
           Same protein, wildly different prices. This is the ranking the app builds automatically from
           your own foods — here are a few common ones to start.
         </p>
         <ul className="mt-6 space-y-2.5">
           {ranked.map((r) => (
             <li key={r.name} className="flex items-center gap-3">
-              <span className="w-32 shrink-0 text-sm text-slate-700 dark:text-slate-200">
+              <span className="w-32 shrink-0 text-sm text-text">
                 {r.name}
-                <span className="block text-xs text-slate-400 dark:text-slate-500">{r.unit}</span>
+                <span className="block text-xs text-text-muted">{r.unit}</span>
               </span>
-              <span className="flex-1 h-6 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
+              <span className="flex-1 h-6 rounded bg-bg overflow-hidden">
                 <span
-                  className="block h-full bg-emerald-500/80 rounded"
+                  className="block h-full bg-primary/80 rounded"
                   style={{ width: `${Math.max(8, (r.costPerPortion / max) * 100)}%` }}
                 />
               </span>
-              <span className="w-16 shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+              <span className="w-16 shrink-0 text-right text-sm font-semibold tabular-nums text-text">
                 ${r.costPerPortion.toFixed(2)}
               </span>
             </li>
           ))}
         </ul>
-        <p className="mt-4 text-center text-xs text-slate-400 dark:text-slate-500">
+        <p className="mt-4 text-center text-xs text-text-muted">
           Cost per 30g of protein. Example grocery prices — your numbers come from what you actually buy.
         </p>
       </div>
@@ -101,7 +101,7 @@ function ProPreviews({ onGetStarted }) {
   return (
     <section className="max-w-5xl mx-auto px-4 pb-20">
       <h2 className="text-2xl font-semibold text-center">Upgrade to automate the busywork</h2>
-      <p className="mt-2 text-center text-slate-600 dark:text-slate-300">
+      <p className="mt-2 text-center text-text-muted">
         Free does everything by hand. Pro connects your bank and adds the assistant.
       </p>
       <div className="mt-10 grid sm:grid-cols-2 gap-6">
@@ -126,24 +126,24 @@ function ProPreviews({ onGetStarted }) {
 
 function PreviewCard({ title, blurb, children, onGetStarted }) {
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-      <div className="relative h-40 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+    <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+      <div className="relative h-40 bg-bg border-b border-border">
         {/* The mock content is blurred + dimmed so it reads as "preview". */}
         <div className="absolute inset-0 p-4 blur-[3px] opacity-60 select-none pointer-events-none" aria-hidden>
           {children}
         </div>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 text-white text-xs font-semibold px-3 py-1 shadow">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary text-on-primary text-xs font-semibold px-3 py-1 shadow">
             <span aria-hidden>🔒</span> Pro
           </span>
         </div>
       </div>
       <div className="p-5">
         <h3 className="font-semibold">{title}</h3>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{blurb}</p>
+        <p className="mt-2 text-sm text-text-muted">{blurb}</p>
         <button
           onClick={onGetStarted}
-          className="mt-4 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+          className="mt-4 text-sm font-semibold text-interactive hover:underline"
         >
           Start free →
         </button>
@@ -162,10 +162,10 @@ function MockRows() {
   return (
     <div className="space-y-2">
       {rows.map(([name, amt, cat]) => (
-        <div key={name} className="flex items-center justify-between rounded-lg bg-white dark:bg-slate-900 px-3 py-2 text-xs">
-          <span className="font-medium text-slate-700 dark:text-slate-200">{name}</span>
-          <span className="text-slate-400 dark:text-slate-500">{cat}</span>
-          <span className="font-semibold text-slate-900 dark:text-slate-100">{amt}</span>
+        <div key={name} className="flex items-center justify-between rounded-lg bg-surface px-3 py-2 text-xs">
+          <span className="font-medium text-text">{name}</span>
+          <span className="text-text-muted">{cat}</span>
+          <span className="font-semibold text-text">{amt}</span>
         </div>
       ))}
     </div>
@@ -175,10 +175,10 @@ function MockRows() {
 function MockChat() {
   return (
     <div className="space-y-2">
-      <div className="ml-auto max-w-[80%] rounded-2xl bg-emerald-600 text-white px-3 py-2 text-xs">
+      <div className="ml-auto max-w-[80%] rounded-2xl bg-primary text-on-primary px-3 py-2 text-xs">
         how much did I spend eating out this month?
       </div>
-      <div className="max-w-[85%] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs text-slate-700 dark:text-slate-200">
+      <div className="max-w-[85%] rounded-2xl bg-surface border border-border px-3 py-2 text-xs text-text">
         You’ve spent $312 on restaurants so far — 55% of your food spending.
       </div>
     </div>
@@ -190,9 +190,9 @@ function MockChat() {
 function FounderStory() {
   return (
     <section className="max-w-3xl mx-auto px-4 pb-20">
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
+      <div className="rounded-2xl border border-border p-6 sm:p-8">
         <h2 className="text-2xl font-semibold">Why I built this</h2>
-        <div className="mt-4 space-y-3 text-slate-600 dark:text-slate-300 leading-relaxed">
+        <div className="mt-4 space-y-3 text-text-muted leading-relaxed">
           <p>
             I wanted to eat more protein without wrecking my budget, and none of the apps I tried could
             answer a simple question: what is my food actually costing me per gram of protein? Calorie
@@ -212,25 +212,25 @@ function FounderStory() {
 
 function ScreenshotPlaceholder({ label }) {
   return (
-    <div className="aspect-video w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center">
+    <div className="aspect-video w-full rounded-xl border border-dashed border-border bg-bg flex items-center justify-center">
       {/* SCREENSHOT: {label} — 16:9, drop the product screenshot here */}
-      <span className="text-xs text-slate-400 dark:text-slate-500">{label}</span>
+      <span className="text-xs text-text-muted">{label}</span>
     </div>
   )
 }
 
 export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    <div className="min-h-screen bg-bg text-text">
       {/* Top bar */}
       <header className="max-w-5xl mx-auto px-4 py-5 flex items-center justify-between">
         <div className="flex items-center gap-2 font-semibold">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-primary" />
           Budget Tracker
         </div>
         <button
           onClick={onSignIn}
-          className="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+          className="text-sm font-medium text-text-muted hover:text-text"
         >
           Sign in
         </button>
@@ -241,20 +241,20 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight max-w-3xl mx-auto">
           Macro tracking that knows what your food actually costs.
         </h1>
-        <p className="mt-5 text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
+        <p className="mt-5 text-lg text-text-muted max-w-2xl mx-auto">
           Most trackers count calories. This one connects your meals to your real transactions, so you see
           cost per gram of protein, where your food money goes, and the whole budget around it.
         </p>
         <div className="mt-8 flex items-center justify-center gap-3">
           <button
             onClick={onGetStarted}
-            className="rounded-md bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 text-sm font-semibold transition"
+            className="rounded-md bg-primary hover:bg-primary-hover text-on-primary px-6 py-3 text-sm font-semibold transition"
           >
             Get started free
           </button>
           <button
             onClick={onSignIn}
-            className="rounded-md border border-slate-300 dark:border-slate-700 px-6 py-3 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            className="rounded-md border border-border px-6 py-3 text-sm font-semibold hover:bg-primary-tint transition"
           >
             Sign in
           </button>
@@ -262,12 +262,12 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
         {onExploreDemo && (
           <button
             onClick={onExploreDemo}
-            className="mt-4 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+            className="mt-4 text-sm font-semibold text-interactive hover:underline"
           >
             Explore with sample data — no account needed →
           </button>
         )}
-        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Free to start. No ads, ever.</p>
+        <p className="mt-3 text-xs text-text-muted">Free to start. No ads, ever.</p>
       </section>
 
       {/* Cost-per-protein example — the core idea, made concrete with real numbers */}
@@ -282,7 +282,7 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
           >
             <div>
               <h2 className="text-2xl font-semibold">{f.title}</h2>
-              <p className="mt-3 text-slate-600 dark:text-slate-300">{f.body}</p>
+              <p className="mt-3 text-text-muted">{f.body}</p>
             </div>
             <ScreenshotPlaceholder label={f.title} />
           </div>
@@ -296,58 +296,58 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
       <FounderStory />
 
       {/* Pricing */}
-      <section className="bg-slate-50 dark:bg-slate-900/40 border-y border-slate-200 dark:border-slate-800">
+      <section className="bg-surface border-y border-border">
         <div className="max-w-5xl mx-auto px-4 py-16">
           <h2 className="text-2xl font-semibold text-center">Simple pricing</h2>
-          <p className="mt-2 text-center text-slate-600 dark:text-slate-300">
+          <p className="mt-2 text-center text-text-muted">
             Everything you need to track spending and meals is free. Pay only for automation.
           </p>
           <div className="mt-10 grid sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+            <div className="rounded-2xl border border-border bg-surface p-6">
               <h3 className="font-semibold">Free</h3>
               <p className="mt-1 text-3xl font-bold">
-                $0<span className="text-base font-normal text-slate-500 dark:text-slate-400">/mo</span>
+                $0<span className="text-base font-normal text-text-muted">/mo</span>
               </p>
               <ul className="mt-5 space-y-2">
                 {FREE.map((p) => (
-                  <li key={p} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-                    <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+                  <li key={p} className="flex items-start gap-2 text-sm text-text">
+                    <span className="text-interactive">✓</span>
                     <span>{p}</span>
                   </li>
                 ))}
               </ul>
               <button
                 onClick={onGetStarted}
-                className="mt-6 w-full rounded-md border border-slate-300 dark:border-slate-700 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                className="mt-6 w-full rounded-md border border-border py-2.5 text-sm font-semibold hover:bg-primary-tint transition"
               >
                 Get started free
               </button>
             </div>
-            <div className="rounded-2xl border-2 border-emerald-500 bg-white dark:bg-slate-900 p-6">
+            <div className="rounded-2xl border-2 border-primary bg-surface p-6">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold">Pro</h3>
-                <span className="text-xs rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 px-2 py-0.5">
+                <span className="text-xs rounded-full bg-primary/10 text-interactive px-2 py-0.5">
                   Automation
                 </span>
               </div>
               <p className="mt-1 text-3xl font-bold">
-                $6<span className="text-base font-normal text-slate-500 dark:text-slate-400">/mo</span>
+                $6<span className="text-base font-normal text-text-muted">/mo</span>
               </p>
               <ul className="mt-5 space-y-2">
                 {PRO.map((p) => (
-                  <li key={p} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-                    <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+                  <li key={p} className="flex items-start gap-2 text-sm text-text">
+                    <span className="text-interactive">✓</span>
                     <span>{p}</span>
                   </li>
                 ))}
               </ul>
               <button
                 onClick={onGetStarted}
-                className="mt-6 w-full rounded-md bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 text-sm font-semibold transition"
+                className="mt-6 w-full rounded-md bg-primary hover:bg-primary-hover text-on-primary py-2.5 text-sm font-semibold transition"
               >
                 Start free, upgrade anytime
               </button>
-              <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">Cancel anytime.</p>
+              <p className="mt-2 text-center text-xs text-text-muted">Cancel anytime.</p>
             </div>
           </div>
         </div>
@@ -358,19 +358,19 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
         <h2 className="text-2xl font-semibold text-center">Built to hold financial data</h2>
         <div className="mt-10 grid sm:grid-cols-2 gap-6">
           {TRUST.map((t) => (
-            <div key={t.title} className="rounded-xl border border-slate-200 dark:border-slate-800 p-5">
+            <div key={t.title} className="rounded-xl border border-border p-5">
               <h3 className="font-semibold">{t.title}</h3>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t.body}</p>
+              <p className="mt-2 text-sm text-text-muted">{t.body}</p>
             </div>
           ))}
         </div>
-        <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-6 text-center text-sm text-text-muted">
           Read the full{' '}
           <a
             href="/privacy.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="underline hover:text-slate-700 dark:hover:text-slate-200"
+            className="underline hover:text-text"
           >
             privacy policy
           </a>
@@ -382,17 +382,17 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
       <section className="max-w-5xl mx-auto px-4 pb-20 text-center">
         <button
           onClick={onGetStarted}
-          className="rounded-md bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 text-sm font-semibold transition"
+          className="rounded-md bg-primary hover:bg-primary-hover text-on-primary px-6 py-3 text-sm font-semibold transition"
         >
           Get started free
         </button>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800">
-        <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-slate-500 dark:text-slate-400">
+      <footer className="border-t border-border">
+        <div className="max-w-5xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-text-muted">
           <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="inline-block w-2 h-2 rounded-full bg-primary" />
             Budget Tracker
           </div>
           <div className="flex items-center gap-5">
@@ -400,7 +400,7 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
               href="/privacy.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-slate-700 dark:hover:text-slate-200 underline"
+              className="hover:text-text underline"
             >
               Privacy
             </a>

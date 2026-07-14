@@ -5,6 +5,7 @@ import {
   micronutrientRows,
   nutrientContributors,
   foodsMissingNutrient,
+  vitaminAForm,
   COVERAGE_THRESHOLD,
 } from './micronutrients'
 
@@ -124,6 +125,69 @@ describe('nutrientContributors', () => {
     )
     expect(contributors[0].amount).toBeCloseTo(1.6, 6)
   })
+
+  it('labels vitamin A contributors by form from their raw retinol/carotene rows', () => {
+    // Liver: essentially all preformed retinol. Carrot: essentially all
+    // beta-carotene. The RAE total (id row) is unchanged; only the form differs.
+    const liver = {
+      id: 'f-liver-a',
+      name: 'Beef liver',
+      source: 'usda',
+      nutrients: [
+        { name: 'Vitamin A, RAE', amount: 9000, unit: 'mcg', per: '100g', usda_number: '320' },
+        { name: 'Retinol', amount: 9000, unit: 'mcg', per: '100g', usda_number: '319' },
+        { name: 'Carotene, beta', amount: 0, unit: 'mcg', per: '100g', usda_number: '321' },
+        { id: 'vitamin_a', amount: 9000, unit: 'mcg', per: 'serving' },
+      ],
+    }
+    const carrot = {
+      id: 'f-carrot-a',
+      name: 'Carrot',
+      source: 'usda',
+      nutrients: [
+        { name: 'Vitamin A, RAE', amount: 835, unit: 'mcg', per: '100g', usda_number: '320' },
+        { name: 'Retinol', amount: 0, unit: 'mcg', per: '100g', usda_number: '319' },
+        { name: 'Carotene, beta', amount: 8285, unit: 'mcg', per: '100g', usda_number: '321' },
+        { id: 'vitamin_a', amount: 835, unit: 'mcg', per: 'serving' },
+      ],
+    }
+    const map = new Map([['f-liver-a', liver], ['f-carrot-a', carrot]])
+    const logs = [
+      { food_id: 'f-liver-a', servings: 1 },
+      { food_id: 'f-carrot-a', servings: 1 },
+    ]
+    const { contributors } = nutrientContributors('vitamin_a', logs, map)
+    expect(contributors.find((c) => c.foodId === 'f-liver-a').form).toBe('preformed')
+    expect(contributors.find((c) => c.foodId === 'f-carrot-a').form).toBe('plant')
+  })
+})
+
+describe('vitaminAForm', () => {
+  const withRaw = (retinol, carotene) => ({
+    source: 'usda',
+    nutrients: [
+      { name: 'Retinol', amount: retinol, unit: 'mcg', per: '100g', usda_number: '319' },
+      { name: 'Carotene, beta', amount: carotene, unit: 'mcg', per: '100g', usda_number: '321' },
+    ],
+  })
+
+  it('calls a retinol-dominated food preformed (beta-carotene is 12:1 by RAE)', () => {
+    // 100 mcg retinol vs 100 mcg carotene = 8.3 mcg RAE → overwhelmingly retinol.
+    expect(vitaminAForm(withRaw(100, 100))).toBe('preformed')
+  })
+
+  it('calls a carotene-only food plant-source', () => {
+    expect(vitaminAForm(withRaw(0, 5000))).toBe('plant')
+  })
+
+  it('calls a genuinely balanced RAE split mixed', () => {
+    // 600 mcg carotene → 50 mcg RAE, matched by 50 mcg retinol.
+    expect(vitaminAForm(withRaw(50, 600))).toBe('mixed')
+  })
+
+  it('returns null when the food gives no retinol/carotene breakdown', () => {
+    expect(vitaminAForm({ source: 'supplement_scan', nutrients: [{ id: 'vitamin_a', amount: 900, unit: 'mcg', per: 'serving' }] })).toBeNull()
+  })
 })
 
 describe('foodsMissingNutrient', () => {
@@ -185,20 +249,24 @@ describe('micronutrientRows', () => {
   })
 
   it('returns a row for every displayed nutrient in curated order', () => {
-    // 33 catalog nutrients, minus EPA/DHA (folded into rollups), plus the
-    // synthetic EPA+DHA row = 32.
+    // 33 catalog nutrients, minus EPA/DHA (folded into EPA+DHA) and the retired
+    // face-value omega-3 total, plus the synthetic EPA+DHA row = 31.
     const rows = micronutrientRows([], foodsById, null)
-    expect(rows.length).toBe(32)
+    expect(rows.length).toBe(31)
     expect(rows[0].id).toBe('vitamin_a')
     // EPA/DHA never appear as standalone rows.
     expect(rows.find((r) => r.id === 'epa')).toBeUndefined()
     expect(rows.find((r) => r.id === 'dha')).toBeUndefined()
-    // The Omega-3 total is immediately followed by the EPA+DHA rollup.
-    const iTotal = rows.findIndex((r) => r.id === 'omega_3_total')
-    expect(rows[iTotal + 1].id).toBe('epa_dha')
+    // The face-value ALA+EPA+DHA total is retired from display.
+    expect(rows.find((r) => r.id === 'omega_3_total')).toBeUndefined()
+    // EPA+DHA leads the omega-3 group as the primary row; ALA follows, subordinate.
+    const iEpaDha = rows.findIndex((r) => r.id === 'epa_dha')
+    expect(rows[iEpaDha].omegaRole).toBe('primary')
+    expect(rows[iEpaDha + 1].id).toBe('ala')
+    expect(rows[iEpaDha + 1].omegaRole).toBe('secondary')
   })
 
-  it('rolls EPA + DHA + ALA into the informational omega-3 rows', () => {
+  it('shows EPA+DHA as the preformed primary row and ALA as a subordinate row', () => {
     // A USDA salmon reporting all three specific omega-3 acids (per serving, g).
     const omegaFish = {
       id: 'f-omega',
@@ -214,36 +282,76 @@ describe('micronutrientRows', () => {
       new Map([['f-omega', omegaFish]]),
       { sex: 'male', micro_targets: {} }
     )
-    const total = rows.find((r) => r.id === 'omega_3_total')
+    // No single face-value total (would be 3.8 g summing ALA at face value).
+    expect(rows.find((r) => r.id === 'omega_3_total')).toBeUndefined()
     const epaDha = rows.find((r) => r.id === 'epa_dha')
     const ala = rows.find((r) => r.id === 'ala')
-    // total = (0.6 + 1.2 + 0.1) × 2 = 3.8 g ; EPA+DHA = (0.6 + 1.2) × 2 = 3.6 g
-    expect(total.amount).toBeCloseTo(3.8, 6)
-    expect(total.informational).toBe(true)
-    expect(total.target).toBeNull()
+    // EPA+DHA = (0.6 + 1.2) × 2 = 3.6 g — informational (reference, no bar/target).
     expect(epaDha.amount).toBeCloseTo(3.6, 6)
     expect(epaDha.informational).toBe(true)
-    // ALA is a real target row (AI 1.6 g male), not informational.
+    expect(epaDha.target).toBeNull()
+    expect(epaDha.omegaRole).toBe('primary')
+    expect(epaDha.reference).toMatch(/250/)
+    // ALA is a real AI-target row (1.6 g male), subordinate, labeled poorly-converting.
     expect(ala.informational).toBe(false)
     expect(ala.target).toBe(1.6)
     expect(ala.amount).toBeCloseTo(0.2, 6)
+    expect(ala.omegaRole).toBe('secondary')
+    expect(ala.subtitle).toMatch(/converts/)
+    expect(ala.groupNote).toBeTruthy()
   })
 
-  it('folds a generic Omega-3 bucket into the total', () => {
+  it('gives a whole-egg + salmon day a sensible preformed EPA+DHA total', () => {
+    const egg = {
+      id: 'f-egg-o',
+      source: 'usda',
+      nutrients: [
+        { id: 'dha', amount: 0.03, unit: 'g', per: 'serving' },
+        { id: 'ala', amount: 0.01, unit: 'g', per: 'serving' },
+      ],
+    }
+    const salmon = {
+      id: 'f-salmon-o',
+      source: 'usda',
+      nutrients: [
+        { id: 'epa', amount: 0.69, unit: 'g', per: 'serving' },
+        { id: 'dha', amount: 0.82, unit: 'g', per: 'serving' },
+        { id: 'ala', amount: 0.1, unit: 'g', per: 'serving' },
+      ],
+    }
+    const rows = micronutrientRows(
+      [
+        { food_id: 'f-egg-o', servings: 1, calories: 78 },
+        { food_id: 'f-salmon-o', servings: 1, calories: 200 },
+      ],
+      new Map([['f-egg-o', egg], ['f-salmon-o', salmon]]),
+      { sex: 'male', micro_targets: {} }
+    )
+    const epaDha = rows.find((r) => r.id === 'epa_dha')
+    const ala = rows.find((r) => r.id === 'ala')
+    // Preformed EPA+DHA = 0.69 + (0.82 + 0.03) = 1.54 g — sensible, salmon-dominated.
+    expect(epaDha.amount).toBeCloseTo(1.54, 6)
+    // ALA (plant) stays a small, separate row — never folded into EPA+DHA.
+    expect(ala.amount).toBeCloseTo(0.11, 6)
+  })
+
+  it('retires the face-value omega-3 total from display but keeps the raw sum', () => {
     // A gummy that only prints a combined "Omega-3" number → omega_3_total id.
     const gummy = {
       id: 'f-gummy',
       source: 'label_scan',
       nutrients: [{ id: 'omega_3_total', amount: 0.9, unit: 'g', per: 'serving' }],
     }
-    const rows = micronutrientRows(
-      [{ food_id: 'f-gummy', servings: 1, calories: 30 }],
-      new Map([['f-gummy', gummy]]),
-      { sex: 'male', micro_targets: {} }
-    )
-    expect(rows.find((r) => r.id === 'omega_3_total').amount).toBeCloseTo(0.9, 6)
-    // No specific acids logged → EPA+DHA rollup is zero.
+    const map = new Map([['f-gummy', gummy]])
+    const logs = [{ food_id: 'f-gummy', servings: 1, calories: 30 }]
+    const rows = micronutrientRows(logs, map, { sex: 'male', micro_targets: {} })
+    // No standalone omega-3 total row is displayed anymore.
+    expect(rows.find((r) => r.id === 'omega_3_total')).toBeUndefined()
+    // No specific acids logged → the EPA+DHA row is zero.
     expect(rows.find((r) => r.id === 'epa_dha').amount).toBe(0)
+    // Raw data is still aggregated (retained, just not shown as a summed row).
+    const { totals } = dayMicronutrients(logs, map)
+    expect(totals.get('omega_3_total')).toBeCloseTo(0.9, 6)
   })
 
   it('tracks a limit nutrient and flags it over the cap', () => {

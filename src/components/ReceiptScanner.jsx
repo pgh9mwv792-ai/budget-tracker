@@ -159,10 +159,10 @@ export default function ReceiptScanner({
   return (
     <div
       ref={rootRef}
-      className={`bg-white dark:bg-slate-900 rounded-xl border shadow-sm p-4 transition-shadow ${
+      className={`bg-surface rounded-xl border shadow-sm p-4 transition-shadow ${
         highlighted
-          ? 'border-emerald-400 ring-2 ring-emerald-400/60'
-          : 'border-slate-200 dark:border-slate-800'
+          ? 'border-interactive ring-2 ring-interactive/60'
+          : 'border-border'
       }`}
     >
       {/* Camera: opens the camera directly on phones. */}
@@ -188,27 +188,27 @@ export default function ReceiptScanner({
       {status !== 'review' && status !== 'itemize' && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Add a receipt</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <h3 className="text-sm font-semibold text-text">Add a receipt</h3>
+            <p className="text-xs text-text-muted">
               {mode === 'itemize'
                 ? 'Add a photo of the items and another of the total — I’ll read them as one receipt, match your bank charge, and price your foods.'
                 : 'Take a photo, or upload a screenshot or PDF — I’ll read the total and category for you.'}
             </p>
             {canItemize && (
-              <div className="mt-2 inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 text-xs">
+              <div className="mt-2 inline-flex rounded-lg border border-border p-0.5 text-xs">
                 <button
                   onClick={() => {
                     setMode('simple')
                     setPages([])
                     setError(null)
                   }}
-                  className={`px-2.5 py-1 rounded-md transition ${mode === 'simple' ? 'bg-emerald-600 text-white' : 'text-slate-600 dark:text-slate-300'}`}
+                  className={`px-2.5 py-1 rounded-md transition ${mode === 'simple' ? 'bg-primary text-on-primary' : 'text-text-muted'}`}
                 >
                   Quick total
                 </button>
                 <button
                   onClick={() => setMode('itemize')}
-                  className={`px-2.5 py-1 rounded-md transition ${mode === 'itemize' ? 'bg-emerald-600 text-white' : 'text-slate-600 dark:text-slate-300'}`}
+                  className={`px-2.5 py-1 rounded-md transition ${mode === 'itemize' ? 'bg-primary text-on-primary' : 'text-text-muted'}`}
                 >
                   Itemize
                 </button>
@@ -219,14 +219,14 @@ export default function ReceiptScanner({
             <button
               onClick={openCamera}
               disabled={status === 'reading'}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition disabled:opacity-60"
+              className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium px-4 py-2 transition disabled:opacity-60"
             >
               {status === 'reading' ? 'Reading…' : mode === 'itemize' ? '📷 Add photo' : '📷 Take photo'}
             </button>
             <button
               onClick={openUpload}
               disabled={status === 'reading'}
-              className="rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-60"
+              className="rounded-lg border border-border text-text text-sm font-medium px-4 py-2 hover:bg-primary-tint transition disabled:opacity-60"
             >
               {mode === 'itemize' ? '📎 Add images' : '📎 Upload'}
             </button>
@@ -235,22 +235,22 @@ export default function ReceiptScanner({
       )}
 
       {status !== 'review' && status !== 'itemize' && mode === 'itemize' && pages.length > 0 && (
-        <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-          <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">
+        <div className="mt-3 rounded-lg border border-border p-3">
+          <p className="text-xs font-medium text-text-muted mb-2">
             {pages.length} {pages.length === 1 ? 'photo' : 'photos'} added — add the total slip too, then read them together.
           </p>
           <ul className="flex flex-wrap gap-2 mb-3">
             {pages.map((f, i) => (
               <li
                 key={i}
-                className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs px-2 py-1"
+                className="inline-flex items-center gap-1.5 rounded-md bg-bg text-text-muted text-xs px-2 py-1"
               >
                 <span className="max-w-[9rem] truncate">📄 {f.name || `Page ${i + 1}`}</span>
                 <button
                   onClick={() => removePage(i)}
                   disabled={status === 'reading'}
                   title="Remove this photo"
-                  className="text-slate-400 hover:text-red-500 disabled:opacity-50"
+                  className="text-text-muted hover:text-danger disabled:opacity-50"
                 >
                   ✕
                 </button>
@@ -260,7 +260,7 @@ export default function ReceiptScanner({
           <button
             onClick={readItemized}
             disabled={status === 'reading'}
-            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition disabled:opacity-60"
+            className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium px-4 py-2 transition disabled:opacity-60"
           >
             {status === 'reading' ? 'Reading…' : `Read receipt (${pages.length})`}
           </button>
@@ -268,15 +268,15 @@ export default function ReceiptScanner({
       )}
 
       {status === 'reading' && (
-        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Reading your receipt — this takes a few seconds…</p>
+        <p className="mt-3 text-sm text-text-muted">Reading your receipt — this takes a few seconds…</p>
       )}
 
       {status === 'review' && draft && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Check the details</h3>
+            <h3 className="text-sm font-semibold text-text">Check the details</h3>
             {draft.confidence === 'low' && (
-              <span className="text-xs rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 px-2 py-0.5">
+              <span className="text-xs rounded-full bg-warning/10 text-warning px-2 py-0.5">
                 Low confidence — double-check
               </span>
             )}
@@ -329,13 +329,13 @@ export default function ReceiptScanner({
             <button
               onClick={save}
               disabled={status === 'saving'}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition disabled:opacity-60"
+              className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium px-4 py-2 transition disabled:opacity-60"
             >
               {status === 'saving' ? 'Adding…' : 'Add transaction'}
             </button>
             <button
               onClick={cancel}
-              className="rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              className="rounded-lg border border-border text-text-muted text-sm font-medium px-4 py-2 hover:bg-primary-tint transition"
             >
               Cancel
             </button>
@@ -362,9 +362,9 @@ export default function ReceiptScanner({
         </div>
       )}
 
-      {savedNote && <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400">✓ {savedNote}</p>}
+      {savedNote && <p className="mt-3 text-sm text-success">✓ {savedNote}</p>}
       {error && (
-        <div className="mt-3 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-sm px-3 py-2">
+        <div className="mt-3 rounded-lg border border-danger/30 bg-danger/10 text-danger text-sm px-3 py-2">
           {error}
         </div>
       )}
@@ -373,12 +373,12 @@ export default function ReceiptScanner({
 }
 
 const inputCls =
-  'w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500'
+  'w-full rounded-md border border-border bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-interactive'
 
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{label}</span>
+      <span className="block text-xs font-medium text-text-muted mb-1">{label}</span>
       {children}
     </label>
   )

@@ -143,7 +143,7 @@ export default function ReceiptItemizer({
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <h3 className="text-sm font-semibold text-text">
             Check the receipt & find the charge
           </h3>
         </div>
@@ -161,7 +161,7 @@ export default function ReceiptItemizer({
         </div>
 
         {/* Line items — tick which are food. Discounts show as negative lines. */}
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+        <div className="rounded-lg border border-border divide-y divide-border">
           {items.map((it, i) => (
             <div key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
               <input
@@ -169,32 +169,32 @@ export default function ReceiptItemizer({
                 checked={it.is_food}
                 onChange={() => toggleFood(i)}
                 title="Is this a food item?"
-                className="accent-emerald-600 shrink-0"
+                className="accent-primary shrink-0"
               />
-              <span className="flex-1 min-w-0 truncate text-slate-700 dark:text-slate-200">
+              <span className="flex-1 min-w-0 truncate text-text">
                 {it.raw_name}
                 {it.quantity != null && (
-                  <span className="text-slate-400 dark:text-slate-500"> · {it.quantity}{it.unit ? ` ${it.unit}` : ''}</span>
+                  <span className="text-text-muted"> · {it.quantity}{it.unit ? ` ${it.unit}` : ''}</span>
                 )}
               </span>
-              <span className={`shrink-0 tabular-nums ${Number(it.price) < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`}>
+              <span className={`shrink-0 tabular-nums ${Number(it.price) < 0 ? 'text-success' : 'text-text-muted'}`}>
                 {it.price == null ? '—' : `$${Number(it.price).toFixed(2)}`}
               </span>
             </div>
           ))}
-          <div className="flex items-center justify-between px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+          <div className="flex items-center justify-between px-3 py-2 text-xs text-text-muted">
             <span>{items.length} lines · items sum ${itemsSum.toFixed(2)}</span>
             {Math.abs(itemsSum - Number(total)) > 0.02 && Number(total) > 0 && (
-              <span className="text-amber-600 dark:text-amber-400">doesn’t match total — tax/discounts expected</span>
+              <span className="text-warning">doesn’t match total — tax/discounts expected</span>
             )}
           </div>
         </div>
 
         {/* Transaction candidates */}
         <div className="space-y-2">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Which bank charge is this?</p>
+          <p className="text-xs font-medium text-text-muted">Which bank charge is this?</p>
           {matches.length === 0 && nearMisses.length === 0 && (
-            <p className="text-xs text-slate-400 dark:text-slate-500">
+            <p className="text-xs text-text-muted">
               No matching Plaid charge found. You can still save — we’ll add a manual transaction.
             </p>
           )}
@@ -203,19 +203,19 @@ export default function ReceiptItemizer({
           ))}
           {nearMisses.length > 0 && (
             <div className="pt-1 space-y-1.5">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Possible match — please confirm</p>
+              <p className="text-[11px] uppercase tracking-wide text-text-muted mb-1">Possible match — please confirm</p>
               {nearMisses.map((m) => (
                 <MatchOption key={m.transaction.id} m={m} selected={chosen === m.transaction} onChoose={() => setChosen(m.transaction)} medium />
               ))}
             </div>
           )}
-          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer pt-1">
+          <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer pt-1">
             <input
               type="radio"
               name="txn-match"
               checked={chosen === 'none'}
               onChange={() => setChosen('none')}
-              className="accent-emerald-600"
+              className="accent-primary"
             />
             No matching charge — create a manual transaction
           </label>
@@ -227,13 +227,13 @@ export default function ReceiptItemizer({
           <button
             onClick={save}
             disabled={busy || chosen == null}
-            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition disabled:opacity-60"
+            className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium px-4 py-2 transition disabled:opacity-60"
           >
             {busy ? 'Saving…' : 'Confirm & itemize'}
           </button>
           <button
             onClick={() => onDone(null)}
-            className="rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            className="rounded-lg border border-border text-text-muted text-sm font-medium px-4 py-2 hover:bg-primary-tint transition"
           >
             Cancel
           </button>
@@ -246,8 +246,8 @@ export default function ReceiptItemizer({
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Match items to your foods</h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <h3 className="text-sm font-semibold text-text">Match items to your foods</h3>
+        <p className="text-xs text-text-muted">
           Linking prices your library — receipt prices flow into cost-per-protein. Buying isn’t eating, so nothing is logged.
         </p>
       </div>
@@ -264,7 +264,7 @@ export default function ReceiptItemizer({
       )}
 
       {foodItems.length === 0 && (
-        <p className="text-sm text-slate-500 dark:text-slate-400">No food items to map on this receipt.</p>
+        <p className="text-sm text-text-muted">No food items to map on this receipt.</p>
       )}
 
       <div className="space-y-2">
@@ -288,7 +288,7 @@ export default function ReceiptItemizer({
 
       <button
         onClick={finish}
-        className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition"
+        className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium px-4 py-2 transition"
       >
         Done
       </button>
@@ -308,21 +308,21 @@ function MatchOption({ m, selected, onChoose, medium }) {
     <label
       className={`block rounded-lg border px-3 py-2 text-sm cursor-pointer transition ${
         selected
-          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
+          ? 'border-primary bg-primary/10'
           : medium
-            ? 'border-amber-200 dark:border-amber-900/60 hover:bg-amber-50/50 dark:hover:bg-amber-950/20'
-            : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+            ? 'border-warning/30 hover:bg-warning/10'
+            : 'border-border hover:bg-primary-tint'
       }`}
     >
       <div className="flex items-center gap-2">
-        <input type="radio" name="txn-match" checked={selected} onChange={onChoose} className="accent-emerald-600" />
-        <span className="font-medium text-slate-700 dark:text-slate-200 tabular-nums">${Number(t.amount).toFixed(2)}</span>
-        <span className="text-slate-400 dark:text-slate-500">·</span>
-        <span className="flex-1 min-w-0 truncate text-slate-600 dark:text-slate-300">{merchant}</span>
-        <span className="text-slate-400 dark:text-slate-500 shrink-0">{t.date}</span>
+        <input type="radio" name="txn-match" checked={selected} onChange={onChoose} className="accent-primary" />
+        <span className="font-medium text-text tabular-nums">${Number(t.amount).toFixed(2)}</span>
+        <span className="text-text-muted">·</span>
+        <span className="flex-1 min-w-0 truncate text-text-muted">{merchant}</span>
+        <span className="text-text-muted shrink-0">{t.date}</span>
       </div>
       {medium && (
-        <p className="mt-1 pl-6 text-xs text-amber-700 dark:text-amber-300">
+        <p className="mt-1 pl-6 text-xs text-warning">
           {amountsDiffer
             ? `Charged $${m.txnAmount.toFixed(2)}, receipt says $${m.receiptTotal.toFixed(2)} — coupons or tax commonly cause this gap. Confirm it's the same purchase.`
             : 'Amount matches, but double-check the store and date before confirming.'}
@@ -338,10 +338,10 @@ function CategoryPrompt({ categories, onApply }) {
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
   const expenseCats = categories.filter((c) => c.kind === 'expense')
-  if (done) return <p className="text-sm text-emerald-600 dark:text-emerald-400">✓ Category applied to the charge.</p>
+  if (done) return <p className="text-sm text-success">✓ Category applied to the charge.</p>
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 px-3 py-2 flex flex-wrap items-center gap-2">
-      <span className="text-sm text-slate-600 dark:text-slate-300">This charge is uncategorized —</span>
+    <div className="rounded-lg border border-border bg-bg px-3 py-2 flex flex-wrap items-center gap-2">
+      <span className="text-sm text-text-muted">This charge is uncategorized —</span>
       <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={`${inputCls} w-auto`}>
         <option value="">choose a category</option>
         {expenseCats.map((c) => (
@@ -359,7 +359,7 @@ function CategoryPrompt({ categories, onApply }) {
             setBusy(false)
           }
         }}
-        className="rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
+        className="rounded-md bg-primary hover:bg-primary-hover text-on-primary text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
       >
         Apply
       </button>
@@ -469,12 +469,12 @@ function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood
 
   if (state === 'mapped') {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm">
-        <span className="text-emerald-600 dark:text-emerald-400">✓</span>
-        <span className="flex-1 min-w-0 truncate text-slate-700 dark:text-slate-200">
-          {item.raw_name} <span className="text-slate-400 dark:text-slate-500">→ {mappedName}</span>
+      <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm">
+        <span className="text-success">✓</span>
+        <span className="flex-1 min-w-0 truncate text-text">
+          {item.raw_name} <span className="text-text-muted">→ {mappedName}</span>
         </span>
-        <button onClick={() => setState('open')} className="text-xs text-slate-500 dark:text-slate-400 hover:underline shrink-0">
+        <button onClick={() => setState('open')} className="text-xs text-text-muted hover:underline shrink-0">
           Change
         </button>
       </div>
@@ -483,7 +483,7 @@ function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood
 
   if (state === 'skipped') {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm text-slate-400 dark:text-slate-500">
+      <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-text-muted">
         <span className="flex-1 min-w-0 truncate">{item.raw_name} — skipped</span>
         <button onClick={() => setState('open')} className="text-xs hover:underline shrink-0">Map</button>
       </div>
@@ -491,49 +491,49 @@ function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 space-y-2">
+    <div className="rounded-lg border border-border px-3 py-2 space-y-2">
       <div className="flex items-center gap-2 text-sm">
-        <span className="flex-1 min-w-0 truncate font-medium text-slate-700 dark:text-slate-200">{item.raw_name}</span>
-        {priceLabel && <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">{priceLabel}</span>}
+        <span className="flex-1 min-w-0 truncate font-medium text-text">{item.raw_name}</span>
+        {priceLabel && <span className="text-xs text-text-muted shrink-0">{priceLabel}</span>}
       </div>
 
       {state === 'idle' && rememberedFood && (
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-xs rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 px-2 py-0.5">from memory</span>
-          <span className="flex-1 min-w-0 truncate text-slate-600 dark:text-slate-300">{rememberedFood.name}</span>
+          <span className="text-xs rounded-full bg-success/10 text-success px-2 py-0.5">from memory</span>
+          <span className="flex-1 min-w-0 truncate text-text-muted">{rememberedFood.name}</span>
           <button
             disabled={busy}
             onClick={() => commit(rememberedFood)}
-            className="rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
+            className="rounded-md bg-primary hover:bg-primary-hover text-on-primary text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
           >
             Use
           </button>
-          <button onClick={() => setState('open')} className="text-xs text-slate-500 dark:text-slate-400 hover:underline">Change</button>
+          <button onClick={() => setState('open')} className="text-xs text-text-muted hover:underline">Change</button>
         </div>
       )}
 
       {state === 'idle' && !rememberedFood && suggestedFood && (
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-xs rounded-full bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 px-2 py-0.5 shrink-0">suggested</span>
-          <span className="flex-1 min-w-0 truncate text-slate-600 dark:text-slate-300">{suggestedFood.name}</span>
+          <span className="text-xs rounded-full bg-primary/10 text-interactive px-2 py-0.5 shrink-0">suggested</span>
+          <span className="flex-1 min-w-0 truncate text-text-muted">{suggestedFood.name}</span>
           <button
             disabled={busy}
             onClick={() => commit(suggestedFood)}
-            className="rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
+            className="rounded-md bg-primary hover:bg-primary-hover text-on-primary text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
           >
             Use
           </button>
-          <button onClick={() => setState('open')} className="text-xs text-slate-500 dark:text-slate-400 hover:underline">Change</button>
-          <button onClick={() => setState('skipped')} className="text-xs text-slate-500 dark:text-slate-400 hover:underline">Skip</button>
+          <button onClick={() => setState('open')} className="text-xs text-text-muted hover:underline">Change</button>
+          <button onClick={() => setState('skipped')} className="text-xs text-text-muted hover:underline">Skip</button>
         </div>
       )}
 
       {state === 'idle' && !rememberedFood && !suggestedFood && (
         <div className="flex gap-2">
-          <button onClick={() => setState('open')} className="rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+          <button onClick={() => setState('open')} className="rounded-md border border-border text-text text-xs font-medium px-3 py-1.5 hover:bg-primary-tint transition">
             Match a food
           </button>
-          <button onClick={() => setState('skipped')} className="text-xs text-slate-500 dark:text-slate-400 hover:underline">Skip</button>
+          <button onClick={() => setState('skipped')} className="text-xs text-text-muted hover:underline">Skip</button>
         </div>
       )}
 
@@ -547,14 +547,14 @@ function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood
           />
           {libraryMatches.length > 0 && (
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Your library</p>
+              <p className="text-[11px] uppercase tracking-wide text-text-muted mb-1">Your library</p>
               <div className="flex flex-wrap gap-1.5">
                 {libraryMatches.map((f) => (
                   <button
                     key={f.id}
                     disabled={busy}
                     onClick={() => commit(f)}
-                    className="rounded-full border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs px-2.5 py-1 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition disabled:opacity-60"
+                    className="rounded-full border border-border text-text text-xs px-2.5 py-1 hover:bg-primary-tint transition disabled:opacity-60"
                   >
                     {f.name}
                   </button>
@@ -563,29 +563,29 @@ function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood
             </div>
           )}
           <div>
-            <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">
-              USDA {searching && <span className="normal-case text-slate-400">— searching…</span>}
+            <p className="text-[11px] uppercase tracking-wide text-text-muted mb-1">
+              USDA {searching && <span className="normal-case text-text-muted">— searching…</span>}
             </p>
-            {usda.length === 0 && !searching && <p className="text-xs text-slate-400 dark:text-slate-500">No USDA matches yet.</p>}
+            {usda.length === 0 && !searching && <p className="text-xs text-text-muted">No USDA matches yet.</p>}
             <div className="space-y-1">
               {usda.slice(0, 5).map((r) => (
                 <button
                   key={r.fdcId}
                   disabled={busy}
                   onClick={() => commitUsda(r)}
-                  className="w-full text-left flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50 transition disabled:opacity-60"
+                  className="w-full text-left flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-primary-tint transition disabled:opacity-60"
                 >
-                  <span className="flex-1 min-w-0 truncate text-slate-700 dark:text-slate-200">
+                  <span className="flex-1 min-w-0 truncate text-text">
                     {r.name}
-                    {r.brand && <span className="text-slate-400 dark:text-slate-500"> · {r.brand}</span>}
+                    {r.brand && <span className="text-text-muted"> · {r.brand}</span>}
                   </span>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">{Math.round(r.protein)}g P/100g</span>
+                  <span className="text-xs text-text-muted shrink-0">{Math.round(r.protein)}g P/100g</span>
                 </button>
               ))}
             </div>
           </div>
           {error && <ErrorBox>{error}</ErrorBox>}
-          <button onClick={() => setState('skipped')} className="text-xs text-slate-500 dark:text-slate-400 hover:underline">Skip this item</button>
+          <button onClick={() => setState('skipped')} className="text-xs text-text-muted hover:underline">Skip this item</button>
         </div>
       )}
     </div>
@@ -593,12 +593,12 @@ function ItemMapRow({ item, foods, receiptItemRules, onSearchFoods, onCreateFood
 }
 
 const inputCls =
-  'w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500'
+  'w-full rounded-md border border-border bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-interactive'
 
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{label}</span>
+      <span className="block text-xs font-medium text-text-muted mb-1">{label}</span>
       {children}
     </label>
   )
@@ -606,7 +606,7 @@ function Field({ label, children }) {
 
 function ErrorBox({ children }) {
   return (
-    <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-sm px-3 py-2">
+    <div className="rounded-lg border border-danger/30 bg-danger/10 text-danger text-sm px-3 py-2">
       {children}
     </div>
   )
@@ -619,8 +619,8 @@ function PantrySummary({ pantry }) {
   const partial = pantry.coverage < 0.999
   const prefix = partial ? '~' : ''
   return (
-    <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-4">
-      <h4 className="text-sm font-semibold text-emerald-800 dark:text-emerald-200 mb-2">This shop brought home</h4>
+    <div className="rounded-xl border border-success/30 bg-success/10 p-4">
+      <h4 className="text-sm font-semibold text-success mb-2">This shop brought home</h4>
       <div className="grid grid-cols-3 gap-3">
         <PantryStat label="Protein" value={`${prefix}${Math.round(pantry.protein)}g`} />
         <PantryStat label="Calories" value={`${prefix}${Math.round(pantry.calories).toLocaleString()}`} />
@@ -630,7 +630,7 @@ function PantrySummary({ pantry }) {
         />
       </div>
       {partial && (
-        <p className="mt-2 text-xs text-emerald-700/80 dark:text-emerald-300/70">
+        <p className="mt-2 text-xs text-success/80">
           From {Math.round(pantry.coverage * 100)}% of mapped spend — only weight-priced items with known macros are counted.
         </p>
       )}
@@ -641,8 +641,8 @@ function PantrySummary({ pantry }) {
 function PantryStat({ label, value }) {
   return (
     <div>
-      <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70">{label}</p>
-      <p className="text-lg font-semibold text-emerald-900 dark:text-emerald-100 tabular-nums">{value}</p>
+      <p className="text-xs text-success/80">{label}</p>
+      <p className="text-lg font-semibold text-success tabular-nums">{value}</p>
     </div>
   )
 }

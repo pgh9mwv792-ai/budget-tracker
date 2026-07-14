@@ -31,7 +31,7 @@ export default function BudgetManager({ categories, budgets, transactions, onSet
 
   if (expenseCategories.length === 0) {
     return (
-      <p className="text-sm text-slate-500 dark:text-slate-400">
+      <p className="text-sm text-text-muted">
         Add some expense categories first (in the Categories tab), then set monthly budgets for them here.
       </p>
     )
@@ -40,12 +40,12 @@ export default function BudgetManager({ categories, budgets, transactions, onSet
   return (
     <div className="space-y-4">
       {totalBudget > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+        <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
           <div className="flex items-baseline justify-between mb-2">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <h3 className="text-sm font-semibold text-text">
               Total budgeted (this month)
             </h3>
-            <span className="text-sm text-slate-500 dark:text-slate-400">
+            <span className="text-sm text-text-muted">
               ${totalSpent.toFixed(2)} of ${totalBudget.toFixed(2)}
             </span>
           </div>
@@ -53,7 +53,7 @@ export default function BudgetManager({ categories, budgets, transactions, onSet
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800">
+      <div className="bg-surface rounded-xl border border-border shadow-sm divide-y divide-border">
         {expenseCategories.map((c) => (
           <BudgetRow
             key={c.id}
@@ -82,9 +82,9 @@ function BudgetRow({ category, budget, spent, onSetBudget, onRemoveBudget }) {
   return (
     <div className="px-4 py-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{category.name}</span>
+        <span className="text-sm font-medium text-text">{category.name}</span>
         <div className="flex items-center gap-2">
-          <span className="text-slate-400 dark:text-slate-500 text-sm">$</span>
+          <span className="text-text-muted text-sm">$</span>
           <input
             type="number"
             step="0.01"
@@ -96,11 +96,11 @@ function BudgetRow({ category, budget, spent, onSetBudget, onRemoveBudget }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter') save()
             }}
-            className="flex-1 sm:flex-none sm:w-24 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-2 sm:py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+            className="flex-1 sm:flex-none sm:w-24 rounded-md border border-border bg-surface text-text px-2 py-2 sm:py-1 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
           />
           <button
             onClick={save}
-            className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-xs font-medium px-3 py-2 sm:px-2.5 sm:py-1 hover:bg-slate-800 dark:hover:bg-emerald-500 transition"
+            className="rounded-md bg-primary hover:bg-primary-hover text-on-primary text-xs font-medium px-3 py-2 sm:px-2.5 sm:py-1 transition"
           >
             Save
           </button>
@@ -110,7 +110,7 @@ function BudgetRow({ category, budget, spent, onSetBudget, onRemoveBudget }) {
                 setDraft('')
                 onRemoveBudget(category.id)
               }}
-              className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs px-2 py-2 sm:py-1"
+              className="text-danger hover:text-danger/80 text-xs px-2 py-2 sm:py-1"
             >
               Clear
             </button>
@@ -121,11 +121,11 @@ function BudgetRow({ category, budget, spent, onSetBudget, onRemoveBudget }) {
       {hasBudget && (
         <div className="mt-2">
           <ProgressBar spent={spent} budget={budget} />
-          <div className="mt-1 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <div className="mt-1 flex items-center justify-between text-xs text-text-muted">
             <span>
               ${spent.toFixed(2)} spent of ${Number(budget).toFixed(2)}
             </span>
-            <span className={spent > budget ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
+            <span className={spent > budget ? 'text-danger font-medium' : ''}>
               {spent > budget
                 ? `$${(spent - budget).toFixed(2)} over`
                 : `$${(budget - spent).toFixed(2)} left`}
@@ -141,9 +141,9 @@ function ProgressBar({ spent, budget }) {
   const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0
   const over = spent > budget
   const near = !over && pct >= 80
-  const color = over ? 'bg-red-500' : near ? 'bg-amber-500' : 'bg-emerald-500'
+  const color = over ? 'bg-danger' : near ? 'bg-warning' : 'bg-success'
   return (
-    <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+    <div className="h-2 rounded-full bg-border overflow-hidden">
       <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
     </div>
   )

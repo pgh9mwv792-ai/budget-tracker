@@ -30,6 +30,17 @@ const Onboarding = lazy(() => import('./components/Onboarding'))
 // Signed-out sample-data explorer: loads only when a visitor opens the demo.
 const DemoMode = lazy(() => import('./components/DemoMode'))
 import * as api from './lib/api'
+import { Delayed } from './components/ui/Skeleton'
+import { useDelayedFlag } from './lib/useDelayedFlag'
+import {
+  DashboardSkeleton,
+  TransactionListSkeleton,
+  BudgetManagerSkeleton,
+  CreditTabSkeleton,
+  MealTrackerSkeleton,
+  GoalTrackerSkeleton,
+  CategoryManagerSkeleton,
+} from './components/Skeletons'
 import { supabase } from './lib/supabaseClient'
 import { merchantKey, matchRules } from './lib/analysis'
 import { perUnitCost } from './lib/receiptMatch'
@@ -68,6 +79,8 @@ function AppShell() {
   // Free vs. pro. Drives which features are gated behind an upgrade card.
   const [entitlements, setEntitlements] = useState({ plan: 'free', status: null, period_end: null })
   const [dataLoading, setDataLoading] = useState(true)
+  // Delay the skeleton by 200ms so a fast initial load never flashes it.
+  const showSkeleton = useDelayedFlag(dataLoading, 200)
   const [onboardDismissed, setOnboardDismissed] = useState(false)
   // One-shot signal: a new user chose "Scan a receipt" in onboarding, so the
   // Transactions tab should scroll to and highlight the receipt scanner.
@@ -225,7 +238,8 @@ function AppShell() {
   if (loading) return <FullScreenMessage text="Loading…" />
   if (!user) return <SignedOut />
   if (needsMfa) return <MfaChallenge />
-  if (dataLoading) return <FullScreenMessage text="Loading your data…" />
+  // While the initial data load runs we no longer blank the whole screen — the
+  // nav and chrome render, and each active tab shows its own skeleton below.
 
   const rulesByKey = new Map(rules.map((r) => [r.merchant_key, r.category_id]))
   const savedMatchCount = matchRules(transactions, rulesByKey).length
@@ -640,6 +654,19 @@ function AppShell() {
     setTransferPairs((prev) => prev.filter((p) => p.id !== pairId))
   }
 
+  // The skeleton that stands in for the active tab — used both as the lazy-chunk
+  // Suspense fallback and as the initial-data-load placeholder.
+  const tabSkeleton =
+    {
+      Dashboard: <DashboardSkeleton />,
+      Transactions: <TransactionListSkeleton />,
+      Budgets: <BudgetManagerSkeleton />,
+      Credit: <CreditTabSkeleton />,
+      Meals: <MealTrackerSkeleton />,
+      Goals: <GoalTrackerSkeleton />,
+      Categories: <CategoryManagerSkeleton />,
+    }[activeTab] ?? <TabSkeleton />
+
   return (
     <div className="min-h-screen">
       <NavBar
@@ -652,7 +679,11 @@ function AppShell() {
       />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6 pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] md:pb-6">
-        <Suspense fallback={<TabSkeleton />}>
+        <Suspense fallback={<Delayed>{tabSkeleton}</Delayed>}>
+        {dataLoading ? (
+          showSkeleton ? tabSkeleton : null
+        ) : (
+        <>
         {activeTab === 'Dashboard' && (
           <Dashboard
             transactions={transactions}
@@ -884,6 +915,8 @@ function AppShell() {
             }}
           />
         )}
+        </>
+        )}
         </Suspense>
       </main>
 
@@ -966,15 +999,15 @@ function SignedOut() {
 }
 
 function FullScreenMessage({ text }) {
-  return <div className="min-h-screen flex items-center justify-center text-slate-500 text-sm">{text}</div>
+  return <div className="min-h-screen flex items-center justify-center text-text-muted text-sm">{text}</div>
 }
 
 // Lightweight placeholder shown while a lazily-loaded tab chunk is fetched.
 function TabSkeleton() {
   return (
     <div className="animate-pulse space-y-4" aria-hidden="true">
-      <div className="h-32 rounded-xl bg-slate-200 dark:bg-slate-800" />
-      <div className="h-48 rounded-xl bg-slate-200 dark:bg-slate-800" />
+      <div className="h-32 rounded-xl bg-border" />
+      <div className="h-48 rounded-xl bg-border" />
     </div>
   )
 }

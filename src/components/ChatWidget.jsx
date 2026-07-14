@@ -325,7 +325,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
       <button
         onClick={() => setOpen(true)}
         aria-label="Open assistant"
-        className="fixed right-4 md:right-5 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-5 z-30 h-14 w-14 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg grid place-items-center text-2xl transition"
+        className="fixed right-4 md:right-5 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-5 z-30 h-14 w-14 rounded-full bg-primary hover:bg-primary-hover text-on-primary shadow-lg grid place-items-center text-2xl transition"
       >
         💬
       </button>
@@ -336,16 +336,16 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
   // Pro feature, and the backend enforces this too — this is just the front door.
   if (!isPro) {
     return (
-      <div className="fixed z-50 flex flex-col bg-white dark:bg-slate-900 shadow-2xl inset-0 w-full h-full md:inset-auto md:bottom-5 md:right-5 md:w-[min(24rem,calc(100vw-2.5rem))] md:h-auto md:rounded-2xl md:border md:border-slate-200 md:dark:border-slate-700">
-        <div className="flex items-center justify-between px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3 border-b border-slate-200 dark:border-slate-800">
-          <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+      <div className="fixed z-50 flex flex-col bg-surface shadow-2xl inset-0 w-full h-full md:inset-auto md:bottom-5 md:right-5 md:w-[min(24rem,calc(100vw-2.5rem))] md:h-auto md:rounded-2xl md:border md:border-border">
+        <div className="flex items-center justify-between px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3 border-b border-border">
+          <span className="font-semibold text-text flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-interactive" />
             Assistant
           </span>
           <button
             onClick={() => setOpen(false)}
             aria-label="Close assistant"
-            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg leading-none"
+            className="text-text-muted hover:text-text text-lg leading-none"
           >
             ✕
           </button>
@@ -362,10 +362,10 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
   }
 
   return (
-    <div className="fixed z-50 flex flex-col bg-white dark:bg-slate-900 shadow-2xl inset-0 w-full h-full md:inset-auto md:bottom-5 md:right-5 md:w-[min(24rem,calc(100vw-2.5rem))] md:h-[min(32rem,calc(100vh-2.5rem))] md:rounded-2xl md:border md:border-slate-200 md:dark:border-slate-700">
-      <div className="flex items-center justify-between px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3 border-b border-slate-200 dark:border-slate-800">
-        <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+    <div className="fixed z-50 flex flex-col bg-surface shadow-2xl inset-0 w-full h-full md:inset-auto md:bottom-5 md:right-5 md:w-[min(24rem,calc(100vw-2.5rem))] md:h-[min(32rem,calc(100vh-2.5rem))] md:rounded-2xl md:border md:border-border">
+      <div className="flex items-center justify-between px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-3 border-b border-border">
+        <span className="font-semibold text-text flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-interactive" />
           Assistant
         </span>
         <div className="flex items-center gap-2">
@@ -382,7 +382,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
           <button
             onClick={() => setOpen(false)}
             aria-label="Close assistant"
-            className="h-11 w-11 grid place-items-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-lg leading-none"
+            className="h-11 w-11 grid place-items-center text-text-muted hover:text-text text-lg leading-none"
           >
             ✕
           </button>
@@ -390,21 +390,21 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
       </div>
 
       {showMemory && (
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 max-h-48 overflow-y-auto">
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+        <div className="px-4 py-3 border-b border-border bg-bg max-h-48 overflow-y-auto">
+          <p className="text-xs text-text-muted mb-2">
             Saved privately in your own database. Only you can see this. Delete anything you don't want kept.
           </p>
           {(context.memories || []).length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Nothing remembered yet.</p>
+            <p className="text-sm text-text-muted">Nothing remembered yet.</p>
           ) : (
             <ul className="space-y-1.5">
               {(context.memories || []).map((m) => (
-                <li key={m.id} className="flex items-start justify-between gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <li key={m.id} className="flex items-start justify-between gap-2 text-sm text-text">
                   <span>{m.content}</span>
                   <button
                     onClick={() => actions.deleteMemory(m.id)}
                     aria-label="Forget this"
-                    className="shrink-0 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                    className="shrink-0 text-text-muted hover:text-danger"
                   >
                     ✕
                   </button>
@@ -417,14 +417,14 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {messages.length === 0 && (
-          <div className="text-sm text-slate-500 dark:text-slate-400 space-y-3">
+          <div className="text-sm text-text-muted space-y-3">
             <p>Hi! I can answer questions about your money and food, and make changes for you. Try:</p>
             <div className="flex flex-col gap-1.5">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
                   onClick={() => send(s)}
-                  className="text-left rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-slate-700 dark:text-slate-200"
+                  className="text-left rounded-lg border border-border px-3 py-1.5 hover:bg-primary-tint transition text-text"
                 >
                   {s}
                 </button>
@@ -438,7 +438,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
             return (
               <div key={i} className="space-y-1">
                 {m.items.map((it, j) => (
-                  <div key={j} className="text-xs text-emerald-700 dark:text-emerald-400 flex items-start gap-1">
+                  <div key={j} className="text-xs text-success flex items-start gap-1">
                     <span>✓</span>
                     <span>{it}</span>
                   </div>
@@ -448,7 +448,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
           }
           if (m.role === 'note') {
             return (
-              <div key={i} className="text-center text-xs text-slate-400 dark:text-slate-500 italic">
+              <div key={i} className="text-center text-xs text-text-muted italic">
                 {m.text}
               </div>
             )
@@ -472,19 +472,19 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
                     }}
                     rows={2}
                     autoFocus
-                    className="w-full rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 resize-none"
+                    className="w-full rounded-xl border border-interactive/50 bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40 resize-none"
                   />
                   <div className="flex justify-end gap-2 mt-1">
                     <button
                       onClick={cancelEdit}
-                      className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 px-2 py-1"
+                      className="text-xs text-text-muted hover:text-text px-2 py-1"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => submitEdit(i)}
                       disabled={!editText.trim()}
-                      className="text-xs rounded-full bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 font-medium disabled:opacity-50"
+                      className="text-xs rounded-full bg-primary hover:bg-primary-hover text-on-primary px-3 py-1 font-medium disabled:opacity-50"
                     >
                       Save &amp; resend
                     </button>
@@ -501,7 +501,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
                   onClick={() => startEdit(i)}
                   title="Edit and resend"
                   aria-label="Edit this message"
-                  className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs shrink-0 mb-1"
+                  className="opacity-0 group-hover:opacity-100 transition text-text-muted hover:text-text text-xs shrink-0 mb-1"
                 >
                   ✎
                 </button>
@@ -514,7 +514,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
                         key={k}
                         src={url}
                         alt="attachment"
-                        className="h-24 w-24 object-cover rounded-lg border border-emerald-300/60 dark:border-emerald-700/60"
+                        className="h-24 w-24 object-cover rounded-lg border border-interactive/40"
                       />
                     ))}
                   </div>
@@ -523,8 +523,8 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
                   <div
                     className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
                       mine
-                        ? 'bg-emerald-600 text-white rounded-br-sm'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-sm'
+                        ? 'bg-primary text-on-primary rounded-br-sm'
+                        : 'bg-bg text-text rounded-bl-sm'
                     }`}
                   >
                     {m.text}
@@ -537,13 +537,13 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
 
         {busy && (
           <div className="flex justify-start">
-            <div className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-2xl rounded-bl-sm px-3 py-2 text-sm">
+            <div className="bg-bg text-text-muted rounded-2xl rounded-bl-sm px-3 py-2 text-sm">
               Thinking…
             </div>
           </div>
         )}
         {error && (
-          <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-sm px-3 py-2">
+          <div className="rounded-lg border border-danger/30 bg-danger/10 text-danger text-sm px-3 py-2">
             {error}
           </div>
         )}
@@ -563,7 +563,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
                   <button
                     key={meal}
                     onClick={() => send(meal.toLowerCase())}
-                    className="rounded-full border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm py-2 font-medium transition"
+                    className="rounded-full border border-border text-text hover:bg-primary-tint text-sm py-2 font-medium transition"
                   >
                     {meal}
                   </button>
@@ -576,13 +576,13 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
               <div className="px-3 pt-2 flex gap-2">
                 <button
                   onClick={() => send('yes')}
-                  className="flex-1 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm py-2 font-medium transition"
+                  className="flex-1 rounded-full bg-primary hover:bg-primary-hover text-on-primary text-sm py-2 font-medium transition"
                 >
                   Yes, log it
                 </button>
                 <button
                   onClick={() => inputRef.current?.focus()}
-                  className="flex-1 rounded-full border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm py-2 font-medium transition"
+                  className="flex-1 rounded-full border border-border text-text hover:bg-primary-tint text-sm py-2 font-medium transition"
                 >
                   No, make changes
                 </button>
@@ -599,13 +599,13 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
               <img
                 src={a.url}
                 alt="pending attachment"
-                className="h-16 w-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
+                className="h-16 w-16 object-cover rounded-lg border border-border"
               />
               <button
                 type="button"
                 onClick={() => removeAttachment(idx)}
                 aria-label="Remove attachment"
-                className="absolute -top-1.5 -right-1.5 h-5 w-5 grid place-items-center rounded-full bg-slate-700 hover:bg-slate-600 text-white text-[10px] leading-none"
+                className="absolute -top-1.5 -right-1.5 h-5 w-5 grid place-items-center rounded-full bg-nav hover:bg-nav/90 text-nav-text text-[10px] leading-none"
               >
                 ✕
               </button>
@@ -619,7 +619,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
           e.preventDefault()
           send(input)
         }}
-        className="p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-3 border-t border-slate-200 dark:border-slate-800 flex gap-2"
+        className="p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-3 border-t border-border flex gap-2"
       >
         <input
           ref={fileRef}
@@ -638,7 +638,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
           disabled={busy}
           title="Attach a photo"
           aria-label="Attach a photo"
-          className="shrink-0 h-11 w-11 grid place-items-center rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50 transition"
+          className="shrink-0 h-11 w-11 grid place-items-center rounded-full text-text-muted hover:text-text disabled:opacity-50 transition"
         >
           📎
         </button>
@@ -648,7 +648,7 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask, do something, or attach a receipt…"
           disabled={busy}
-          className="flex-1 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
+          className="flex-1 rounded-full border border-border bg-surface text-text px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40 disabled:opacity-50"
         />
         {busy ? (
           <button
@@ -656,15 +656,15 @@ export default function ChatWidget({ plan, context, actions, setActiveTab, openW
             onClick={stop}
             title="Stop (Esc)"
             aria-label="Stop generating"
-            className="rounded-full bg-slate-700 hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500 text-white text-sm px-4 font-medium transition grid place-items-center"
+            className="rounded-full bg-nav hover:bg-nav/90 text-nav-text text-sm px-4 font-medium transition grid place-items-center"
           >
-            <span className="inline-block w-3 h-3 rounded-[3px] bg-white" />
+            <span className="inline-block w-3 h-3 rounded-[3px] bg-nav-text" />
           </button>
         ) : (
           <button
             type="submit"
             disabled={!input.trim() && attachments.length === 0}
-            className="rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 font-medium transition disabled:opacity-50"
+            className="rounded-full bg-primary hover:bg-primary-hover text-on-primary text-sm px-4 font-medium transition disabled:opacity-50"
           >
             Send
           </button>

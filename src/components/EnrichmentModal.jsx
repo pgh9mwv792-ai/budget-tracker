@@ -131,46 +131,46 @@ export default function EnrichmentModal({ food, searchTerm, onUpdateFood, onSear
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-md max-h-[92vh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl"
+        className="w-full sm:max-w-md max-h-[92vh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-surface border border-border shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Fill in micronutrients?</h3>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h3 className="text-sm font-semibold text-text">Fill in micronutrients?</h3>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="w-8 h-8 grid place-items-center rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            className="w-8 h-8 grid place-items-center rounded-md text-text-muted hover:text-text hover:bg-primary-tint transition"
           >
             ✕
           </button>
         </div>
 
         <div className="overflow-y-auto p-4 space-y-3">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            <span className="font-medium text-slate-700 dark:text-slate-200">{food.name}</span> lists only the
+          <p className="text-xs text-text-muted">
+            <span className="font-medium text-text">{food.name}</span> lists only the
             nutrients on its label. I can borrow the rest (choline, magnesium, selenium…) from a generic USDA food,
             shown with a “borrowed” marker. Your label’s own numbers stay exactly as they are.
           </p>
 
           {phase === 'loading' && (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Finding a generic equivalent…</p>
+            <p className="text-sm text-text-muted">Finding a generic equivalent…</p>
           )}
 
-          {phase === 'error' && <p className="text-sm text-amber-600 dark:text-amber-400">{error}</p>}
+          {phase === 'error' && <p className="text-sm text-warning">{error}</p>}
 
           {phase === 'empty' && (
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-text-muted">
               I couldn’t auto-match a generic that adds anything new. You can pick one yourself below, or skip.
             </p>
           )}
 
           {phase === 'preview' && preview && (
             <div className="space-y-2">
-              <p className="text-xs text-slate-600 dark:text-slate-300">
+              <p className="text-xs text-text-muted">
                 From <span className="font-medium">{preview.name}</span>, scaled to this food’s{' '}
                 {preview.servingGrams} g serving, I’d add {preview.added.length} nutrient
                 {preview.added.length === 1 ? '' : 's'}:
@@ -179,7 +179,7 @@ export default function EnrichmentModal({ food, searchTerm, onUpdateFood, onSear
                 {preview.added.map((a) => (
                   <span
                     key={a.id}
-                    className="rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[11px] px-2 py-0.5"
+                    className="rounded-full bg-success/10 text-success text-[11px] px-2 py-0.5"
                   >
                     {a.name} {Math.round(a.amount * 100) / 100}
                     {a.unit}
@@ -191,7 +191,7 @@ export default function EnrichmentModal({ food, searchTerm, onUpdateFood, onSear
 
           {(phase === 'search' || phase === 'empty' || phase === 'preview') && (
             <details className="group" open={phase === 'search' || phase === 'empty'}>
-              <summary className="cursor-pointer text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+              <summary className="cursor-pointer text-xs text-text-muted hover:text-text">
                 {phase === 'preview' ? 'Pick a different food' : 'Search a generic food'}
               </summary>
               <form onSubmit={runSearch} className="mt-2 flex gap-2">
@@ -199,18 +199,18 @@ export default function EnrichmentModal({ food, searchTerm, onUpdateFood, onSear
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="e.g. “egg, whole”"
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                  className="flex-1 rounded-lg border border-border bg-surface text-text px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-interactive/40"
                 />
                 <button
                   type="submit"
                   disabled={searching || query.trim().length < 2}
-                  className="rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 font-medium disabled:opacity-50"
+                  className="rounded-lg bg-nav hover:bg-nav/90 text-nav-text text-xs px-3 font-medium disabled:opacity-50"
                 >
                   {searching ? '…' : 'Search'}
                 </button>
               </form>
               {results && results.length === 0 && (
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">No matches — try different words.</p>
+                <p className="text-xs text-text-muted mt-2">No matches — try different words.</p>
               )}
               {results && results.length > 0 && (
                 <ul className="mt-2 space-y-1">
@@ -219,7 +219,7 @@ export default function EnrichmentModal({ food, searchTerm, onUpdateFood, onSear
                       <button
                         onClick={() => choose(r)}
                         disabled={busy}
-                        className="w-full text-left rounded-lg px-2 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                        className="w-full text-left rounded-lg px-2 py-1 text-xs text-text hover:bg-primary-tint disabled:opacity-50"
                       >
                         {r.name}
                         {r.brand ? ` (${r.brand})` : ''}
@@ -229,18 +229,18 @@ export default function EnrichmentModal({ food, searchTerm, onUpdateFood, onSear
                 </ul>
               )}
               {error && phase !== 'error' && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{error}</p>
+                <p className="text-xs text-warning mt-2">{error}</p>
               )}
             </details>
           )}
         </div>
 
-        <div className="flex gap-2 px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex gap-2 px-4 py-3 border-t border-border">
           {phase === 'preview' && (
             <button
               onClick={apply}
               disabled={busy}
-              className="flex-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium py-2 transition disabled:opacity-50"
+              className="flex-1 rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium py-2 transition disabled:opacity-50"
             >
               {busy ? 'Adding…' : `Add these ${preview ? preview.added.length : ''}`.trim()}
             </button>
@@ -248,7 +248,7 @@ export default function EnrichmentModal({ food, searchTerm, onUpdateFood, onSear
           <button
             onClick={skip}
             disabled={busy}
-            className="rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+            className="rounded-lg border border-border text-text-muted text-sm font-medium px-4 py-2 hover:bg-primary-tint transition disabled:opacity-50"
           >
             Skip for now
           </button>

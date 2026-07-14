@@ -81,11 +81,11 @@ export default function Onboarding({ onFinish, onNavigate, onLoadSample, onScanR
   const current = steps[step]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-6 sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-nav/50 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl bg-surface border border-border shadow-xl p-6 sm:p-8">
         <div className="text-4xl mb-3" aria-hidden>{current.emoji}</div>
-        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{current.title}</h2>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{current.body}</p>
+        <h2 className="text-xl font-semibold text-text">{current.title}</h2>
+        <p className="mt-2 text-sm text-text-muted leading-relaxed">{current.body}</p>
 
         <div className="mt-6">{current.actions}</div>
 
@@ -95,14 +95,14 @@ export default function Onboarding({ onFinish, onNavigate, onLoadSample, onScanR
               <span
                 key={i}
                 className={`w-2 h-2 rounded-full transition ${
-                  i === step ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'
+                  i === step ? 'bg-primary' : 'bg-border'
                 }`}
               />
             ))}
           </div>
           <button
             onClick={onFinish}
-            className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+            className="text-xs text-text-muted hover:text-text"
           >
             Skip for now
           </button>
@@ -116,7 +116,7 @@ function PrimaryButton({ children, ...props }) {
   return (
     <button
       {...props}
-      className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-medium py-2.5 transition"
+      className="w-full rounded-lg bg-primary hover:bg-primary-hover disabled:opacity-60 text-on-primary text-sm font-medium py-2.5 transition"
     >
       {children}
     </button>
@@ -127,7 +127,7 @@ function SecondaryButton({ children, ...props }) {
   return (
     <button
       {...props}
-      className="w-full rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 text-slate-700 dark:text-slate-200 text-sm font-medium py-2.5 transition"
+      className="w-full rounded-lg border border-border hover:bg-primary-tint disabled:opacity-60 text-text text-sm font-medium py-2.5 transition"
     >
       {children}
     </button>

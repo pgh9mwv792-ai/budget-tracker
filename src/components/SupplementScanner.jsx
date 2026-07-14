@@ -144,8 +144,8 @@ export default function SupplementScanner({ onSave }) {
       {status !== 'review' && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Scan a supplement label</h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <h4 className="text-sm font-semibold text-text">Scan a supplement label</h4>
+            <p className="text-xs text-text-muted">
               Photograph the Supplement Facts panel — I’ll read the serving size and ingredients for you to check.
             </p>
           </div>
@@ -153,14 +153,14 @@ export default function SupplementScanner({ onSave }) {
             <button
               onClick={openCamera}
               disabled={status === 'reading'}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition disabled:opacity-60"
+              className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium px-4 py-2 transition disabled:opacity-60"
             >
               {status === 'reading' ? 'Reading…' : '📷 Take photo'}
             </button>
             <button
               onClick={openUpload}
               disabled={status === 'reading'}
-              className="rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-60"
+              className="rounded-lg border border-border text-text text-sm font-medium px-4 py-2 hover:bg-bg transition disabled:opacity-60"
             >
               📎 Upload
             </button>
@@ -169,12 +169,12 @@ export default function SupplementScanner({ onSave }) {
       )}
 
       {status === 'reading' && (
-        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">Reading the label — this takes a few seconds…</p>
+        <p className="mt-3 text-sm text-text-muted">Reading the label — this takes a few seconds…</p>
       )}
 
       {status === 'review' && draft && (
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Check the label</h4>
+          <h4 className="text-sm font-semibold text-text">Check the label</h4>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Product">
@@ -206,28 +206,28 @@ export default function SupplementScanner({ onSave }) {
           )}
 
           {detected.length > 0 && (
-            <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30 px-3 py-2.5">
-              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 mb-1.5">Will be logged</p>
+            <div className="rounded-xl border border-success/30 bg-success/10 px-3 py-2.5">
+              <p className="text-xs font-semibold text-success mb-1.5">Will be logged</p>
               <ul className="space-y-1">
                 {detected.map((d, i) => (
                   <li key={i} className="flex items-center gap-2 text-sm">
-                    <span className="tabular-nums font-semibold text-slate-800 dark:text-slate-100 shrink-0 w-16 text-right">
+                    <span className="tabular-nums font-semibold text-text shrink-0 w-16 text-right">
                       {d.amount === '' ? '—' : d.amount} {d.unit}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">
-                      {d.name || <span className="italic text-amber-600 dark:text-amber-400">add a name below →</span>}
+                    <span className="min-w-0 flex-1 truncate text-text-muted">
+                      {d.name || <span className="italic text-warning">add a name below →</span>}
                     </span>
                     {d.mapped ? (
-                      <span className="shrink-0 rounded-full bg-emerald-600 text-white text-xs font-medium px-2 py-0.5">{d.mapped}</span>
+                      <span className="shrink-0 rounded-full bg-success text-on-primary text-xs font-medium px-2 py-0.5">{d.mapped}</span>
                     ) : (
-                      <span className="shrink-0 rounded-full bg-amber-200 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 text-xs font-medium px-2 py-0.5">
+                      <span className="shrink-0 rounded-full bg-warning/20 text-warning text-xs font-medium px-2 py-0.5">
                         not counted
                       </span>
                     )}
                   </li>
                 ))}
               </ul>
-              <p className="mt-1.5 text-[11px] text-emerald-700/80 dark:text-emerald-400/70">
+              <p className="mt-1.5 text-[11px] text-success">
                 Green pills count toward that micronutrient on the Meals tab. Fix any “not counted” row below.
               </p>
             </div>
@@ -235,13 +235,13 @@ export default function SupplementScanner({ onSave }) {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Ingredients (edit if needed)</span>
-              <button onClick={addIngredient} className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline">
+              <span className="text-xs font-medium text-text-muted">Ingredients (edit if needed)</span>
+              <button onClick={addIngredient} className="text-xs text-interactive hover:underline">
                 + Add row
               </button>
             </div>
             {draft.ingredients.length === 0 && (
-              <p className="text-xs text-slate-400 dark:text-slate-500">No ingredients read — add rows by hand if needed.</p>
+              <p className="text-xs text-text-muted">No ingredients read — add rows by hand if needed.</p>
             )}
             <div className="space-y-2">
               {draft.ingredients.map((ing, i) => (
@@ -272,24 +272,24 @@ export default function SupplementScanner({ onSave }) {
                   <button
                     onClick={() => removeIngredient(i)}
                     title="Remove"
-                    className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs shrink-0"
+                    className="text-danger hover:text-danger text-xs shrink-0"
                   >
                     ✕
                   </button>
                 </div>
               ))}
             </div>
-            <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+            <p className="mt-1.5 text-xs text-text-muted">
               IU units (vitamins A, D, E) keep their label value; a standard metric conversion is stored where one exists.
             </p>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-text-muted">
             <input
               type="checkbox"
               checked={addToStack}
               onChange={(e) => setAddToStack(e.target.checked)}
-              className="rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500"
+              className="rounded border-border text-primary focus:ring-interactive"
             />
             Add to my daily stack (one-tap “Log my stack” on the Meals tab)
           </label>
@@ -298,13 +298,13 @@ export default function SupplementScanner({ onSave }) {
             <button
               onClick={save}
               disabled={status === 'saving'}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 transition disabled:opacity-60"
+              className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium px-4 py-2 transition disabled:opacity-60"
             >
               {status === 'saving' ? 'Saving…' : 'Save to library'}
             </button>
             <button
               onClick={cancel}
-              className="rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              className="rounded-lg border border-border text-text-muted text-sm font-medium px-4 py-2 hover:bg-bg transition"
             >
               Cancel
             </button>
@@ -312,9 +312,9 @@ export default function SupplementScanner({ onSave }) {
         </div>
       )}
 
-      {savedNote && <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-400">✓ {savedNote}</p>}
+      {savedNote && <p className="mt-3 text-sm text-success">✓ {savedNote}</p>}
       {error && (
-        <div className="mt-3 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-sm px-3 py-2">
+        <div className="mt-3 rounded-lg border border-danger/30 bg-danger/10 text-danger text-sm px-3 py-2">
           {error}
         </div>
       )}
@@ -323,12 +323,12 @@ export default function SupplementScanner({ onSave }) {
 }
 
 const inputCls =
-  'w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500'
+  'w-full rounded-md border border-border bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-interactive'
 
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{label}</span>
+      <span className="block text-xs font-medium text-text-muted mb-1">{label}</span>
       {children}
     </label>
   )

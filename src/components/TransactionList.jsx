@@ -153,7 +153,7 @@ export default function TransactionList({
           the bottom sheet. */}
       <button
         onClick={() => setAddOpen(true)}
-        className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-medium text-sm min-h-12 flex items-center justify-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+        className="w-full rounded-xl border border-dashed border-border bg-surface text-text font-medium text-sm min-h-12 flex items-center justify-center gap-1.5 hover:bg-bg transition"
       >
         <span className="text-lg leading-none">+</span> Add transaction
       </button>
@@ -165,12 +165,12 @@ export default function TransactionList({
           placeholder="Search transactions…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:flex-1 sm:w-auto sm:min-w-40 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="w-full sm:flex-1 sm:w-auto sm:min-w-40 rounded-md border border-border bg-surface text-text px-3 py-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
         />
         <select
           value={kindFilter}
           onChange={(e) => setKindFilter(e.target.value)}
-          className="flex-1 sm:flex-none rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="flex-1 sm:flex-none rounded-md border border-border bg-surface text-text px-2 py-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
         >
           <option value="all">All types</option>
           <option value="income">Income</option>
@@ -180,7 +180,7 @@ export default function TransactionList({
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="flex-1 sm:flex-none rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+          className="flex-1 sm:flex-none rounded-md border border-border bg-surface text-text px-2 py-2 sm:py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
         >
           <option value="all">All categories</option>
           <option value="uncategorized">Uncategorized</option>
@@ -194,22 +194,22 @@ export default function TransactionList({
           onClick={() => downloadTransactionsCsv(csvRows)}
           disabled={csvRows.length === 0}
           title="Download the currently shown transactions as a CSV file"
-          className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm px-3 py-2 sm:py-1.5 disabled:opacity-50"
+          className="rounded-md border border-border text-text hover:bg-bg transition text-sm px-3 py-2 sm:py-1.5 disabled:opacity-50"
         >
           Export CSV
         </button>
       </div>
 
       {/* Group-by lens toggle, above the feed. */}
-      <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-1 w-fit">
+      <div className="flex items-center gap-1 rounded-lg bg-border p-1 w-fit">
         {LENSES.map((l) => (
           <button
             key={l.id}
             onClick={() => setLens(l.id)}
             className={`px-3 py-1 rounded-md text-sm font-medium transition ${
               lens === l.id
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'bg-surface text-text shadow-sm'
+                : 'text-text-muted hover:text-text'
             }`}
           >
             {l.label}
@@ -218,15 +218,15 @@ export default function TransactionList({
       </div>
 
       {!hasAnything && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <p className="p-4 text-sm text-slate-500 dark:text-slate-400">No transactions yet.</p>
+        <div className="bg-surface rounded-xl border border-border shadow-sm">
+          <p className="p-4 text-sm text-text-muted">No transactions yet.</p>
         </div>
       )}
       {hasAnything && filtered.length === 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <p className="p-4 text-sm text-slate-500 dark:text-slate-400">
+        <div className="bg-surface rounded-xl border border-border shadow-sm">
+          <p className="p-4 text-sm text-text-muted">
             No transactions match your filters.{' '}
-            <button onClick={clearFilters} className="text-emerald-600 dark:text-emerald-400 hover:underline">
+            <button onClick={clearFilters} className="text-interactive hover:underline">
               Clear filters
             </button>
           </p>
@@ -237,10 +237,10 @@ export default function TransactionList({
         {groups.map((g) => (
           <div key={g.key} className="space-y-1.5">
             <div className="flex items-baseline justify-between px-1">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{g.label}</h3>
-              <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{g.right}</span>
+              <h3 className="text-sm font-semibold text-text">{g.label}</h3>
+              <span className="text-xs tabular-nums text-text-muted">{g.right}</span>
             </div>
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="bg-surface rounded-xl border border-border shadow-sm divide-y divide-border">
               {g.items.map((it) =>
                 it.type === 'pair' ? (
                   <PairRow
@@ -282,8 +282,8 @@ export default function TransactionList({
         {detailTx && (
           <div className="space-y-4">
             {txnDescriptorText(detailTx) && (
-              <p className="text-xs text-slate-400 dark:text-slate-500 break-words">
-                <span className="font-medium text-slate-500 dark:text-slate-400">Bank descriptor: </span>
+              <p className="text-xs text-text-muted break-words">
+                <span className="font-medium text-text-muted">Bank descriptor: </span>
                 {txnDescriptorText(detailTx)}
               </p>
             )}
@@ -303,7 +303,7 @@ export default function TransactionList({
                 await onDelete(detailTx.id)
                 setDetailId(null)
               }}
-              className="w-full rounded-md border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 text-sm font-medium min-h-11 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+              className="w-full rounded-md border border-danger/30 text-danger text-sm font-medium min-h-11 hover:bg-danger/10 transition"
             >
               Delete transaction
             </button>
@@ -427,32 +427,32 @@ function itemAmount(it) {
 function FeedRow({ t, hasReceipt, onOpen }) {
   const isTransfer = t.kind === 'transfer'
   const amountCls = isTransfer
-    ? 'text-slate-500 dark:text-slate-400'
+    ? 'text-text-muted'
     : t.kind === 'income'
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : 'text-red-600 dark:text-red-400'
+      ? 'text-success'
+      : 'text-danger'
   const sign = t.kind === 'income' ? '+' : t.kind === 'transfer' ? '⇄ ' : '−'
   return (
     <button
       onClick={onOpen}
-      className="w-full text-left px-4 py-3 min-h-14 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
+      className="w-full text-left px-4 py-3 min-h-14 flex items-center justify-between gap-3 hover:bg-bg transition"
     >
       <div className="min-w-0 flex items-center gap-2">
-        <span className={`text-sm truncate ${isTransfer ? 'text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-slate-100'}`}>
+        <span className={`text-sm truncate ${isTransfer ? 'text-text-muted' : 'text-text'}`}>
           {cleanName(t)}
         </span>
         {t.category?.name ? (
-          <span className="shrink-0 text-[11px] rounded-full px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+          <span className="shrink-0 text-[11px] rounded-full px-2 py-0.5 bg-border text-text-muted">
             {t.category.name}
           </span>
         ) : isTransfer ? null : (
-          <span className="shrink-0 text-[11px] rounded-full px-2 py-0.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">
+          <span className="shrink-0 text-[11px] rounded-full px-2 py-0.5 bg-warning/10 text-warning">
             Uncategorized
           </span>
         )}
         {hasReceipt && <span className="shrink-0 text-xs" title="Has itemized receipt">🧾</span>}
         {t.source === 'plaid' && (
-          <span className="shrink-0 text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded px-1.5 py-0.5">plaid</span>
+          <span className="shrink-0 text-[10px] bg-border text-text-muted rounded px-1.5 py-0.5">plaid</span>
         )}
       </div>
       <span className={`shrink-0 text-sm font-semibold tabular-nums ${amountCls}`}>
@@ -469,35 +469,35 @@ function PairRow({ item, expanded, onToggle, onUnpair }) {
     <div>
       <button
         onClick={onToggle}
-        className="w-full text-left px-4 py-3 min-h-14 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
+        className="w-full text-left px-4 py-3 min-h-14 flex items-center justify-between gap-3 hover:bg-bg transition"
       >
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
+          <div className="flex items-center gap-1.5 text-sm text-text-muted">
             <span aria-hidden>⇄</span>
             <span className="truncate">{item.label}</span>
-            <span className={`text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`}>›</span>
+            <span className={`text-text-muted transition-transform ${expanded ? 'rotate-90' : ''}`}>›</span>
           </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+          <p className="text-xs text-text-muted truncate">
             {item.fromLabel} → {item.toLabel}
           </p>
         </div>
-        <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-500 dark:text-slate-400">
+        <span className="shrink-0 text-sm font-semibold tabular-nums text-text-muted">
           ${item.amount.toFixed(2)}
         </span>
       </button>
       {expanded && (
-        <div className="px-4 pb-3 pt-1 space-y-2 bg-slate-50/60 dark:bg-slate-800/30">
+        <div className="px-4 pb-3 pt-1 space-y-2 bg-bg">
           {[item.from, item.to].map((leg, i) => (
             <div key={leg.id} className="flex items-center justify-between gap-3 text-xs">
-              <span className="text-slate-500 dark:text-slate-400">
+              <span className="text-text-muted">
                 {i === 0 ? 'From' : 'To'} · {leg.date}
               </span>
-              <span className="tabular-nums text-slate-600 dark:text-slate-300">${Number(leg.amount).toFixed(2)}</span>
+              <span className="tabular-nums text-text-muted">${Number(leg.amount).toFixed(2)}</span>
             </div>
           ))}
           <button
             onClick={() => onUnpair?.(item.pair.id)}
-            className="text-xs text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:underline"
+            className="text-xs text-text-muted hover:text-danger hover:underline"
           >
             Unpair — show as two separate transactions
           </button>
@@ -513,22 +513,22 @@ function ReceiptDetail({ receipt }) {
   const items = receipt.items ?? []
   return (
     <div className="px-1 pb-1 pt-1">
-      <div className="rounded-lg border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+      <div className="rounded-lg border border-border divide-y divide-border text-sm">
         {items.length === 0 && (
-          <p className="px-3 py-2 text-slate-400 dark:text-slate-500">No line items recorded.</p>
+          <p className="px-3 py-2 text-text-muted">No line items recorded.</p>
         )}
         {items.map((it) => (
           <div key={it.id} className="flex items-center gap-3 px-3 py-1.5">
-            <span className="flex-1 min-w-0 truncate text-slate-600 dark:text-slate-300">
+            <span className="flex-1 min-w-0 truncate text-text-muted">
               {it.raw_name}
-              {it.food?.name && <span className="text-emerald-600 dark:text-emerald-400"> → {it.food.name}</span>}
+              {it.food?.name && <span className="text-interactive"> → {it.food.name}</span>}
             </span>
             {it.quantity != null && (
-              <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">
+              <span className="text-xs text-text-muted shrink-0">
                 {it.quantity}{it.unit ? ` ${it.unit}` : ''}
               </span>
             )}
-            <span className={`shrink-0 tabular-nums ${Number(it.price) < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+            <span className={`shrink-0 tabular-nums ${Number(it.price) < 0 ? 'text-success' : 'text-text-muted'}`}>
               {it.price == null ? '—' : `$${Number(it.price).toFixed(2)}`}
             </span>
           </div>

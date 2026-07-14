@@ -49,23 +49,23 @@ export default function MicronutrientSection({
   const anyLogged = logs.length > 0
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+    <div className="bg-surface rounded-xl border border-border shadow-sm">
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-2 px-4 py-2.5 text-left"
         aria-expanded={open}
       >
-        <span className={`text-slate-400 dark:text-slate-500 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
+        <span className={`text-text-muted transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
           ›
         </span>
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Micronutrients</span>
-        <span className="text-xs text-slate-400 dark:text-slate-500">
+        <span className="text-sm font-semibold text-text">Micronutrients</span>
+        <span className="text-xs text-text-muted">
           {anyLogged ? 'vitamins, minerals, fats & sugars today' : 'no micros logged yet'}
         </span>
       </button>
 
       {open && (
-        <div className="border-t border-slate-100 dark:border-slate-800 p-4 space-y-3">
+        <div className="border-t border-border p-4 space-y-3">
           {editing ? (
             <MicroTargetsEditor
               targets={targets}
@@ -82,13 +82,13 @@ export default function MicronutrientSection({
                   <MicroRow key={r.id} row={r} logs={logs} foodsById={foodsById} onFix={onFix} />
                 ))}
               </div>
-              <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3">
-                <p className="text-xs text-slate-400 dark:text-slate-500">
+              <div className="flex items-center justify-between border-t border-border pt-3">
+                <p className="text-xs text-text-muted">
                   “~” means few of today’s foods report that nutrient, so the total is likely an undercount.
                 </p>
                 <button
                   onClick={() => setEditing(true)}
-                  className="shrink-0 ml-3 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                  className="shrink-0 ml-3 text-xs text-text-muted hover:text-text"
                 >
                   Edit targets
                 </button>
@@ -112,14 +112,15 @@ export default function MicronutrientSection({
 
 // One nutrient's bar. Two flavors:
 //   • target nutrients (vitamins/minerals/fiber): bar fills toward the RDA,
-//     turns emerald at 100%, amber past the tolerable upper limit.
+//     turns success at 100%, warning past the tolerable upper limit.
 //   • limit nutrients (saturated fat, cholesterol, added sugars): bar fills
-//     toward the cap and turns amber once over it — reaching it isn't a "win",
-//     so it never goes emerald.
+//     toward the cap and turns warning once over it — reaching it isn't a "win",
+//     so it never goes success.
 // A "~" prefix flags low coverage; a nutrient with no reference just shows its
 // running total (e.g. total sugars).
 function MicroRow({ row, logs, foodsById, onFix }) {
   const { id, name, unit, amount, upperLimit, lowCoverage, overUL, kind, informational } = row
+  const { omegaRole, subtitle, reference, groupNote } = row
   const [open, setOpen] = useState(false)
   const shown = formatAmount(amount, unit)
   const isLimit = kind === 'limit'
@@ -132,7 +133,7 @@ function MicroRow({ row, logs, foodsById, onFix }) {
 
   const chevron = (
     <span
-      className={`shrink-0 text-slate-300 dark:text-slate-600 transition-transform ${open ? 'rotate-90' : ''}`}
+      className={`shrink-0 text-text-muted transition-transform ${open ? 'rotate-90' : ''}`}
       aria-hidden
     >
       ›
@@ -143,11 +144,11 @@ function MicroRow({ row, logs, foodsById, onFix }) {
   // they show just the running amount — no denominator, percent, or bar.
   const header = informational ? (
     <div className="flex items-baseline justify-between gap-2 text-sm">
-      <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+      <span className="flex items-center gap-1.5 text-text-muted">
         {chevron}
         {name}
       </span>
-      <span className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">
+      <span className="tabular-nums font-semibold text-text">
         {lowCoverage && amount > 0 ? '~' : ''}
         {shown} {unit}
       </span>
@@ -162,7 +163,7 @@ function MicroRow({ row, logs, foodsById, onFix }) {
   )
 
   return (
-    <div>
+    <div className={omegaRole === 'secondary' ? 'ml-4 pl-2 border-l border-border' : ''}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -171,8 +172,15 @@ function MicroRow({ row, logs, foodsById, onFix }) {
       >
         {header}
       </button>
+      {/* Omega-3 form hints: EPA+DHA "preformed", ALA "converts poorly". */}
+      {subtitle && (
+        <p className="mt-0.5 text-[11px] text-text-muted">{subtitle}</p>
+      )}
+      {reference && (
+        <p className="text-[11px] text-text-muted">{reference}</p>
+      )}
       {!informational && overUL && (
-        <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
+        <p className="mt-0.5 text-[11px] text-warning">
           Over the {isLimit ? 'recommended limit' : 'safe upper limit'} ({formatAmount(upperLimit, unit)} {unit}).
         </p>
       )}
@@ -184,6 +192,9 @@ function MicroRow({ row, logs, foodsById, onFix }) {
           format={(n) => formatAmount(n, unit)}
           onFix={lowCoverage ? onFix : undefined}
         />
+      )}
+      {groupNote && (
+        <p className="mt-1.5 text-[11px] italic text-text-muted">{groupNote}</p>
       )}
     </div>
   )
@@ -198,32 +209,32 @@ function BarHeader({ row, shown, isLimit, chevron }) {
   const pct = scale != null && scale > 0 ? (amount / scale) * 100 : 0
   const barPct = scale != null ? Math.min(100, pct) : amount > 0 ? 100 : 0
   const barColor = overUL
-    ? 'bg-amber-500'
+    ? 'bg-warning'
     : !isLimit && target != null && pct >= 100
-      ? 'bg-emerald-500'
-      : 'bg-sky-500'
+      ? 'bg-success'
+      : 'bg-interactive'
 
   return (
     <>
       <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+        <span className="flex items-center gap-1.5 text-text-muted">
           {chevron}
           {name}
         </span>
-        <span className="text-slate-500 dark:text-slate-400 tabular-nums">
-          <span className="font-semibold text-slate-900 dark:text-slate-100">
+        <span className="text-text-muted tabular-nums">
+          <span className="font-semibold text-text">
             {lowCoverage && amount > 0 ? '~' : ''}
             {shown}
           </span>
           {scale != null ? ` / ${formatAmount(scale, unit)} ${unit}${isLimit ? ' max' : ''}` : ` ${unit}`}
           {scale != null && (
-            <span className={`ml-1 ${overUL ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>
+            <span className={`ml-1 ${overUL ? 'text-warning' : 'text-text-muted'}`}>
               {Math.round(pct)}%
             </span>
           )}
         </span>
       </div>
-      <div className="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+      <div className="mt-1 h-2 rounded-full bg-border overflow-hidden">
         <div className={`h-full ${barColor} transition-all`} style={{ width: `${barPct}%` }} />
       </div>
     </>
@@ -291,12 +302,12 @@ function MicroTargetsEditor({ targets, onCancel, onSave }) {
   }
 
   const field =
-    'w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
+    'w-full rounded-md border border-border bg-surface text-text px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-interactive/40'
 
   return (
     <div className="space-y-3">
       <div>
-        <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+        <span className="block text-xs font-medium text-text-muted mb-1">
           Reference cohort (sets default RDAs)
         </span>
         <div className="flex gap-2">
@@ -311,8 +322,8 @@ function MicroTargetsEditor({ targets, onCancel, onSave }) {
               onClick={() => setSex(opt.key)}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
                 sex === opt.key
-                  ? 'bg-slate-900 dark:bg-emerald-600 text-white'
-                  : 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  ? 'bg-primary text-on-primary'
+                  : 'border border-border text-text-muted hover:bg-bg'
               }`}
             >
               {opt.label}
@@ -322,9 +333,9 @@ function MicroTargetsEditor({ targets, onCancel, onSave }) {
       </div>
 
       <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-2 gap-y-1.5">
-        <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Nutrient</span>
-        <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 text-right">Target</span>
-        <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 text-right">Max (UL)</span>
+        <span className="text-[10px] uppercase tracking-wide text-text-muted">Nutrient</span>
+        <span className="text-[10px] uppercase tracking-wide text-text-muted text-right">Target</span>
+        <span className="text-[10px] uppercase tracking-wide text-text-muted text-right">Max (UL)</span>
         <span />
         {NUTRIENTS.map((n) => (
           <MicroTargetFieldRow
@@ -344,7 +355,7 @@ function MicroTargetsEditor({ targets, onCancel, onSave }) {
         <button
           type="button"
           onClick={resetAll}
-          className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          className="text-xs text-text-muted hover:text-text"
         >
           Reset all to defaults
         </button>
@@ -352,7 +363,7 @@ function MicroTargetsEditor({ targets, onCancel, onSave }) {
           <button
             type="button"
             onClick={onCancel}
-            className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 px-3 py-1.5"
+            className="text-xs text-text-muted hover:text-text px-3 py-1.5"
           >
             Cancel
           </button>
@@ -360,7 +371,7 @@ function MicroTargetsEditor({ targets, onCancel, onSave }) {
             type="button"
             onClick={save}
             disabled={saving}
-            className="text-xs rounded-full bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 font-medium transition disabled:opacity-50"
+            className="text-xs rounded-full bg-primary hover:bg-primary-hover text-on-primary px-4 py-1.5 font-medium transition disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save targets'}
           </button>
@@ -374,8 +385,8 @@ function MicroTargetFieldRow({ nutrient, values, def, onTarget, onUpper, onReset
   const customized = values.target.trim() !== '' || values.upper_limit.trim() !== ''
   return (
     <>
-      <span className="text-xs text-slate-600 dark:text-slate-300 truncate" title={nutrient.name}>
-        {nutrient.name} <span className="text-slate-400 dark:text-slate-500">({nutrient.unit})</span>
+      <span className="text-xs text-text-muted truncate" title={nutrient.name}>
+        {nutrient.name} <span className="text-text-muted">({nutrient.unit})</span>
       </span>
       <input
         type="number"
@@ -400,7 +411,7 @@ function MicroTargetFieldRow({ nutrient, values, def, onTarget, onUpper, onReset
         onClick={onReset}
         disabled={!customized}
         title="Reset to default"
-        className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-30 px-1"
+        className="text-xs text-text-muted hover:text-text disabled:opacity-30 px-1"
       >
         ↺
       </button>

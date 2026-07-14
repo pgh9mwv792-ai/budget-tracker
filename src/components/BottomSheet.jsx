@@ -28,16 +28,16 @@ export default function BottomSheet({ open, onClose, title, children }) {
       <button
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-nav/50 backdrop-blur-sm"
       />
-      <div className="relative w-full max-h-[90vh] flex flex-col rounded-t-2xl bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xl animate-[sheet-up_180ms_ease-out]">
-        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-slate-100 dark:border-slate-800">
-          <div className="mx-auto sm:mx-0 -mt-1 mb-1 h-1 w-10 rounded-full bg-slate-300 dark:bg-slate-700 sm:hidden absolute left-1/2 -translate-x-1/2 top-1.5" />
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
+      <div className="relative w-full max-h-[90vh] flex flex-col rounded-t-2xl bg-surface border-t border-border shadow-2xl animate-[sheet-up_180ms_ease-out]">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-border">
+          <div className="mx-auto sm:mx-0 -mt-1 mb-1 h-1 w-10 rounded-full bg-border sm:hidden absolute left-1/2 -translate-x-1/2 top-1.5" />
+          <h2 className="text-base font-semibold text-text">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="h-11 w-11 -mr-2 grid place-items-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xl leading-none"
+            className="h-11 w-11 -mr-2 grid place-items-center text-text-muted hover:text-text text-xl leading-none"
           >
             ✕
           </button>

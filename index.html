@@ -5,6 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
+    <!-- Apply the saved theme before React mounts, so there's no white flash on
+         load in dark mode. Mirrors ThemeContext: 'theme' is 'light' | 'dark' |
+         'system' (or unset). Must stay in sync with getInitialMode() there. -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem('theme')
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+          var dark = mode === 'dark' || ((mode === 'system' || !mode) && prefersDark)
+          document.documentElement.classList.toggle('dark', dark)
+        } catch (e) {
+          /* localStorage blocked (e.g. private mode) — default to light. */
+        }
+      })()
+    </script>
+
     <title>Budget Tracker — macro tracking that knows what your food costs</title>
     <meta
       name="description"

@@ -39,10 +39,10 @@ export default function MfaChallenge() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
-      <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-6">
-        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">Two-factor authentication</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
+    <div className="min-h-screen flex items-center justify-center bg-bg px-4">
+      <div className="w-full max-w-sm bg-surface rounded-xl border border-border shadow-sm p-6">
+        <h1 className="text-lg font-semibold text-text mb-1">Two-factor authentication</h1>
+        <p className="text-sm text-text-muted mb-5">
           Enter the 6-digit code from your authenticator app to continue.
         </p>
 
@@ -54,22 +54,22 @@ export default function MfaChallenge() {
             placeholder="123456"
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-md border border-border bg-surface text-text px-3 py-2 text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-interactive"
           />
           <button
             type="submit"
             disabled={busy || code.length < 6}
-            className="w-full rounded-md bg-slate-900 dark:bg-emerald-600 text-white py-2 text-sm font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+            className="w-full rounded-md bg-primary text-on-primary py-2 text-sm font-medium hover:bg-primary-hover transition disabled:opacity-50"
           >
             {busy ? 'Verifying…' : 'Verify'}
           </button>
         </form>
 
-        {error && <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="mt-4 text-sm text-danger">{error}</p>}
 
         <button
           onClick={signOut}
-          className="mt-5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+          className="mt-5 text-sm text-text-muted hover:text-text"
         >
           Sign out
         </button>

@@ -25,39 +25,39 @@ export default function Subscriptions({ transactions, overrides = [], onSetOverr
     return (
       <button
         onClick={() => setExpanded(true)}
-        className="w-full flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
+        className="w-full flex items-center justify-between gap-3 rounded-xl border border-border bg-surface shadow-sm px-4 py-3 text-left hover:bg-bg transition"
       >
-        <span className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+        <span className="flex items-center gap-2 text-sm text-text">
+          <span className="inline-block w-2 h-2 rounded-full bg-interactive" />
           Recurring:{' '}
-          <b className="text-slate-900 dark:text-slate-100">{money(burn.monthly)}/mo</b>
-          <span className="text-slate-400 dark:text-slate-500">· {burn.count} charges</span>
+          <b className="text-text">{money(burn.monthly)}/mo</b>
+          <span className="text-text-muted">· {burn.count} charges</span>
         </span>
-        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">view all →</span>
+        <span className="text-sm font-medium text-interactive">view all →</span>
       </button>
     )
   }
 
   return (
-    <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-      <div className="flex items-start justify-between gap-3 p-4 border-b border-slate-100 dark:border-slate-800">
+    <section className="rounded-xl border border-border bg-surface shadow-sm">
+      <div className="flex items-start justify-between gap-3 p-4 border-b border-border">
         <div>
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+            <span className="inline-block w-2 h-2 rounded-full bg-interactive" />
             Recurring &amp; subscriptions
           </div>
-          <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+          <p className="mt-1 text-3xl font-bold tracking-tight text-text">
             {money(burn.monthly)}
-            <span className="ml-1 text-sm font-normal text-slate-500 dark:text-slate-400">/ month</span>
+            <span className="ml-1 text-sm font-normal text-text-muted">/ month</span>
           </p>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            about <b className="text-slate-700 dark:text-slate-200">{money(burn.annual)}</b> a year across{' '}
+          <p className="text-sm text-text-muted">
+            about <b className="text-text">{money(burn.annual)}</b> a year across{' '}
             {burn.count} charges
           </p>
         </div>
         <button
           onClick={() => setExpanded(false)}
-          className="shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+          className="shrink-0 text-sm font-medium text-text-muted hover:text-text"
         >
           Collapse
         </button>
@@ -87,8 +87,8 @@ function Group({ title, items, overridesMap, onSetOverride, onClearOverride }) {
   if (items.length === 0) return null
   return (
     <div>
-      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">{title}</h4>
-      <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-slate-100 dark:border-slate-800">
+      <h4 className="text-sm font-semibold text-text mb-1">{title}</h4>
+      <div className="divide-y divide-border rounded-lg border border-border">
         {items.map((g) => (
           <Row
             key={g.key}
@@ -116,38 +116,38 @@ function Row({ g, override, onSetOverride, onClearOverride }) {
     <div>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full text-left px-3 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
+        className="w-full text-left px-3 py-2.5 flex items-center justify-between gap-3 hover:bg-bg transition"
       >
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{g.label}</span>
+            <span className="truncate text-sm font-medium text-text">{g.label}</span>
             <StatusBadge g={g} />
           </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500">
+          <p className="text-xs text-text-muted">
             {g.cadence} · next ~ {g.nextDate} · seen {g.count}×
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+          <p className="text-sm font-semibold tabular-nums text-text">
             ${g.amount.toFixed(2)}
           </p>
-          <p className="text-xs text-slate-400 dark:text-slate-500">{money(g.monthlyEquivalent)}/mo</p>
+          <p className="text-xs text-text-muted">{money(g.monthlyEquivalent)}/mo</p>
         </div>
       </button>
 
       {open && (
-        <div className="px-3 pb-3 pt-1 space-y-3 bg-slate-50/60 dark:bg-slate-800/30">
+        <div className="px-3 pb-3 pt-1 space-y-3 bg-bg">
           <AmountHistory history={g.history} />
 
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
             <span>
-              Lifetime paid <b className="text-slate-700 dark:text-slate-200">${g.lifetime.toFixed(2)}</b>
+              Lifetime paid <b className="text-text">${g.lifetime.toFixed(2)}</b>
             </span>
             <span>
-              Last charge <b className="text-slate-700 dark:text-slate-200">{g.lastDate}</b>
+              Last charge <b className="text-text">{g.lastDate}</b>
             </span>
             {g.priceDelta && (
-              <span className={g.priceDelta.direction === 'up' ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}>
+              <span className={g.priceDelta.direction === 'up' ? 'text-danger' : 'text-success'}>
                 {g.priceDelta.direction === 'up' ? 'Up' : 'Down'} from ${g.priceDelta.from.toFixed(2)} → ${g.priceDelta.to.toFixed(2)}
               </span>
             )}
@@ -158,12 +158,12 @@ function Row({ g, override, onSetOverride, onClearOverride }) {
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
               placeholder={g.rawLabel}
-              className="flex-1 min-w-40 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              className="flex-1 min-w-40 rounded-md border border-border bg-surface text-text px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40"
             />
             <button
               onClick={saveNickname}
               disabled={(nickname ?? '') === (g.nickname ?? '')}
-              className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium px-2.5 py-1.5 disabled:opacity-40 transition"
+              className="rounded-md border border-border text-text hover:bg-bg text-xs font-medium px-2.5 py-1.5 disabled:opacity-40 transition"
             >
               Save name
             </button>
@@ -171,27 +171,27 @@ function Row({ g, override, onSetOverride, onClearOverride }) {
 
           <div className="flex flex-wrap items-center gap-2">
             {currentStatus === 'confirmed' ? (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
                 ✓ Confirmed
               </span>
             ) : (
               <button
                 onClick={() => setStatus('confirmed')}
-                className="rounded-md border border-emerald-200 dark:border-emerald-900/60 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-xs font-medium px-2.5 py-1.5 transition"
+                className="rounded-md border border-success/30 text-success hover:bg-success/10 text-xs font-medium px-2.5 py-1.5 transition"
               >
                 Confirm recurring
               </button>
             )}
             <button
               onClick={() => setStatus('not_recurring')}
-              className="rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium px-2.5 py-1.5 transition"
+              className="rounded-md border border-border text-text-muted hover:bg-bg text-xs font-medium px-2.5 py-1.5 transition"
             >
               Not recurring
             </button>
             {currentStatus && (
               <button
                 onClick={() => onClearOverride?.(g.key)}
-                className="text-xs text-slate-400 dark:text-slate-500 hover:underline"
+                className="text-xs text-text-muted hover:underline"
               >
                 Reset
               </button>
@@ -206,7 +206,7 @@ function Row({ g, override, onSetOverride, onClearOverride }) {
 function StatusBadge({ g }) {
   if (g.status === 'missed') {
     return (
-      <span className="shrink-0 text-[10px] font-medium rounded px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">
+      <span className="shrink-0 text-[10px] font-medium rounded px-1.5 py-0.5 bg-warning/10 text-warning">
         didn’t charge
       </span>
     )
@@ -217,8 +217,8 @@ function StatusBadge({ g }) {
       <span
         className={`shrink-0 text-[10px] font-medium rounded px-1.5 py-0.5 ${
           up
-            ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300'
-            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+            ? 'bg-danger/10 text-danger'
+            : 'bg-success/10 text-success'
         }`}
       >
         {up ? '↑' : '↓'} price {up ? 'up' : 'down'}
@@ -238,10 +238,10 @@ function AmountHistory({ history }) {
       {history.map((h, i) => (
         <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1" title={`${h.date}: $${h.amount.toFixed(2)}`}>
           <div
-            className="w-full rounded-sm bg-emerald-400/70 dark:bg-emerald-500/60"
+            className="w-full rounded-sm bg-interactive/70"
             style={{ height: `${Math.max(6, (Math.abs(h.amount) / max) * 100)}%` }}
           />
-          <span className="text-[9px] text-slate-400 dark:text-slate-500 tabular-nums">{h.date.slice(5)}</span>
+          <span className="text-[9px] text-text-muted tabular-nums">{h.date.slice(5)}</span>
         </div>
       ))}
     </div>

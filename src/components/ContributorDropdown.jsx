@@ -13,22 +13,23 @@
 export default function ContributorDropdown({ contributors, notReported = [], unit, format, onFix }) {
   const fmt = format ?? ((n) => String(Math.round((Number(n) || 0) * 100) / 100))
   return (
-    <div className="mt-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 px-3 py-2 space-y-1.5">
+    <div className="mt-1.5 rounded-lg bg-bg px-3 py-2 space-y-1.5">
       {contributors.length === 0 ? (
-        <p className="text-xs text-slate-400 dark:text-slate-500">Nothing logged contributes this yet.</p>
+        <p className="text-xs text-text-muted">Nothing logged contributes this yet.</p>
       ) : (
         <ul className="space-y-1">
           {contributors.map((c) => (
             <li key={c.foodId ?? c.name} className="flex items-baseline justify-between gap-3 text-xs">
-              <span className="min-w-0 truncate text-slate-600 dark:text-slate-300">
+              <span className="min-w-0 truncate text-text-muted">
                 {c.name}
+                <FormLabel form={c.form} />
                 <Markers markers={c.markers} />
               </span>
-              <span className="shrink-0 tabular-nums text-slate-500 dark:text-slate-400">
-                <span className="font-medium text-slate-800 dark:text-slate-100">
+              <span className="shrink-0 tabular-nums text-text-muted">
+                <span className="font-medium text-text">
                   {fmt(c.amount)} {unit}
                 </span>
-                <span className="ml-1 text-slate-400 dark:text-slate-500">{Math.round(c.pct)}%</span>
+                <span className="ml-1 text-text-muted">{Math.round(c.pct)}%</span>
               </span>
             </li>
           ))}
@@ -36,8 +37,8 @@ export default function ContributorDropdown({ contributors, notReported = [], un
       )}
 
       {notReported.length > 0 && (
-        <div className="pt-1 border-t border-slate-200/70 dark:border-slate-700/70">
-          <p className="text-[11px] text-slate-400 dark:text-slate-500">Not reported by:</p>
+        <div className="pt-1 border-t border-border">
+          <p className="text-[11px] text-text-muted">Not reported by:</p>
           <ul className="mt-0.5 flex flex-wrap gap-1.5">
             {notReported.map((f) => (
               <li key={f.foodId ?? f.name}>
@@ -46,12 +47,12 @@ export default function ContributorDropdown({ contributors, notReported = [], un
                     type="button"
                     onClick={() => onFix(f)}
                     title={`Fill in this nutrient for ${f.name} from a generic equivalent`}
-                    className="rounded-full bg-white dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-300 text-[11px] px-2 py-0.5 hover:border-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-300 transition"
+                    className="rounded-full bg-surface border border-border text-text-muted text-[11px] px-2 py-0.5 hover:border-interactive hover:text-interactive transition"
                   >
                     {f.name} · fix
                   </button>
                 ) : (
-                  <span className="rounded-full bg-white/60 dark:bg-slate-700/40 text-slate-400 dark:text-slate-500 text-[11px] px-2 py-0.5">
+                  <span className="rounded-full bg-surface text-text-muted text-[11px] px-2 py-0.5">
                     {f.name}
                   </span>
                 )}
@@ -61,6 +62,23 @@ export default function ContributorDropdown({ contributors, notReported = [], un
         </div>
       )}
     </div>
+  )
+}
+
+// Vitamin A form label: names whether a contributor's vitamin A is preformed
+// retinol (from animals) or beta-carotene (from plants, which the body converts
+// far less efficiently). Education only — the RAE total already accounts for the
+// conversion. Absent for foods that report no retinol/carotene breakdown.
+const VIT_A_FORM_LABEL = {
+  preformed: 'retinol (preformed)',
+  plant: 'beta-carotene (from plants)',
+  mixed: 'retinol + beta-carotene',
+}
+function FormLabel({ form }) {
+  const label = VIT_A_FORM_LABEL[form]
+  if (!label) return null
+  return (
+    <span className="ml-1 align-middle text-[10px] text-text-muted">· {label}</span>
   )
 }
 
@@ -81,7 +99,7 @@ function Chip({ children, title }) {
   return (
     <span
       title={title}
-      className="ml-1 align-middle rounded px-1 text-[9px] font-medium bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+      className="ml-1 align-middle rounded px-1 text-[9px] font-medium bg-border text-text-muted"
     >
       {children}
     </span>

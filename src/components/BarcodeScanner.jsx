@@ -155,28 +155,28 @@ export default function BarcodeScanner({ onDetected, onManual }) {
 
   return (
     <div className="space-y-2">
-      <div className="relative overflow-hidden rounded-xl bg-slate-900 aspect-[4/3]">
+      <div className="relative overflow-hidden rounded-xl bg-nav aspect-[4/3]">
         <video ref={videoRef} muted className="h-full w-full object-cover" />
         {/* Aiming reticle */}
         {status === 'scanning' && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="h-24 w-4/5 rounded-lg border-2 border-emerald-400/90 shadow-[0_0_0_9999px_rgba(15,23,42,0.35)]" />
+            <div className="h-24 w-4/5 rounded-lg border-2 border-interactive/90 shadow-[0_0_0_9999px_rgba(15,23,42,0.35)]" />
           </div>
         )}
         {status === 'starting' && (
-          <div className="absolute inset-0 grid place-items-center text-sm text-slate-300">
+          <div className="absolute inset-0 grid place-items-center text-sm text-nav-text">
             Starting camera…
           </div>
         )}
         {status === 'error' && (
-          <div className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-slate-200">
+          <div className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-nav-text">
             {error}
           </div>
         )}
       </div>
 
       {status === 'scanning' && (
-        <p className="text-center text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-center text-xs text-text-muted">
           Point the rear camera at the barcode — it scans automatically.
         </p>
       )}
@@ -185,7 +185,7 @@ export default function BarcodeScanner({ onDetected, onManual }) {
         <button
           type="button"
           onClick={onManual}
-          className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
+          className="text-xs font-medium text-interactive hover:underline"
         >
           Enter the barcode number by hand
         </button>

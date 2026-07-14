@@ -30,7 +30,7 @@ const WEIGHT_UNITS = [
 ]
 
 const inputCls =
-  'rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
+  'rounded-md border border-border bg-surface text-text px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40'
 
 // Unified, meal-scoped food search opened by any meal's + icon. Merges the
 // user's library (client-side filter) with the USDA database (existing edge
@@ -504,19 +504,19 @@ export default function FoodSearchSheet({
   return (
     <>
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-nav/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-lg max-h-[92vh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl"
+        className="w-full sm:max-w-lg max-h-[92vh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-surface border border-border shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h3>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h3 className="text-sm font-semibold text-text">{title}</h3>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="w-8 h-8 grid place-items-center rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            className="w-8 h-8 grid place-items-center rounded-md text-text-muted hover:text-text hover:bg-bg transition"
           >
             ✕
           </button>
@@ -575,13 +575,13 @@ export default function FoodSearchSheet({
                   className={`w-full ${inputCls}`}
                 />
                 {searching && (
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 dark:text-slate-500">
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-text-muted">
                     searching…
                   </span>
                 )}
               </div>
 
-              {searchError && <p className="text-xs text-amber-600 dark:text-amber-400">{searchError}</p>}
+              {searchError && <p className="text-xs text-warning">{searchError}</p>}
 
               {gradeFamily && gradeOptions.length > 0 && (
                 <GradeChips
@@ -595,7 +595,7 @@ export default function FoodSearchSheet({
               {!query.trim() && (
                 <ResultGroup title="Recent foods">
                   {recents.length === 0 ? (
-                    <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
+                    <p className="px-3 py-2 text-xs text-text-muted">
                       Nothing logged yet. Search above to add your first food.
                     </p>
                   ) : (
@@ -617,7 +617,7 @@ export default function FoodSearchSheet({
                 <>
                   <ResultGroup title="My foods">
                     {libraryMatches.length === 0 ? (
-                      <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
+                      <p className="px-3 py-2 text-xs text-text-muted">
                         No matches in your library.
                       </p>
                     ) : (
@@ -637,13 +637,13 @@ export default function FoodSearchSheet({
 
                   <ResultGroup title="Common foods">
                     {!onSearchFoods ? (
-                      <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
+                      <p className="px-3 py-2 text-xs text-text-muted">
                         Database search is unavailable.
                       </p>
                     ) : searching ? (
-                      <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">searching…</p>
+                      <p className="px-3 py-2 text-xs text-text-muted">searching…</p>
                     ) : dbCommon.length === 0 ? (
-                      <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
+                      <p className="px-3 py-2 text-xs text-text-muted">
                         {query.trim().length < 2 ? 'Keep typing…' : 'No common-food matches.'}
                       </p>
                     ) : (
@@ -678,27 +678,27 @@ export default function FoodSearchSheet({
               )}
 
               {/* Manual create + supplement scanner stay reachable here. */}
-              <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-2">
+              <div className="border-t border-border pt-3 space-y-2">
                 {!showManual && !showScan && (
                   <div className="grid grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => { setManualCreateUpc(''); setShowManual(true) }}
-                      className="rounded-md border border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                      className="rounded-md border border-dashed border-border text-text-muted text-sm font-medium py-2 hover:bg-bg transition"
                     >
                       ＋ Create
                     </button>
                     <button
                       type="button"
                       onClick={() => { setScanKind('food'); setShowScan(true) }}
-                      className="rounded-md border border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                      className="rounded-md border border-dashed border-border text-text-muted text-sm font-medium py-2 hover:bg-bg transition"
                     >
                       📋 Label
                     </button>
                     <button
                       type="button"
                       onClick={() => { setBcPhase('scan'); setBcError(null); setScanKind('barcode'); setShowScan(true) }}
-                      className="rounded-md border border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                      className="rounded-md border border-dashed border-border text-text-muted text-sm font-medium py-2 hover:bg-bg transition"
                     >
                       📷 Barcode
                     </button>
@@ -717,14 +717,14 @@ export default function FoodSearchSheet({
                 {showScan && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 text-xs font-medium">
+                      <div className="inline-flex rounded-lg border border-border p-0.5 text-xs font-medium">
                         <button
                           type="button"
                           onClick={() => setScanKind('food')}
                           className={`px-2.5 py-1 rounded-md transition ${
                             scanKind === 'food'
-                              ? 'bg-emerald-600 text-white'
-                              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                              ? 'bg-primary text-on-primary'
+                              : 'text-text-muted hover:bg-bg'
                           }`}
                         >
                           🍎 Food label
@@ -734,8 +734,8 @@ export default function FoodSearchSheet({
                           onClick={() => setScanKind('supplement')}
                           className={`px-2.5 py-1 rounded-md transition ${
                             scanKind === 'supplement'
-                              ? 'bg-emerald-600 text-white'
-                              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                              ? 'bg-primary text-on-primary'
+                              : 'text-text-muted hover:bg-bg'
                           }`}
                         >
                           💊 Supplement
@@ -745,8 +745,8 @@ export default function FoodSearchSheet({
                           onClick={() => { setBcPhase('scan'); setBcError(null); setScanKind('barcode') }}
                           className={`px-2.5 py-1 rounded-md transition ${
                             scanKind === 'barcode'
-                              ? 'bg-emerald-600 text-white'
-                              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                              ? 'bg-primary text-on-primary'
+                              : 'text-text-muted hover:bg-bg'
                           }`}
                         >
                           📷 Barcode
@@ -755,7 +755,7 @@ export default function FoodSearchSheet({
                       <button
                         type="button"
                         onClick={() => setShowScan(false)}
-                        className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                        className="text-xs text-text-muted hover:text-text"
                       >
                         Close scanner
                       </button>
@@ -777,7 +777,7 @@ export default function FoodSearchSheet({
                       />
                     )}
                     {scanKind !== 'barcode' && (
-                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                      <p className="text-xs text-text-muted">
                         Saved items appear under “My foods” — search for one above to log it.
                       </p>
                     )}
@@ -809,9 +809,9 @@ export default function FoodSearchSheet({
 function GradeChips({ family, options, active, onPick }) {
   const activeTier = active ? gradeById(active)?.tier : null
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-3 py-2 space-y-1.5">
-      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-        {family.label} quality <span className="font-normal text-slate-400 dark:text-slate-500">(optional)</span>
+    <div className="rounded-lg border border-border bg-bg px-3 py-2 space-y-1.5">
+      <p className="text-xs font-medium text-text-muted">
+        {family.label} quality <span className="font-normal text-text-muted">(optional)</span>
       </p>
       <div className="flex flex-wrap gap-1.5">
         {options.map((g) => {
@@ -823,8 +823,8 @@ function GradeChips({ family, options, active, onPick }) {
               onClick={() => onPick(on ? null : g.id)}
               className={`rounded-full px-2.5 py-1 text-xs font-medium border transition ${
                 on
-                  ? 'bg-emerald-600 border-emerald-600 text-white'
-                  : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'
+                  ? 'bg-primary border-primary text-on-primary'
+                  : 'border-border text-text-muted hover:bg-surface'
               }`}
             >
               {g.label}
@@ -833,7 +833,7 @@ function GradeChips({ family, options, active, onPick }) {
         })}
       </div>
       {active && (
-        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+        <p className="text-[11px] text-text-muted">
           {activeTier === 1
             ? 'Showing the matching USDA entry first.'
             : activeTier === 2
@@ -862,8 +862,8 @@ function BarcodeFlow({
   if (phase === 'looking') {
     return (
       <div className="py-6 text-center">
-        <p className="text-sm text-slate-600 dark:text-slate-300">Looking up barcode…</p>
-        {upc && <p className="mt-1 text-xs tabular-nums text-slate-400 dark:text-slate-500">#{upc}</p>}
+        <p className="text-sm text-text-muted">Looking up barcode…</p>
+        {upc && <p className="mt-1 text-xs tabular-nums text-text-muted">#{upc}</p>}
       </div>
     )
   }
@@ -877,7 +877,7 @@ function BarcodeFlow({
     const valid = !!normalizeUpc(manualUpc)
     return (
       <form onSubmit={submit} className="space-y-2">
-        <p className="text-sm text-slate-600 dark:text-slate-300">Type the barcode number (the digits under the bars).</p>
+        <p className="text-sm text-text-muted">Type the barcode number (the digits under the bars).</p>
         <input
           autoFocus
           inputMode="numeric"
@@ -890,20 +890,20 @@ function BarcodeFlow({
           <button
             type="submit"
             disabled={!valid}
-            className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-2 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+            className="flex-1 rounded-md bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium py-2 transition disabled:opacity-50"
           >
             Look it up
           </button>
           <button
             type="button"
             onClick={onRescan}
-            className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            className="rounded-md border border-border text-text-muted text-sm font-medium px-4 py-2 hover:bg-bg transition"
           >
             Use camera
           </button>
         </div>
         {!valid && manualUpc.trim() !== '' && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">That isn’t a valid 8–14 digit barcode.</p>
+          <p className="text-xs text-warning">That isn’t a valid 8–14 digit barcode.</p>
         )}
       </form>
     )
@@ -912,11 +912,11 @@ function BarcodeFlow({
   if (phase === 'miss') {
     return (
       <div className="space-y-2">
-        <div className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 px-3 py-2.5">
-          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5">
+          <p className="text-sm font-medium text-warning">
             No product found{upc ? <span className="tabular-nums"> for #{upc}</span> : ''}.
           </p>
-          <p className="text-[11px] text-amber-700/90 dark:text-amber-400/80">
+          <p className="text-[11px] text-warning/90">
             {error || 'Neither Open Food Facts nor USDA had this barcode. Add it another way — we’ll remember the number.'}
           </p>
         </div>
@@ -924,21 +924,21 @@ function BarcodeFlow({
           <button
             type="button"
             onClick={onScanLabel}
-            className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            className="rounded-md border border-border text-text-muted text-sm font-medium py-2 hover:bg-bg transition"
           >
             📋 Scan label
           </button>
           <button
             type="button"
             onClick={onManualCreate}
-            className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            className="rounded-md border border-border text-text-muted text-sm font-medium py-2 hover:bg-bg transition"
           >
             ＋ Enter by hand
           </button>
           <button
             type="button"
             onClick={onRescan}
-            className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+            className="rounded-md border border-border text-text-muted text-sm font-medium py-2 hover:bg-bg transition"
           >
             📷 Scan again
           </button>
@@ -954,8 +954,8 @@ function BarcodeFlow({
 function ResultGroup({ title, children }) {
   return (
     <div>
-      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{title}</p>
-      <ul className="rounded-md border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+      <p className="text-xs font-medium text-text-muted mb-1">{title}</p>
+      <ul className="rounded-md border border-border divide-y divide-border overflow-hidden">
         {children}
       </ul>
     </div>
@@ -968,17 +968,17 @@ function ResultRow({ onClick, title, subtitle, badge }) {
       <button
         type="button"
         onClick={onClick}
-        className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+        className="w-full text-left px-3 py-2 hover:bg-bg transition"
       >
-        <p className="text-sm text-slate-700 dark:text-slate-200 flex items-center gap-2">
+        <p className="text-sm text-text flex items-center gap-2">
           <span className="truncate">{title}</span>
           {badge && (
-            <span className="shrink-0 rounded-full bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300 text-[10px] font-medium px-1.5 py-0.5">
+            <span className="shrink-0 rounded-full bg-success/10 text-success text-[10px] font-medium px-1.5 py-0.5">
               {badge}
             </span>
           )}
         </p>
-        <p className="text-xs text-slate-400 dark:text-slate-500">{subtitle}</p>
+        <p className="text-xs text-text-muted">{subtitle}</p>
       </button>
     </li>
   )
@@ -989,15 +989,15 @@ function QuantityStep({ food, meal, servings, setServings, cost, setCost, busy, 
   return (
     <div className="space-y-3">
       <div>
-        <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{food.name}</p>
-        <p className="text-xs text-slate-400 dark:text-slate-500">
+        <p className="text-sm font-medium text-text">{food.name}</p>
+        <p className="text-xs text-text-muted">
           {Math.round(Number(food.calories))} cal · {round1(food.protein)}g P per serving
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
-          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Servings</span>
+          <span className="block text-xs font-medium text-text-muted mb-1">Servings</span>
           <input
             type="number"
             step="0.25"
@@ -1008,11 +1008,11 @@ function QuantityStep({ food, meal, servings, setServings, cost, setCost, busy, 
           />
         </label>
         <label className="block">
-          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+          <span className="block text-xs font-medium text-text-muted mb-1">
             Cost / serving
           </span>
           <div className="relative">
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm" aria-hidden>
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted text-sm" aria-hidden>
               $
             </span>
             <input
@@ -1028,13 +1028,13 @@ function QuantityStep({ food, meal, servings, setServings, cost, setCost, busy, 
         </label>
       </div>
 
-      <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 px-3 py-2 text-sm">
-        <span className="font-semibold text-slate-900 dark:text-slate-100">
+      <div className="rounded-lg bg-bg px-3 py-2 text-sm">
+        <span className="font-semibold text-text">
           {Math.round(Number(food.calories) * s)} kcal
         </span>{' '}
-        <span className="text-emerald-600 dark:text-emerald-400">P {round1(Number(food.protein) * s)}g</span>{' '}
-        <span className="text-sky-600 dark:text-sky-400">C {round1(Number(food.carbs) * s)}g</span>{' '}
-        <span className="text-fuchsia-600 dark:text-fuchsia-400">F {round1(Number(food.fat) * s)}g</span>
+        <span className="text-success">P {round1(Number(food.protein) * s)}g</span>{' '}
+        <span className="text-interactive">C {round1(Number(food.carbs) * s)}g</span>{' '}
+        <span className="text-chart-1">F {round1(Number(food.fat) * s)}g</span>
       </div>
 
       <div className="flex gap-2">
@@ -1042,14 +1042,14 @@ function QuantityStep({ food, meal, servings, setServings, cost, setCost, busy, 
           type="button"
           onClick={onConfirm}
           disabled={busy || !(s > 0)}
-          className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-2 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="flex-1 rounded-md bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium py-2 transition disabled:opacity-50"
         >
           Add to {meal.label}
         </button>
         <button
           type="button"
           onClick={onBack}
-          className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          className="rounded-md border border-border text-text-muted text-sm font-medium px-4 py-2 hover:bg-bg transition"
         >
           Back
         </button>
@@ -1092,21 +1092,21 @@ function UsdaCreateStep({
   return (
     <div className="space-y-3">
       {barcode && (
-        <div className="rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/30 px-3 py-2 space-y-1">
-          <p className="text-xs text-sky-800 dark:text-sky-300">
+        <div className="rounded-lg border border-interactive/30 bg-primary/10 px-3 py-2 space-y-1">
+          <p className="text-xs text-interactive">
             📷 Scanned {barcode.meta?.upc ? <span className="tabular-nums">#{barcode.meta.upc}</span> : 'barcode'}
             {barcode.brand ? ` · ${barcode.brand}` : ''}
           </p>
-          {provenance && <p className="text-[11px] text-sky-700/80 dark:text-sky-400/70">{provenance}</p>}
+          {provenance && <p className="text-[11px] text-interactive/80">{provenance}</p>}
         </div>
       )}
 
       {blocked && (
-        <div className="rounded-lg border border-amber-300 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
-          <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
+          <p className="text-xs font-medium text-warning">
             These numbers look off ({barcode.plausible.reason}).
           </p>
-          <p className="text-[11px] text-amber-700/90 dark:text-amber-400/80">
+          <p className="text-[11px] text-warning/90">
             Rather than trust them, scan the Nutrition Facts label or add this food by hand.
           </p>
         </div>
@@ -1121,7 +1121,7 @@ function UsdaCreateStep({
 
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
-          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Amount</span>
+          <span className="block text-xs font-medium text-text-muted mb-1">Amount</span>
           <input
             type="number"
             step="0.25"
@@ -1132,8 +1132,8 @@ function UsdaCreateStep({
           />
         </label>
         <label className="block">
-          <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-            Serving size {loadingPortions && <span className="text-slate-400">· loading…</span>}
+          <span className="block text-xs font-medium text-text-muted mb-1">
+            Serving size {loadingPortions && <span className="text-text-muted">· loading…</span>}
           </span>
           <select
             value={String(grams)}
@@ -1150,28 +1150,28 @@ function UsdaCreateStep({
       </div>
 
       {!loadingPortions && !hasNamedPortion && (
-        <p className="text-xs text-slate-400 dark:text-slate-500">
+        <p className="text-xs text-text-muted">
           USDA has no preset portions for this food — log it by weight (grams or ounces).
-          {noPortionHint ? <span className="text-slate-500 dark:text-slate-400"> As a guide, {noPortionHint}.</span> : ''}
+          {noPortionHint ? <span className="text-text-muted"> As a guide, {noPortionHint}.</span> : ''}
         </p>
       )}
 
       {liveMacros && (
-        <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Per {amountLabel()}</p>
+        <div className="rounded-lg bg-bg px-3 py-2">
+          <p className="text-xs text-text-muted mb-1">Per {amountLabel()}</p>
           <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
-            <span className="font-semibold text-slate-900 dark:text-slate-100">
+            <span className="font-semibold text-text">
               {Math.round(liveMacros.calories)} kcal
             </span>
-            <span className="text-emerald-600 dark:text-emerald-400">P {round1(liveMacros.protein)}g</span>
-            <span className="text-sky-600 dark:text-sky-400">C {round1(liveMacros.carbs)}g</span>
-            <span className="text-fuchsia-600 dark:text-fuchsia-400">F {round1(liveMacros.fat)}g</span>
+            <span className="text-success">P {round1(liveMacros.protein)}g</span>
+            <span className="text-interactive">C {round1(liveMacros.carbs)}g</span>
+            <span className="text-chart-1">F {round1(liveMacros.fat)}g</span>
           </div>
         </div>
       )}
 
       <div className="relative">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm" aria-hidden>
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted text-sm" aria-hidden>
           $
         </span>
         <input
@@ -1190,14 +1190,14 @@ function UsdaCreateStep({
           type="button"
           onClick={onConfirm}
           disabled={busy || !pName.trim() || !(qty > 0) || blocked}
-          className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-2 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+          className="flex-1 rounded-md bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium py-2 transition disabled:opacity-50"
         >
           Add & log to {meal.label}
         </button>
         <button
           type="button"
           onClick={onBack}
-          className="rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          className="rounded-md border border-border text-text-muted text-sm font-medium px-4 py-2 hover:bg-bg transition"
         >
           Back
         </button>
@@ -1233,13 +1233,13 @@ function ManualCreate({ busy, onCancel, onCreate, defaultUpc }) {
   return (
     <form onSubmit={submit} className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-          Create a food{defaultUpc ? <span className="ml-1 font-normal tabular-nums text-slate-400">· barcode #{defaultUpc}</span> : ''}
+        <span className="text-xs font-medium text-text-muted">
+          Create a food{defaultUpc ? <span className="ml-1 font-normal tabular-nums text-text-muted">· barcode #{defaultUpc}</span> : ''}
         </span>
         <button
           type="button"
           onClick={onCancel}
-          className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+          className="text-xs text-text-muted hover:text-text"
         >
           Cancel
         </button>
@@ -1256,7 +1256,7 @@ function ManualCreate({ busy, onCancel, onCreate, defaultUpc }) {
       <button
         type="submit"
         disabled={busy}
-        className="w-full rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-1.5 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+        className="w-full rounded-md bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium py-1.5 transition disabled:opacity-50"
       >
         Create &amp; log
       </button>

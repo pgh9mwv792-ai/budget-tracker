@@ -258,17 +258,17 @@ export default function MealTracker({
       )}
 
       {stackFoods.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 flex items-center justify-between gap-3">
+        <div className="bg-surface rounded-xl border border-border shadow-sm p-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Daily stack</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+            <p className="text-sm font-semibold text-text">Daily stack</p>
+            <p className="text-xs text-text-muted truncate">
               {stackFoods.length} supplement{stackFoods.length === 1 ? '' : 's'} · {stackFoods.map((f) => f.name).join(', ')}
             </p>
           </div>
           <button
             onClick={logStack}
             disabled={loggingStack}
-            className="shrink-0 rounded-lg bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-60"
+            className="shrink-0 rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium px-4 py-2 transition disabled:opacity-60"
           >
             {loggingStack ? 'Logging…' : '💊 Log my stack'}
           </button>
@@ -394,28 +394,28 @@ function TargetsHeader({ date, setDate, totals, targets, dayLogs, foodsById, edi
   }
 
   return (
-    <div className="sticky top-14 z-10 -mx-4 px-4 py-2 bg-[#f8fafc] dark:bg-[#0b1120]">
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-3">
+    <div className="sticky top-14 z-10 -mx-4 px-4 py-2 bg-bg">
+      <div className="bg-surface rounded-xl border border-border shadow-sm p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Meals</h2>
+          <h2 className="text-lg font-semibold text-text">Meals</h2>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setDate(addDays(date, -1))}
               aria-label="Previous day"
-              className="w-8 h-8 grid place-items-center rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="w-8 h-8 grid place-items-center rounded-md text-text-muted hover:bg-bg transition"
             >
               ‹
             </button>
             <button
               onClick={() => setDate(today())}
-              className="min-w-[6rem] text-center text-sm font-medium text-slate-700 dark:text-slate-200 rounded-md px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="min-w-[6rem] text-center text-sm font-medium text-text rounded-md px-2 py-1 hover:bg-bg transition"
             >
               {dateLabel(date)}
             </button>
             <button
               onClick={() => setDate(addDays(date, 1))}
               aria-label="Next day"
-              className="w-8 h-8 grid place-items-center rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="w-8 h-8 grid place-items-center rounded-md text-text-muted hover:bg-bg transition"
             >
               ›
             </button>
@@ -436,15 +436,15 @@ function TargetsHeader({ date, setDate, totals, targets, dayLogs, foodsById, edi
           ))}
         </div>
         {!hasTargets && (
-          <p className="text-xs text-slate-400 dark:text-slate-500">
+          <p className="text-xs text-text-muted">
             Bars show today’s macro split. Set targets to track progress toward a goal.
           </p>
         )}
 
         {/* Food cost today — our differentiator, weighted like a macro row. */}
-        <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3">
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Food cost today</span>
-          <span className="text-base font-semibold text-slate-900 dark:text-slate-100">
+        <div className="flex items-center justify-between border-t border-border pt-3">
+          <span className="text-sm font-medium text-text">Food cost today</span>
+          <span className="text-base font-semibold text-text">
             ${totals.cost.toFixed(2)}
           </span>
         </div>
@@ -453,14 +453,14 @@ function TargetsHeader({ date, setDate, totals, targets, dayLogs, foodsById, edi
           {hasTargets ? (
             <button
               onClick={onToggleTargets}
-              className="text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+              className="text-xs text-text-muted hover:text-text"
             >
               {editingTargets ? 'Close' : 'Edit targets'}
             </button>
           ) : (
             <button
               onClick={onToggleTargets}
-              className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+              className="text-xs font-medium text-interactive hover:underline"
             >
               {editingTargets ? 'Close' : '＋ Set targets'}
             </button>
@@ -491,28 +491,28 @@ function MacroRow({ macroKey, value, target, fallbackPct = 0, logs, foodsById })
     <div>
       <button type="button" onClick={() => setOpen((v) => !v)} className="w-full text-left" aria-expanded={open}>
         <div className="flex items-baseline justify-between gap-2 text-sm">
-          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+          <span className="flex items-center gap-1.5 text-text-muted">
             <span
-              className={`shrink-0 text-slate-300 dark:text-slate-600 transition-transform ${open ? 'rotate-90' : ''}`}
+              className={`shrink-0 text-text-muted transition-transform ${open ? 'rotate-90' : ''}`}
               aria-hidden
             >
               ›
             </span>
             {meta.label}
           </span>
-          <span className="text-slate-500 dark:text-slate-400 tabular-nums">
-            <span className="font-semibold text-slate-900 dark:text-slate-100">{Math.round(value)}</span>
+          <span className="text-text-muted tabular-nums">
+            <span className="font-semibold text-text">{Math.round(value)}</span>
             {hasTarget && ` / ${Math.round(Number(target))}`} {meta.unit}
             {hasTarget ? (
-              <span className={`ml-1 ${over ? 'text-red-500 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
+              <span className={`ml-1 ${over ? 'text-danger' : 'text-text-muted'}`}>
                 {Math.round(pct)}%
               </span>
             ) : (
-              !isEnergy && <span className="ml-1 text-slate-400 dark:text-slate-500">{Math.round(fallbackPct)}%</span>
+              !isEnergy && <span className="ml-1 text-text-muted">{Math.round(fallbackPct)}%</span>
             )}
           </span>
         </div>
-        <div className="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+        <div className="mt-1 h-2 rounded-full bg-border overflow-hidden">
           <div
             className={`h-full ${over ? OVER_BAR : meta.bar} transition-all`}
             style={{ width: `${Math.min(100, pct)}%` }}
@@ -533,7 +533,7 @@ function MacroRow({ macroKey, value, target, fallbackPct = 0, logs, foodsById })
 function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDeleteLog, onSaveMeal, estimateFoodIds, brandByFoodId, servingByFoodId }) {
   const t = totalsFor(logs)
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+    <div className="bg-surface rounded-xl border border-border shadow-sm">
       <div className="flex items-center gap-2 px-4 py-2.5">
         <button
           onClick={onToggle}
@@ -541,13 +541,13 @@ function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDe
           aria-expanded={!collapsed}
         >
           <span
-            className={`text-slate-400 dark:text-slate-500 transition-transform ${collapsed ? '' : 'rotate-90'}`}
+            className={`text-text-muted transition-transform ${collapsed ? '' : 'rotate-90'}`}
             aria-hidden
           >
             ›
           </span>
-          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{meal.label}</span>
-          <span className="text-xs text-slate-400 dark:text-slate-500 truncate">
+          <span className="text-sm font-semibold text-text">{meal.label}</span>
+          <span className="text-xs text-text-muted truncate">
             {logs.length > 0
               ? `${Math.round(t.calories)} cal${t.cost > 0 ? ` · $${t.cost.toFixed(2)}` : ''}`
               : 'Empty'}
@@ -556,14 +556,14 @@ function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDe
         <button
           onClick={onAdd}
           aria-label={`Add food to ${meal.label}`}
-          className="w-7 h-7 shrink-0 grid place-items-center rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-lg leading-none hover:bg-slate-800 dark:hover:bg-emerald-500 transition"
+          className="w-7 h-7 shrink-0 grid place-items-center rounded-md bg-primary hover:bg-primary-hover text-on-primary text-lg leading-none transition"
         >
           +
         </button>
       </div>
 
       {!collapsed && (
-        <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
+        <div className="divide-y divide-border border-t border-border">
           {logs.map((l) => (
             <LogRow
               key={l.id}
@@ -576,7 +576,7 @@ function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDe
             />
           ))}
           {logs.length === 0 && (
-            <p className="px-4 py-2 text-xs text-slate-400 dark:text-slate-500">
+            <p className="px-4 py-2 text-xs text-text-muted">
               Nothing logged. Tap + to add a food.
             </p>
           )}
@@ -584,7 +584,7 @@ function MealSection({ meal, logs, collapsed, onToggle, onAdd, onUpdateLog, onDe
             <div className="px-4 py-2">
               <button
                 onClick={() => onSaveMeal(logs)}
-                className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+                className="text-xs font-medium text-interactive hover:underline"
               >
                 ＋ Save as a reusable meal
               </button>
@@ -603,12 +603,12 @@ function PlannedMealCard({ template, dateLabel, logging, onConfirm, onSkip }) {
   const t = templateTotals(template.items || [])
   const count = (template.items || []).length
   return (
-    <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 p-4 flex items-center justify-between gap-3">
+    <div className="bg-success/10 rounded-xl border border-success/30 p-4 flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+        <p className="text-sm font-semibold text-success">
           Planned: {template.name}
         </p>
-        <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70 truncate">
+        <p className="text-xs text-success/80 truncate">
           {count} item{count === 1 ? '' : 's'} · {Math.round(t.calories)} cal · {Math.round(t.protein)}g protein
           {t.cost > 0 ? ` · $${t.cost.toFixed(2)}` : ''} · for {dateLabel}
         </p>
@@ -617,14 +617,14 @@ function PlannedMealCard({ template, dateLabel, logging, onConfirm, onSkip }) {
         <button
           onClick={onSkip}
           disabled={logging}
-          className="text-xs text-emerald-700/70 dark:text-emerald-300/70 hover:text-emerald-900 dark:hover:text-emerald-100 px-2 py-1.5 disabled:opacity-50"
+          className="text-xs text-success/80 hover:text-success px-2 py-1.5 disabled:opacity-50"
         >
           Skip
         </button>
         <button
           onClick={onConfirm}
           disabled={logging}
-          className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
+          className="rounded-lg bg-success hover:bg-success text-on-primary text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
         >
           {logging ? 'Logging…' : 'Log it'}
         </button>
@@ -638,23 +638,23 @@ function PlannedMealCard({ template, dateLabel, logging, onConfirm, onSkip }) {
 function SavedMealsManager({ templates, logging, onLog, onUpdate, onDelete }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+    <div className="bg-surface rounded-xl border border-border shadow-sm">
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-2 px-4 py-2.5 text-left"
         aria-expanded={open}
       >
-        <span className={`text-slate-400 dark:text-slate-500 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
+        <span className={`text-text-muted transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
           ›
         </span>
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Saved meals</span>
-        <span className="text-xs text-slate-400 dark:text-slate-500">
+        <span className="text-sm font-semibold text-text">Saved meals</span>
+        <span className="text-xs text-text-muted">
           {templates.length} {templates.length === 1 ? 'meal' : 'meals'}
         </span>
       </button>
 
       {open && (
-        <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
+        <div className="divide-y divide-border border-t border-border">
           {templates.map((t) => (
             <SavedMealRow
               key={t.id}
@@ -689,8 +689,8 @@ function SavedMealRow({ template, logging, onLog, onUpdate, onDelete }) {
     <div className="px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{template.name}</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+          <p className="text-sm font-medium text-text truncate">{template.name}</p>
+          <p className="text-xs text-text-muted truncate">
             {count} item{count === 1 ? '' : 's'} · {Math.round(t.calories)} cal · {Math.round(t.protein)}g P
             {t.cost > 0 ? ` · $${t.cost.toFixed(2)}` : ''} · {scheduleText}
             {template.auto_log && days.length > 0 ? ' · auto' : ''}
@@ -699,14 +699,14 @@ function SavedMealRow({ template, logging, onLog, onUpdate, onDelete }) {
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setEditing((v) => !v)}
-            className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 text-xs px-1 py-1.5 sm:py-0"
+            className="text-text-muted hover:text-text text-xs px-1 py-1.5 sm:py-0"
           >
             {editing ? 'Done' : 'Schedule'}
           </button>
           <button
             onClick={onLog}
             disabled={logging}
-            className="rounded-lg bg-slate-900 dark:bg-emerald-600 text-white text-xs font-medium px-3 py-1.5 hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-60"
+            className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-xs font-medium px-3 py-1.5 transition disabled:opacity-60"
           >
             {logging ? 'Logging…' : 'Log'}
           </button>
@@ -716,7 +716,7 @@ function SavedMealRow({ template, logging, onLog, onUpdate, onDelete }) {
       {editing && (
         <div className="mt-3 space-y-3">
           <div>
-            <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1.5">
+            <p className="text-[10px] uppercase tracking-wide text-text-muted mb-1.5">
               Plan on these days
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -726,8 +726,8 @@ function SavedMealRow({ template, logging, onLog, onUpdate, onDelete }) {
                   onClick={() => toggleDay(d)}
                   className={`w-9 h-8 rounded-md text-xs font-medium transition ${
                     days.includes(d)
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      ? 'bg-primary text-on-primary'
+                      : 'bg-bg text-text-muted hover:bg-border'
                   }`}
                 >
                   {label}
@@ -735,13 +735,13 @@ function SavedMealRow({ template, logging, onLog, onUpdate, onDelete }) {
               ))}
             </div>
           </div>
-          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+          <label className="flex items-center gap-2 text-xs text-text-muted">
             <input
               type="checkbox"
               checked={!!template.auto_log}
               disabled={days.length === 0}
               onChange={(e) => onUpdate(template.id, { auto_log: e.target.checked })}
-              className="rounded border-slate-300 dark:border-slate-600"
+              className="rounded border-border"
             />
             Log automatically on planned days (no confirmation)
           </label>
@@ -751,7 +751,7 @@ function SavedMealRow({ template, logging, onLog, onUpdate, onDelete }) {
                 onDelete(template.id)
               }
             }}
-            className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+            className="text-xs text-danger hover:text-danger"
           >
             Delete saved meal
           </button>
@@ -767,7 +767,7 @@ export function EstBadge() {
   return (
     <span
       title="Macros are an estimate"
-      className="ml-1.5 align-middle rounded px-1 py-px text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+      className="ml-1.5 align-middle rounded px-1 py-px text-[10px] font-medium bg-warning/15 text-warning"
     >
       est.
     </span>
@@ -795,18 +795,18 @@ function LogRow({ log, isEstimate, brand, servingDesc, onUpdateLog, onDeleteLog 
   return (
     <div className="flex items-center justify-between px-4 py-2 text-sm">
       <div className="min-w-0">
-        <p className="truncate text-slate-700 dark:text-slate-200">
+        <p className="truncate text-text">
           {log.name}
-          {s !== 1 && <span className="text-slate-400 dark:text-slate-500"> ×{s}</span>}
+          {s !== 1 && <span className="text-text-muted"> ×{s}</span>}
           {isEstimate && <EstBadge />}
         </p>
-        {brand && <p className="truncate text-xs text-slate-500 dark:text-slate-400">{brand}</p>}
+        {brand && <p className="truncate text-xs text-text-muted">{brand}</p>}
         {household && (
-          <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+          <p className="truncate text-xs text-text-muted">
             {household.text} · {Math.round(Number(log.calories) * s)} kcal
           </p>
         )}
-        <p className="text-xs text-slate-400 dark:text-slate-500">
+        <p className="text-xs text-text-muted">
           {Math.round(Number(log.calories) * s)} cal · {Math.round(Number(log.protein) * s)}g P
           {log.cost != null && ` · $${(Number(log.cost) * s).toFixed(2)}`}
         </p>
@@ -814,13 +814,13 @@ function LogRow({ log, isEstimate, brand, servingDesc, onUpdateLog, onDeleteLog 
       <div className="flex items-center gap-2 shrink-0 ml-3">
         <button
           onClick={() => setEditing(true)}
-          className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 text-xs px-1 py-1.5 sm:py-0"
+          className="text-text-muted hover:text-text text-xs px-1 py-1.5 sm:py-0"
         >
           Edit
         </button>
         <button
           onClick={() => onDeleteLog(log.id)}
-          className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs px-1 py-1.5 sm:py-0"
+          className="text-danger hover:text-danger text-xs px-1 py-1.5 sm:py-0"
         >
           Remove
         </button>
@@ -862,12 +862,12 @@ function LogEditor({ log, onSave, onCancel }) {
     setSaving(false)
   }
 
-  const field = 'w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
-  const labelCls = 'block text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-0.5'
+  const field = 'w-full rounded-md border border-border bg-surface text-text px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-interactive/40'
+  const labelCls = 'block text-[10px] uppercase tracking-wide text-text-muted mb-0.5'
 
   return (
-    <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50">
-      <p className="truncate text-sm text-slate-700 dark:text-slate-200 mb-2">{log.name}</p>
+    <div className="px-4 py-3 bg-bg">
+      <p className="truncate text-sm text-text mb-2">{log.name}</p>
       <div className="grid grid-cols-3 gap-2">
         <label>
           <span className={labelCls}>Servings</span>
@@ -906,13 +906,13 @@ function LogEditor({ log, onSave, onCancel }) {
         </label>
       </div>
       <div className="flex justify-end gap-2 mt-3">
-        <button onClick={onCancel} className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 px-3 py-1.5">
+        <button onClick={onCancel} className="text-xs text-text-muted hover:text-text px-3 py-1.5">
           Cancel
         </button>
         <button
           onClick={save}
           disabled={saving || num(servings) <= 0}
-          className="text-xs rounded-full bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 font-medium transition disabled:opacity-50"
+          className="text-xs rounded-full bg-primary hover:bg-primary-hover text-on-primary px-4 py-1.5 font-medium transition disabled:opacity-50"
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
@@ -927,25 +927,25 @@ function LogEditor({ log, onSave, onCancel }) {
 function LibraryManager({ foods, onDeleteFood, onUpdateFood, onSearchFoods, onFoodDetails }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+    <div className="bg-surface rounded-xl border border-border shadow-sm">
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-2 px-4 py-2.5 text-left"
         aria-expanded={open}
       >
-        <span className={`text-slate-400 dark:text-slate-500 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
+        <span className={`text-text-muted transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
           ›
         </span>
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Food library</span>
-        <span className="text-xs text-slate-400 dark:text-slate-500">
+        <span className="text-sm font-semibold text-text">Food library</span>
+        <span className="text-xs text-text-muted">
           {foods.length} {foods.length === 1 ? 'food' : 'foods'}
         </span>
       </button>
 
       {open && (
-        <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
+        <div className="divide-y divide-border border-t border-border">
           {foods.length === 0 && (
-            <p className="px-4 py-2 text-xs text-slate-400 dark:text-slate-500">
+            <p className="px-4 py-2 text-xs text-text-muted">
               No foods yet. Add one from a meal’s + button.
             </p>
           )}
@@ -985,8 +985,8 @@ function WeeklyStrip({ transactions, logs }) {
   if (!hasAny) return null
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
-      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">This week</h3>
+    <div className="bg-surface rounded-xl border border-border shadow-sm p-4">
+      <h3 className="text-sm font-semibold text-text mb-3">This week</h3>
       <div className="grid grid-cols-3 gap-3">
         <WeekStat
           label="Food spend"
@@ -1028,22 +1028,22 @@ function WeekStat({ label, value, delta, lowerIsBetter = false, hint = null }) {
     const good = lowerIsBetter ? !up : up
     trend = {
       text: `${up ? '↑' : '↓'} ${Math.round(Math.abs(delta) * 100)}%`,
-      cls: good ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+      cls: good ? 'text-success' : 'text-warning',
     }
   } else if (delta != null) {
-    trend = { text: 'flat', cls: 'text-slate-400 dark:text-slate-500' }
+    trend = { text: 'flat', cls: 'text-text-muted' }
   }
   return (
     <div>
-      <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{value}</p>
+      <p className="text-xs text-text-muted">{label}</p>
+      <p className="text-lg font-semibold text-text">{value}</p>
       <p className="text-xs h-4">
         {trend ? (
           <span className={trend.cls}>
-            {trend.text} <span className="text-slate-400 dark:text-slate-500">vs last week</span>
+            {trend.text} <span className="text-text-muted">vs last week</span>
           </span>
         ) : hint ? (
-          <span className="text-slate-400 dark:text-slate-500">{hint}</span>
+          <span className="text-text-muted">{hint}</span>
         ) : null}
       </p>
     </div>
@@ -1071,11 +1071,11 @@ function TargetsEditor({ targets, onSetTargets }) {
   }
 
   const inputCls =
-    'rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40'
+    'rounded-md border border-border bg-surface text-text px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-interactive/40'
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-      <h3 className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800">
+    <div className="bg-surface rounded-xl border border-border shadow-sm">
+      <h3 className="px-4 py-2 text-sm font-semibold text-text border-b border-border">
         Daily targets
       </h3>
       <form onSubmit={submit} className="p-4 grid grid-cols-2 sm:grid-cols-5 gap-2 items-center">
@@ -1085,7 +1085,7 @@ function TargetsEditor({ targets, onSetTargets }) {
         <input type="number" step="1" min="0" placeholder="Fat g" value={form.fat} onChange={set('fat')} className={inputCls} />
         <button
           type="submit"
-          className="rounded-md bg-slate-900 dark:bg-emerald-600 text-white text-sm font-medium py-1.5 hover:bg-slate-800 dark:hover:bg-emerald-500 transition"
+          className="rounded-md bg-primary hover:bg-primary-hover text-on-primary text-sm font-medium py-1.5 transition"
         >
           Save targets
         </button>

@@ -135,34 +135,34 @@ export default function Login({ initialMode = 'signin', onBack, onExploreDemo })
   const onSubmit = mode === 'signin' ? handleSignIn : mode === 'signup' ? handleSignUp : handleMagicLink
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
-      <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-6">
+    <div className="min-h-screen flex items-center justify-center bg-bg px-4">
+      <div className="w-full max-w-sm bg-surface rounded-xl border border-border shadow-sm p-6">
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            className="mb-3 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            className="mb-3 text-sm text-text-muted hover:text-text"
           >
             ← Back
           </button>
         )}
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
+        <h1 className="text-xl font-semibold text-text mb-1 flex items-center gap-2">
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-primary" />
           Budget Tracker
         </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">Sign in to sync your data across devices.</p>
+        <p className="text-sm text-text-muted mb-3">Sign in to sync your data across devices.</p>
 
         {onExploreDemo && (
           <button
             type="button"
             onClick={onExploreDemo}
-            className="mb-6 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+            className="mb-6 text-sm font-semibold text-interactive hover:underline"
           >
             Or explore with sample data — no account needed →
           </button>
         )}
 
-        <div className="grid grid-cols-3 gap-1 mb-4 text-sm p-1 rounded-lg bg-slate-100 dark:bg-slate-800">
+        <div className="grid grid-cols-3 gap-1 mb-4 text-sm p-1 rounded-lg bg-bg">
           {[
             ['signin', 'Sign in'],
             ['signup', 'Create account'],
@@ -178,8 +178,8 @@ export default function Login({ initialMode = 'signin', onBack, onExploreDemo })
               }}
               className={`px-2 py-1.5 rounded-md transition ${
                 mode === key
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm font-medium'
-                  : 'text-slate-500 dark:text-slate-400'
+                  ? 'bg-surface text-text shadow-sm font-medium'
+                  : 'text-text-muted'
               }`}
             >
               {label}
@@ -195,7 +195,7 @@ export default function Login({ initialMode = 'signin', onBack, onExploreDemo })
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full rounded-md border border-border bg-surface text-text px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-interactive"
           />
 
           {mode !== 'magic' && (
@@ -208,12 +208,12 @@ export default function Login({ initialMode = 'signin', onBack, onExploreDemo })
                   placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 pr-16 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full rounded-md border border-border bg-surface text-text px-3 py-2 pr-16 text-sm focus:outline-none focus:ring-2 focus:ring-interactive"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-text-muted hover:text-text"
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
@@ -226,7 +226,7 @@ export default function Login({ initialMode = 'signin', onBack, onExploreDemo })
                     setPassword(generatePassword())
                     setShowPassword(true)
                   }}
-                  className="mt-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
+                  className="mt-1.5 text-xs font-medium text-interactive hover:underline"
                 >
                   🔑 Generate a strong password
                 </button>
@@ -237,23 +237,23 @@ export default function Login({ initialMode = 'signin', onBack, onExploreDemo })
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-md bg-slate-900 dark:bg-emerald-600 text-white py-2 text-sm font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition disabled:opacity-50"
+            className="w-full rounded-md bg-primary text-on-primary py-2 text-sm font-medium hover:bg-primary-hover transition disabled:opacity-50"
           >
             {mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send magic link'}
           </button>
         </form>
 
         <div className="flex items-center gap-3 my-4">
-          <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-          <span className="text-xs text-slate-400 dark:text-slate-500">or</span>
-          <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-xs text-text-muted">or</span>
+          <span className="h-px flex-1 bg-border" />
         </div>
 
         <button
           type="button"
           onClick={handleGoogle}
           disabled={submitting}
-          className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-100 py-2 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full rounded-md border border-border bg-surface text-text py-2 text-sm font-medium hover:bg-primary-tint transition disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden>
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
@@ -265,14 +265,14 @@ export default function Login({ initialMode = 'signin', onBack, onExploreDemo })
         </button>
 
         {mode === 'signup' && password && showPassword && (
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-3 text-xs text-text-muted">
             Save this password somewhere safe — your browser or password manager can store it for you.
           </p>
         )}
 
         {status && (
           <div className="mt-4">
-            <p className={`text-sm ${status.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+            <p className={`text-sm ${status.type === 'error' ? 'text-danger' : 'text-success'}`}>
               {status.message}
             </p>
             {canResend && (
@@ -280,7 +280,7 @@ export default function Login({ initialMode = 'signin', onBack, onExploreDemo })
                 type="button"
                 onClick={resendConfirmation}
                 disabled={submitting}
-                className="mt-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-50"
+                className="mt-2 text-sm font-medium text-interactive hover:underline disabled:opacity-50"
               >
                 Resend confirmation email
               </button>
@@ -288,18 +288,18 @@ export default function Login({ initialMode = 'signin', onBack, onExploreDemo })
           </div>
         )}
 
-        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <ul className="space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+        <div className="mt-6 pt-4 border-t border-border">
+          <ul className="space-y-1.5 text-xs text-text-muted">
             <li className="flex items-start gap-2">
-              <span className="text-emerald-500" aria-hidden>🔒</span>
+              <span className="text-interactive" aria-hidden>🔒</span>
               <span>Your data is private to your account — we never sell it or show ads.</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-emerald-500" aria-hidden>🏦</span>
+              <span className="text-interactive" aria-hidden>🏦</span>
               <span>Bank connections are read-only and handled securely by Plaid.</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-emerald-500" aria-hidden>🔑</span>
+              <span className="text-interactive" aria-hidden>🔑</span>
               <span>Optional two-factor authentication for an extra layer of security.</span>
             </li>
           </ul>
@@ -307,7 +307,7 @@ export default function Login({ initialMode = 'signin', onBack, onExploreDemo })
             href="/privacy.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-block text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 underline"
+            className="mt-3 inline-block text-xs text-text-muted hover:text-text underline"
           >
             Privacy Policy
           </a>

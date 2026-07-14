@@ -16,14 +16,28 @@ import { NUTRIENTS, NUTRIENT_BY_ID, CURATED_ORDER, defaultTargets } from './nutr
 
 export const COVERAGE_THRESHOLD = 0.7
 
-// Omega-3 display rollups (computed at day-sum time, never stored per food):
-//   • omega_3_total = generic "Omega-3" bucket + EPA + DHA + ALA
-//   • epa_dha       = EPA + DHA (the "marine" omega-3 people ask about)
-// EPA and DHA are stored/summed like any nutrient but surfaced only through these
-// rollup rows, not their own bars (they have no reference intake to bar against).
-// `epa_dha` is a synthetic id with no catalog entry, so its metadata lives here.
-const EPA_DHA_META = { id: 'epa_dha', name: 'EPA + DHA', unit: 'g' }
-// Ids the section renders as their own standalone row (EPA/DHA fold into rollups).
+// Omega-3 display: EPA and DHA are stored/summed like any nutrient but surfaced
+// only through the combined EPA+DHA row (the preformed, directly-usable marine
+// omega-3), never as their own bars. `epa_dha` is a synthetic id with no catalog
+// entry, so its metadata lives here. It leads the omega-3 group as the PRIMARY
+// row, carrying a reference range (there is no formal RDA) and, deliberately,
+// no bar — you can't measure against an intake that doesn't exist.
+//
+// We do NOT show a single "omega-3 total" that sums ALA with EPA+DHA at face
+// value: ALA from plants converts to EPA/DHA only ~5–10%, so a naive sum
+// overstates usable omega-3. ALA is shown as a separate, subordinate row instead.
+const EPA_DHA_META = {
+  id: 'epa_dha',
+  name: 'EPA + DHA',
+  unit: 'g',
+  omegaRole: 'primary',
+  subtitle: 'preformed — directly usable (fish, eggs)',
+  reference: '250–500 mg/day combined · reference, not an RDA',
+}
+// One-line education for the omega-3 group, shown under the ALA row.
+const OMEGA_GROUP_NOTE =
+  'Preformed EPA/DHA (fish, eggs) is used directly; ALA (plants) converts to EPA/DHA only ~5–10%, so they’re shown separately rather than summed.'
+// Ids the section renders as their own standalone row (EPA/DHA fold into EPA+DHA).
 const HIDDEN_IN_ROLLUP = new Set(['epa', 'dha'])
 
 // The normalized (id-bearing) rows of a food, i.e. the canonical per-serving set.
@@ -97,6 +111,39 @@ const ROLLUP_COMPONENTS = {
   epa_dha: ['epa', 'dha'],
 }
 
+// USDA nutrient numbers for the two vitamin A precursors a food can break out:
+// preformed retinol (from animals) vs beta-carotene (from plants). Kept on the
+// food as raw (non-id) rows alongside the summed RAE total.
+const RETINOL_NUM = '319'
+const BETA_CAROTENE_NUM = '321'
+
+// Classify a vitamin A contributor's form from the food's raw USDA rows. RAE
+// already bakes in the 12:1 beta-carotene→retinol conversion, so we compare each
+// precursor's RAE contribution (retinol 1:1, beta-carotene ÷12) to name the
+// dominant source. Display/education only — it never changes the RAE total.
+// Returns 'preformed' | 'plant' | 'mixed', or null when the food gives no
+// breakdown (e.g. a supplement that reports only a lumped "vitamin A").
+export function vitaminAForm(food) {
+  const raw = Array.isArray(food?.nutrients) ? food.nutrients : []
+  let retinol = null
+  let carotene = null
+  for (const e of raw) {
+    if (!e || e.id) continue // skip normalized rows; the breakdown is in the raw rows
+    const num = e.usda_number != null ? String(e.usda_number) : null
+    if (num === RETINOL_NUM) retinol = Number(e.amount) || 0
+    else if (num === BETA_CAROTENE_NUM) carotene = Number(e.amount) || 0
+  }
+  if (retinol == null && carotene == null) return null
+  const retinolRae = retinol ?? 0
+  const caroteneRae = (carotene ?? 0) / 12
+  const totalRae = retinolRae + caroteneRae
+  if (totalRae <= 0) return null
+  const plantShare = caroteneRae / totalRae
+  if (plantShare >= 0.85) return 'plant'
+  if (plantShare <= 0.15) return 'preformed'
+  return 'mixed'
+}
+
 // Per-food breakdown of one nutrient for the day, for the contributor dropdown:
 //   • contributors: foods that supply the nutrient, each with its summed amount
 //     (respecting servings), share (% of the day total), and provenance markers
@@ -132,7 +179,10 @@ export function nutrientContributors(id, logs, foodsById) {
       prev.markers.borrowed ||= markers.borrowed
       prev.markers.profile ||= markers.profile
     } else {
-      byFood.set(food.id, { foodId: food.id, name, amount, markers })
+      // Vitamin A contributors carry a form tag (retinol vs beta-carotene) so the
+      // dropdown can show which foods gave preformed vs plant-source vitamin A.
+      const form = id === 'vitamin_a' ? vitaminAForm(food) : null
+      byFood.set(food.id, { foodId: food.id, name, amount, markers, form })
     }
   }
 
@@ -194,7 +244,7 @@ export function micronutrientRows(logs, foodsById, targetsRow) {
       unit: meta.unit,
       // 'target' (aim to reach, e.g. vitamins) vs 'limit' (cap, e.g. sat fat).
       kind: meta.kind ?? 'target',
-      // Informational rows (omega-3 rollups) carry a running total with no bar —
+      // Informational rows (the EPA+DHA row) carry a running total with no bar —
       // there is no established intake to measure them against.
       informational,
       amount,
@@ -204,16 +254,38 @@ export function micronutrientRows(logs, foodsById, targetsRow) {
       lowCoverage: cover < COVERAGE_THRESHOLD,
       pct,
       overUL,
+      // Optional omega-3 display hints (undefined for ordinary nutrients).
+      omegaRole: meta.omegaRole ?? null,
+      subtitle: meta.subtitle ?? null,
+      reference: meta.reference ?? null,
+      groupNote: meta.groupNote ?? null,
     }
   }
 
   const rows = []
   for (const id of CURATED_ORDER) {
-    if (HIDDEN_IN_ROLLUP.has(id)) continue // EPA/DHA surface via the rollups below
-    const meta = NUTRIENT_BY_ID.get(id)
-    rows.push(buildRow(meta, meta.rollup === true))
-    // Slot the computed "EPA + DHA" row right under the Omega-3 total.
-    if (id === 'omega_3_total') rows.push(buildRow(EPA_DHA_META, true))
+    if (HIDDEN_IN_ROLLUP.has(id)) continue // EPA/DHA surface via the EPA+DHA row
+    // Retire the face-value omega-3 total from display: summing ALA with EPA+DHA
+    // overstates usable omega-3 (ALA converts poorly). Lead the omega-3 group
+    // with the preformed EPA+DHA row instead. The raw acids are still stored.
+    if (id === 'omega_3_total') {
+      rows.push(buildRow(EPA_DHA_META, true))
+      continue
+    }
+    // ALA: a real AI-target row, but subordinate to EPA+DHA and labeled with its
+    // poor conversion. It also anchors the group's one-line educational note.
+    if (id === 'ala') {
+      rows.push(
+        buildRow({
+          ...NUTRIENT_BY_ID.get('ala'),
+          omegaRole: 'secondary',
+          subtitle: '~5–10% converts to EPA/DHA',
+          groupNote: OMEGA_GROUP_NOTE,
+        })
+      )
+      continue
+    }
+    rows.push(buildRow(NUTRIENT_BY_ID.get(id)))
   }
   return rows
 }

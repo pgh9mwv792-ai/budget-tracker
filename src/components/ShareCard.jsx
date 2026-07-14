@@ -210,14 +210,14 @@ export default function ShareCard({ cards, firstName = '', onClose }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-5"
+        className="w-full max-w-md rounded-2xl bg-surface border border-border shadow-xl p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Share your moment</h2>
+          <h2 className="text-base font-semibold text-text">Share your moment</h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl leading-none"
+            className="text-text-muted hover:text-text text-xl leading-none"
             aria-label="Close"
           >
             ×
@@ -225,15 +225,15 @@ export default function ShareCard({ cards, firstName = '', onClose }) {
         </div>
 
         {cards.length > 1 && (
-          <div className="grid grid-flow-col auto-cols-fr gap-1 mb-4 p-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm">
+          <div className="grid grid-flow-col auto-cols-fr gap-1 mb-4 p-1 rounded-lg bg-bg text-sm">
             {cards.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setActiveId(c.id)}
                 className={`px-2 py-1.5 rounded-md transition ${
                   active?.id === c.id
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm font-medium'
-                    : 'text-slate-500 dark:text-slate-400'
+                    ? 'bg-surface text-text shadow-sm font-medium'
+                    : 'text-text-muted'
                 }`}
               >
                 {c.label}
@@ -242,20 +242,20 @@ export default function ShareCard({ cards, firstName = '', onClose }) {
           </div>
         )}
 
-        <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">
+        <div className="rounded-xl overflow-hidden border border-border">
           <canvas ref={canvasRef} width={SIZE} height={SIZE} className="block w-full h-auto" />
         </div>
 
-        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+        <p className="mt-3 text-xs text-text-muted">
           Only this stat, your first name, and the app name are on the card — never balances, banks, or transactions.
         </p>
 
-        {note && <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{note}</p>}
+        {note && <p className="mt-2 text-xs text-warning">{note}</p>}
 
         <div className="mt-4 flex gap-2">
           <button
             onClick={download}
-            className="flex-1 rounded-md bg-slate-900 dark:bg-emerald-600 text-white py-2 text-sm font-medium hover:bg-slate-800 dark:hover:bg-emerald-500 transition"
+            className="flex-1 rounded-md bg-primary hover:bg-primary-hover text-on-primary py-2 text-sm font-medium transition"
           >
             Download PNG
           </button>
@@ -263,7 +263,7 @@ export default function ShareCard({ cards, firstName = '', onClose }) {
             <button
               onClick={share}
               disabled={busy}
-              className="flex-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-100 py-2 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50"
+              className="flex-1 rounded-md border border-border bg-surface text-text py-2 text-sm font-medium hover:bg-primary-tint transition disabled:opacity-50"
             >
               {busy ? 'Sharing…' : 'Share'}
             </button>

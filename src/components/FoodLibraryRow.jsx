@@ -22,10 +22,10 @@ function SourceBadge({ source }) {
   const label = SOURCE_LABEL[source] ?? source
   const tone =
     source === 'estimate'
-      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+      ? 'bg-warning/15 text-warning'
       : source === 'web'
-        ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
-        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+        ? 'bg-primary/10 text-interactive'
+        : 'bg-border text-text-muted'
   return (
     <span className={`ml-1.5 align-middle rounded px-1 py-px text-[10px] font-medium ${tone}`}>{label}</span>
   )
@@ -51,22 +51,22 @@ export default function FoodLibraryRow({ food: f, onDeleteFood, onUpdateFood, on
           aria-expanded={open}
         >
           <span
-            className={`mt-0.5 text-slate-400 dark:text-slate-500 transition-transform ${open ? 'rotate-90' : ''}`}
+            className={`mt-0.5 text-text-muted transition-transform ${open ? 'rotate-90' : ''}`}
             aria-hidden
           >
             ›
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-slate-700 dark:text-slate-200">
+            <span className="block truncate text-text">
               {f.name}
-              {f.serving_desc && <span className="text-slate-400 dark:text-slate-500"> · {f.serving_desc}</span>}
+              {f.serving_desc && <span className="text-text-muted"> · {f.serving_desc}</span>}
               {f.source === 'estimate' ? <EstBadge /> : <SourceBadge source={f.source} />}
               <GradeBadge grade={f.grade} />
             </span>
             {f.brand && (
-              <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{f.brand}</span>
+              <span className="block truncate text-xs text-text-muted">{f.brand}</span>
             )}
-            <span className="block text-xs text-slate-400 dark:text-slate-500">
+            <span className="block text-xs text-text-muted">
               {Math.round(Number(f.calories))} cal · {Math.round(Number(f.protein))}g P · {Math.round(Number(f.carbs))}g C ·{' '}
               {Math.round(Number(f.fat))}g F
               {f.cost != null && ` · $${Number(f.cost).toFixed(2)}`}
@@ -81,8 +81,8 @@ export default function FoodLibraryRow({ food: f, onDeleteFood, onUpdateFood, on
               title={f.is_stack ? 'In your daily stack — click to remove' : 'Add to your daily stack'}
               className={`text-xs ${
                 f.is_stack
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                  ? 'text-interactive'
+                  : 'text-text-muted hover:text-text'
               }`}
             >
               {f.is_stack ? '★ Stack' : '☆ Stack'}
@@ -90,7 +90,7 @@ export default function FoodLibraryRow({ food: f, onDeleteFood, onUpdateFood, on
           )}
           <button
             onClick={() => onDeleteFood(f.id)}
-            className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs"
+            className="text-danger hover:text-danger text-xs"
           >
             Delete
           </button>
@@ -116,7 +116,7 @@ function GradeBadge({ grade }) {
   const label = gradeLabel(grade)
   if (!label) return null
   return (
-    <span className="ml-1.5 align-middle rounded px-1 py-px text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+    <span className="ml-1.5 align-middle rounded px-1 py-px text-[10px] font-medium bg-primary/10 text-interactive">
       {label}
     </span>
   )
@@ -144,7 +144,7 @@ function GradeEditor({ food: f, onUpdateFood }) {
   const activeTier = f.grade ? gradeById(f.grade)?.tier : null
   return (
     <div>
-      <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Quality grade</p>
+      <p className="text-xs font-medium text-text-muted mb-1">Quality grade</p>
       <div className="flex flex-wrap gap-1.5">
         {options.map((g) => {
           const on = g.id === f.grade
@@ -156,8 +156,8 @@ function GradeEditor({ food: f, onUpdateFood }) {
               disabled={busy}
               className={`rounded-full px-2.5 py-1 text-xs font-medium border transition disabled:opacity-50 ${
                 on
-                  ? 'bg-emerald-600 border-emerald-600 text-white'
-                  : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  ? 'bg-primary border-primary text-on-primary'
+                  : 'border-border text-text-muted hover:bg-bg'
               }`}
             >
               {g.label}
@@ -166,7 +166,7 @@ function GradeEditor({ food: f, onUpdateFood }) {
         })}
       </div>
       {f.grade && (
-        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+        <p className="text-[11px] text-text-muted mt-1">
           {activeTier === 2
             ? 'Cited nutrient values are applied to this food. Click the chip again to remove.'
             : 'Saved as a label — no nutrition change. Click the chip again to remove.'}
@@ -180,7 +180,7 @@ function ProvenanceLine({ food: f, enrichedCount }) {
   const label = SOURCE_LABEL[f.source] ?? 'Manual entry'
   const domain = f.source_ref ? urlDomain(f.source_ref) : ''
   return (
-    <p className="text-xs text-slate-500 dark:text-slate-400">
+    <p className="text-xs text-text-muted">
       Source: {label}
       {f.source === 'web' && f.source_ref && (
         <>
@@ -189,14 +189,14 @@ function ProvenanceLine({ food: f, enrichedCount }) {
             href={f.source_ref}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sky-600 dark:text-sky-400 hover:underline"
+            className="text-interactive hover:underline"
           >
             {domain || 'view source'}
           </a>
         </>
       )}
       {enrichedCount > 0 && (
-        <span className="text-slate-400 dark:text-slate-500">
+        <span className="text-text-muted">
           {' · '}
           {enrichedCount} micronutrient{enrichedCount === 1 ? '' : 's'} from a generic equivalent
         </span>
@@ -231,25 +231,25 @@ function AliasEditor({ food: f, aliases, onUpdateFood }) {
 
   return (
     <div>
-      <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Quick-names</p>
+      <p className="text-xs font-medium text-text-muted mb-1">Quick-names</p>
       <div className="flex flex-wrap items-center gap-1.5">
         {aliases.map((a) => (
           <span
             key={a}
-            className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs px-2 py-0.5"
+            className="inline-flex items-center gap-1 rounded-full bg-border text-text-muted text-xs px-2 py-0.5"
           >
             {a}
             <button
               onClick={() => remove(a)}
               disabled={busy}
               aria-label={`Remove quick-name ${a}`}
-              className="text-slate-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-50"
+              className="text-text-muted hover:text-danger disabled:opacity-50"
             >
               ✕
             </button>
           </span>
         ))}
-        {aliases.length === 0 && <span className="text-xs text-slate-400 dark:text-slate-500">None yet</span>}
+        {aliases.length === 0 && <span className="text-xs text-text-muted">None yet</span>}
       </div>
       <form onSubmit={add} className="mt-1.5 flex gap-2">
         <input
@@ -257,12 +257,12 @@ function AliasEditor({ food: f, aliases, onUpdateFood }) {
           onChange={(e) => setText(e.target.value)}
           placeholder='e.g. "eggs", "my protein"'
           disabled={busy}
-          className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50"
+          className="flex-1 rounded-lg border border-border bg-surface text-text px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-interactive/40 disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={busy || !text.trim()}
-          className="rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 font-medium disabled:opacity-50"
+          className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-xs px-3 font-medium disabled:opacity-50"
         >
           Add
         </button>
@@ -334,9 +334,9 @@ function EnrichPanel({ food: f, onUpdateFood, onSearchFoods, onFoodDetails }) {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5">
-      <p className="text-xs font-medium text-slate-600 dark:text-slate-300">Fill in micronutrients from a generic equivalent</p>
-      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 mb-2">
+    <div className="rounded-lg border border-border p-2.5">
+      <p className="text-xs font-medium text-text-muted">Fill in micronutrients from a generic equivalent</p>
+      <p className="text-[11px] text-text-muted mt-0.5 mb-2">
         Borrows nutrients this label doesn’t list (choline, magnesium, etc.) from a generic USDA food. Your label’s own numbers stay as-is.
       </p>
 
@@ -347,18 +347,18 @@ function EnrichPanel({ food: f, onUpdateFood, onSearchFoods, onFoodDetails }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search a generic food, e.g. “egg, whole”"
-              className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              className="flex-1 rounded-lg border border-border bg-surface text-text px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-interactive/40"
             />
             <button
               type="submit"
               disabled={searching || query.trim().length < 2}
-              className="rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 font-medium disabled:opacity-50"
+              className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-xs px-3 font-medium disabled:opacity-50"
             >
               {searching ? '…' : 'Search'}
             </button>
           </form>
           {results && results.length === 0 && (
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">No matches — try different words.</p>
+            <p className="text-xs text-text-muted mt-2">No matches — try different words.</p>
           )}
           {results && results.length > 0 && (
             <ul className="mt-2 space-y-1">
@@ -367,7 +367,7 @@ function EnrichPanel({ food: f, onUpdateFood, onSearchFoods, onFoodDetails }) {
                   <button
                     onClick={() => choose(r)}
                     disabled={busy}
-                    className="w-full text-left rounded-lg px-2 py-1 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                    className="w-full text-left rounded-lg px-2 py-1 text-xs text-text hover:bg-bg disabled:opacity-50"
                   >
                     {r.name}
                     {r.brand ? ` (${r.brand})` : ''}
@@ -381,7 +381,7 @@ function EnrichPanel({ food: f, onUpdateFood, onSearchFoods, onFoodDetails }) {
 
       {preview && (
         <div className="space-y-2">
-          <p className="text-xs text-slate-600 dark:text-slate-300">
+          <p className="text-xs text-text-muted">
             From <span className="font-medium">{preview.name}</span>, scaled to this food’s {preview.servingGrams} g serving,
             I’d add {preview.added.length} nutrient{preview.added.length === 1 ? '' : 's'}:
           </p>
@@ -389,7 +389,7 @@ function EnrichPanel({ food: f, onUpdateFood, onSearchFoods, onFoodDetails }) {
             {preview.added.map((a) => (
               <span
                 key={a.id}
-                className="rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[11px] px-2 py-0.5"
+                className="rounded-full bg-success/10 text-success text-[11px] px-2 py-0.5"
               >
                 {a.name} {Math.round(a.amount * 100) / 100}
                 {a.unit}
@@ -400,14 +400,14 @@ function EnrichPanel({ food: f, onUpdateFood, onSearchFoods, onFoodDetails }) {
             <button
               onClick={apply}
               disabled={busy}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1 font-medium disabled:opacity-50"
+              className="rounded-lg bg-primary hover:bg-primary-hover text-on-primary text-xs px-3 py-1 font-medium disabled:opacity-50"
             >
               {busy ? 'Adding…' : 'Add these'}
             </button>
             <button
               onClick={() => setPreview(null)}
               disabled={busy}
-              className="rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs px-3 py-1 disabled:opacity-50"
+              className="rounded-lg border border-border text-text-muted text-xs px-3 py-1 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -415,7 +415,7 @@ function EnrichPanel({ food: f, onUpdateFood, onSearchFoods, onFoodDetails }) {
         </div>
       )}
 
-      {error && <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">{error}</p>}
+      {error && <p className="text-xs text-warning mt-2">{error}</p>}
     </div>
   )
 }
