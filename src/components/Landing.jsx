@@ -8,15 +8,23 @@ import { estimateProteinCosts } from '../lib/foodCost'
 const FEATURES = [
   {
     title: 'See what your food actually costs',
-    body: 'Track meals and macros like any tracker — but each food carries its real price, so you get cost per 100g of protein and your cheapest protein ranked automatically.',
+    body: 'Log meals like any tracker — but every food carries its real price, so you get cost per gram of protein and your cheapest protein, ranked automatically.',
+    Visual: FoodCostMini,
   },
   {
-    title: 'Automatic bank import and budgets',
-    body: 'Link a bank or credit card and transactions import and categorize themselves. Set monthly budgets per category and watch spending against them.',
+    title: 'Stop hand-entering transactions',
+    body: 'Link a bank or card and transactions import and categorize themselves. No more typing in every coffee run.',
+    Visual: TransactionsMock,
   },
   {
-    title: 'An AI assistant that does the work',
-    body: 'Ask questions in plain language — "how much did I spend eating out?" — or tell it to add a transaction, set a budget, or log a meal. It reads your data and makes the change.',
+    title: 'Catch overspending before month-end',
+    body: 'Set a monthly budget per category and watch each one fill up as you spend.',
+    Visual: BudgetMock,
+  },
+  {
+    title: 'Just ask instead of digging',
+    body: 'Ask in plain language, or tell it to add a transaction, set a budget, or log a meal — it reads your data and makes the change.',
+    Visual: AssistantMock,
   },
 ]
 
@@ -210,11 +218,121 @@ function FounderStory() {
   )
 }
 
-function ScreenshotPlaceholder({ label }) {
+// Feature-row visuals. Each renders a cropped slice of the real product UI with
+// realistic sample data and makes exactly one point. All use design tokens only
+// (no hardcoded hues) so they read correctly in both light and dark themes, and
+// share the card radius/border of the buttons and cards around them.
+
+// Money formatter shared by the transaction and budget visuals.
+const usd = (n) =>
+  n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+// Food cost → the app's core idea, cropped to just the cheapest-protein ranking.
+function FoodCostMini() {
+  const cheapest = estimateProteinCosts().slice(0, 3)
   return (
-    <div className="aspect-video w-full rounded-xl border border-dashed border-border bg-bg flex items-center justify-center">
-      {/* SCREENSHOT: {label} — 16:9, drop the product screenshot here */}
-      <span className="text-xs text-text-muted">{label}</span>
+    <div className="rounded-xl overflow-hidden border border-border bg-surface">
+      <div className="border-b border-border px-4 py-2.5 text-xs font-medium text-text-muted">
+        Cheapest protein · $ per 30g
+      </div>
+      <ul className="p-3 space-y-2">
+        {cheapest.map((r, i) => (
+          <li key={r.name} className="flex items-center gap-3">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold tabular-nums text-interactive">
+              {i + 1}
+            </span>
+            <span className="min-w-0 flex-1 text-sm text-text">
+              {r.name}
+              <span className="block text-xs text-text-muted">{r.unit}</span>
+            </span>
+            <span className="shrink-0 text-sm font-semibold tabular-nums text-text">
+              ${usd(r.costPerPortion)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// Bank import → imported rows that categorized themselves; green income / red
+// expense via the semantic tokens, category as a chip.
+function TransactionsMock() {
+  const rows = [
+    ["Trader Joe's", -64.18, 'Groceries'],
+    ['Chipotle', -12.85, 'Dining out'],
+    ['Shell', -41.2, 'Gas'],
+    ['Paycheck', 2480, 'Income'],
+  ]
+  return (
+    <div className="rounded-xl overflow-hidden border border-border bg-surface">
+      <div className="border-b border-border px-4 py-2.5 text-xs font-medium text-text-muted">
+        Imported today · auto-categorized
+      </div>
+      {rows.map(([name, amt, cat]) => (
+        <div
+          key={name}
+          className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5 last:border-b-0"
+        >
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-text">{name}</div>
+            <span className="mt-0.5 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-interactive">
+              {cat}
+            </span>
+          </div>
+          <span
+            className={`shrink-0 text-sm font-semibold tabular-nums ${amt >= 0 ? 'text-success' : 'text-danger'}`}
+          >
+            {amt >= 0 ? '+' : '−'}${usd(Math.abs(amt))}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Budget → a progress card mid-month: one healthy category, one near its limit.
+function BudgetMock() {
+  const budgets = [
+    { name: 'Groceries', spent: 312, limit: 450 },
+    { name: 'Dining out', spent: 178, limit: 200 },
+  ]
+  return (
+    <div className="rounded-xl overflow-hidden border border-border bg-surface p-4 space-y-4">
+      {budgets.map((b) => {
+        const pct = b.spent / b.limit
+        const bar = pct >= 1 ? 'bg-danger' : pct >= 0.85 ? 'bg-warning' : 'bg-success'
+        return (
+          <div key={b.name}>
+            <div className="flex items-baseline justify-between text-sm">
+              <span className="font-medium text-text">{b.name}</span>
+              <span className="tabular-nums text-text-muted">
+                <span className="font-semibold text-text">${usd(b.spent)}</span> of ${usd(b.limit)}
+              </span>
+            </div>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-bg">
+              <div
+                className={`h-full rounded-full ${bar}`}
+                style={{ width: `${Math.min(100, pct * 100)}%` }}
+              />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// AI assistant → told to do something, it makes the change and reports back.
+function AssistantMock() {
+  return (
+    <div className="rounded-xl overflow-hidden border border-border bg-surface p-4 space-y-2.5">
+      <div className="ml-auto max-w-[80%] rounded-2xl bg-primary px-3 py-2 text-sm text-on-primary">
+        add $60 groceries from today
+      </div>
+      <div className="max-w-[88%] rounded-2xl border border-border bg-bg px-3 py-2 text-sm text-text">
+        Added a $60 Groceries expense for today. Your grocery budget is now $372 of $450.
+      </div>
     </div>
   )
 }
@@ -228,50 +346,68 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-primary" />
           Budget Tracker
         </div>
-        <button
-          onClick={onSignIn}
-          className="text-sm font-medium text-text-muted hover:text-text"
-        >
-          Sign in
-        </button>
-      </header>
-
-      {/* Hero */}
-      <section className="max-w-5xl mx-auto px-4 pt-10 pb-16 text-center">
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight max-w-3xl mx-auto">
-          Macro tracking that knows what your food actually costs.
-        </h1>
-        <p className="mt-5 text-lg text-text-muted max-w-2xl mx-auto">
-          Most trackers count calories. This one connects your meals to your real transactions, so you see
-          cost per gram of protein, where your food money goes, and the whole budget around it.
-        </p>
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <button
-            onClick={onGetStarted}
-            className="rounded-md bg-primary hover:bg-primary-hover text-on-primary px-6 py-3 text-sm font-semibold transition"
-          >
-            Get started free
-          </button>
+        <div className="flex items-center gap-4">
           <button
             onClick={onSignIn}
-            className="rounded-md border border-border px-6 py-3 text-sm font-semibold hover:bg-primary-tint transition"
+            className="text-sm font-medium text-text-muted hover:text-text"
           >
             Sign in
           </button>
-        </div>
-        {onExploreDemo && (
           <button
-            onClick={onExploreDemo}
-            className="mt-4 text-sm font-semibold text-interactive hover:underline"
+            onClick={onGetStarted}
+            className="rounded-md bg-primary hover:bg-primary-hover text-on-primary px-4 py-2 text-sm font-semibold transition"
           >
-            Explore with sample data — no account needed →
+            Get started free
           </button>
-        )}
-        <p className="mt-3 text-xs text-text-muted">Free to start. No ads, ever.</p>
-      </section>
+        </div>
+      </header>
 
-      {/* Cost-per-protein example — the core idea, made concrete with real numbers */}
-      <ProteinCostExample />
+      {/* Hero + the concrete cost-per-protein example share a soft entry glow
+          that fades from a light brand tint down into the page background,
+          easing the eye from the hero visual into the following section. */}
+      <div className="relative isolate">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] bg-gradient-to-b from-primary-tint/50 to-transparent"
+        />
+
+        {/* Hero */}
+        <section className="max-w-5xl mx-auto px-4 pt-10 pb-16 text-center">
+          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight max-w-3xl mx-auto">
+            Macro tracking that knows what your food actually costs.
+          </h1>
+          <p className="mt-5 text-lg text-text-muted max-w-2xl mx-auto">
+            Most trackers count calories. This one connects your meals to your real transactions, so you see
+            cost per gram of protein, where your food money goes, and the whole budget around it.
+          </p>
+          <div className="mt-8 flex items-center justify-center gap-3">
+            <button
+              onClick={onGetStarted}
+              className="rounded-md bg-primary hover:bg-primary-hover text-on-primary px-6 py-3 text-sm font-semibold transition"
+            >
+              Get started free <span aria-hidden="true">→</span>
+            </button>
+            <button
+              onClick={onSignIn}
+              className="rounded-md border border-border px-6 py-3 text-sm font-semibold hover:bg-primary-tint transition"
+            >
+              Sign in
+            </button>
+          </div>
+          {onExploreDemo && (
+            <button
+              onClick={onExploreDemo}
+              className="mt-4 text-sm font-semibold text-interactive hover:underline"
+            >
+              Explore with sample data — no account needed →
+            </button>
+          )}
+          <p className="mt-3 text-xs text-text-muted">Free to start. No ads, ever.</p>
+        </section>
+
+        {/* Cost-per-protein example — the core idea, made concrete with real numbers */}
+        <ProteinCostExample />
+      </div>
 
       {/* Features */}
       <section className="max-w-5xl mx-auto px-4 pb-20 space-y-16">
@@ -284,7 +420,7 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
               <h2 className="text-2xl font-semibold">{f.title}</h2>
               <p className="mt-3 text-text-muted">{f.body}</p>
             </div>
-            <ScreenshotPlaceholder label={f.title} />
+            <f.Visual />
           </div>
         ))}
       </section>
@@ -294,6 +430,11 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
 
       {/* Founder story — why this exists, in plain first person. No fake press. */}
       <FounderStory />
+
+      {/* A short ramp from the page background up into the pricing band, so the
+          deliberate bg-surface break (kept below via border-y) reads as
+          intentional rather than an abrupt line. */}
+      <div aria-hidden className="h-6 bg-gradient-to-b from-bg to-surface" />
 
       {/* Pricing */}
       <section className="bg-surface border-y border-border">
@@ -384,7 +525,7 @@ export default function Landing({ onGetStarted, onSignIn, onExploreDemo }) {
           onClick={onGetStarted}
           className="rounded-md bg-primary hover:bg-primary-hover text-on-primary px-6 py-3 text-sm font-semibold transition"
         >
-          Get started free
+          Get started free <span aria-hidden="true">→</span>
         </button>
       </section>
 
