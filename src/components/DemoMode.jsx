@@ -2,12 +2,15 @@ import { useMemo, useState, lazy, Suspense } from 'react'
 import NavBar from './NavBar'
 import Subscriptions from './Subscriptions'
 import { buildDemoData } from '../lib/demoData'
+import { buildScheduleEventRows, localTimeZone } from '../lib/schedule'
+import { todayISO } from '../lib/dateHelpers'
 import { Delayed } from './ui/Skeleton'
 import {
   DashboardSkeleton,
   TransactionListSkeleton,
   BudgetManagerSkeleton,
   MealTrackerSkeleton,
+  CalendarSkeleton,
 } from './Skeletons'
 
 // Signed-out "Explore with sample data" experience. Renders the real app
@@ -23,11 +26,13 @@ const Dashboard = lazy(() => import('./Dashboard'))
 const TransactionList = lazy(() => import('./TransactionList'))
 const BudgetManager = lazy(() => import('./BudgetManager'))
 const MealTracker = lazy(() => import('./MealTracker'))
+const Calendar = lazy(() => import('./Calendar'))
+const ScheduleEntryBar = lazy(() => import('./ScheduleEntryBar'))
 
 // Tabs that carry sample data worth exploring. The rest of the real nav
 // (Credit, Goals, Categories, Settings) would be empty or account-bound, so the
 // demo redirects those back to the Dashboard rather than showing blank pages.
-const DEMO_TABS = new Set(['Dashboard', 'Transactions', 'Budgets', 'Meals'])
+const DEMO_TABS = new Set(['Dashboard', 'Transactions', 'Calendar', 'Budgets', 'Meals'])
 
 let demoLogSeq = 0
 const nextDemoId = (prefix) => `${prefix}-live-${demoLogSeq++}`
@@ -42,7 +47,26 @@ export default function DemoMode({ onExit, onSignUp }) {
   const [foodLogs, setFoodLogs] = useState(initial.foodLogs)
   const [budgets, setBudgets] = useState(initial.budgets)
   const [nutritionTargets, setNutritionTargets] = useState(initial.nutritionTargets)
+  const [calendarEvents, setCalendarEvents] = useState([])
   const { categories } = initial
+
+  // Local-only schedule commit: no DB, just append materialized events to state
+  // so the demo's calendar reacts like the real one.
+  const commitSchedule = (draft) => {
+    const rows = buildScheduleEventRows(draft, {
+      today: todayISO(),
+      timezone: localTimeZone(),
+      hourlyRate: draft.wage?.hourlyRate ?? null,
+      title: draft.wage?.name || draft.employer || 'Shift',
+    }).map((r, i) => ({ ...r, id: nextDemoId('demo-event') + '-' + i }))
+    setCalendarEvents((prev) => [...prev, ...rows])
+  }
+  const cancelCalendarEvent = (event) =>
+    setCalendarEvents((prev) =>
+      prev.map((e) => (e.id === event.id ? { ...e, status: 'cancelled', is_exception: true } : e))
+    )
+  const deleteCalendarSeries = (ruleId) =>
+    setCalendarEvents((prev) => prev.filter((e) => e.rule_id !== ruleId))
 
   const goTab = (tab) => setActiveTab(DEMO_TABS.has(tab) ? tab : 'Dashboard')
 
@@ -52,6 +76,7 @@ export default function DemoMode({ onExit, onSignUp }) {
     {
       Dashboard: <DashboardSkeleton />,
       Transactions: <TransactionListSkeleton />,
+      Calendar: <CalendarSkeleton />,
       Budgets: <BudgetManagerSkeleton />,
       Meals: <MealTrackerSkeleton />,
     }[activeTab] ?? <TabSkeleton />
@@ -152,6 +177,16 @@ export default function DemoMode({ onExit, onSignUp }) {
                 onDelete={(id) => setTransactions((prev) => prev.filter((t) => t.id !== id))}
               />
             </>
+          )}
+
+          {activeTab === 'Calendar' && (
+            <Calendar
+              transactions={transactions}
+              events={calendarEvents}
+              onCancelEvent={cancelCalendarEvent}
+              onDeleteSeries={deleteCalendarSeries}
+              entryBar={<ScheduleEntryBar onCommit={commitSchedule} userName="Sample account" />}
+            />
           )}
 
           {activeTab === 'Budgets' && (

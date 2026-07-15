@@ -39,6 +39,21 @@ CI requires three GitHub repo secrets: `SUPABASE_ACCESS_TOKEN`,
 When a change needs more than a git push (e.g. a new edge-function *secret*),
 **tell the user exactly which extra step to do**, or it will look "broken."
 
+> **A new migration is not live until it reaches *remote*.** Creating
+> `supabase/migrations/00NN_*.sql` and applying it to the **local** DB only
+> changes local — the app runs against the **remote** project
+> (`flnppvzyevcuawqxiksu`), so a local-only migration makes the API fail with
+> `Could not find the table 'public.<name>' in the schema cache` (PostgREST
+> error `PGRST205`). Every new migration MUST reach remote by one of:
+> (a) `git add` + commit + `git push` to `main` (CI runs `supabase db push`), or
+> (b) `supabase db push` manually (needs `SUPABASE_ACCESS_TOKEN` **or**
+> `SUPABASE_DB_PASSWORD` in the env — the login-role step won't read the macOS
+> Keychain), or (c) paste the SQL into the Supabase SQL Editor and Run.
+> After any of these, if the API still can't see the table, reload the schema
+> cache: run `notify pgrst, 'reload schema';` in the SQL Editor.
+> Check `supabase migration list` — any row where **Remote** is blank while
+> **Local** is set is a migration that never shipped.
+
 ## Secrets (edge functions only — never in `VITE_` vars or frontend)
 | Secret | Purpose |
 | --- | --- |

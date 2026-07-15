@@ -12,6 +12,7 @@ import UpgradeGate from './components/UpgradeGate'
 // bundle small. Suspense shows TabSkeleton while a chunk is fetched.
 const Dashboard = lazy(() => import('./components/Dashboard'))
 const TransactionList = lazy(() => import('./components/TransactionList'))
+const Calendar = lazy(() => import('./components/Calendar'))
 const BudgetManager = lazy(() => import('./components/BudgetManager'))
 const CreditTab = lazy(() => import('./components/CreditTab'))
 const MealTracker = lazy(() => import('./components/MealTracker'))
@@ -26,6 +27,7 @@ const ChatWidget = lazy(() => import('./components/ChatWidget'))
 // receipt/image code out of the entry chunk until actually needed.
 const PlaidLinkButton = lazy(() => import('./components/PlaidLinkButton'))
 const ReceiptScanner = lazy(() => import('./components/ReceiptScanner'))
+const ScheduleEntryBar = lazy(() => import('./components/ScheduleEntryBar'))
 const Onboarding = lazy(() => import('./components/Onboarding'))
 // Signed-out sample-data explorer: loads only when a visitor opens the demo.
 const DemoMode = lazy(() => import('./components/DemoMode'))
@@ -40,12 +42,14 @@ import {
   MealTrackerSkeleton,
   GoalTrackerSkeleton,
   CategoryManagerSkeleton,
+  CalendarSkeleton,
 } from './components/Skeletons'
 import { supabase } from './lib/supabaseClient'
 import { merchantKey, matchRules } from './lib/analysis'
 import { perUnitCost } from './lib/receiptMatch'
 import { pairTransfers } from './lib/transferPair'
 import { addDays, todayISO } from './lib/dateHelpers'
+import { buildScheduleEventRows, localTimeZone } from './lib/schedule'
 
 function AppShell() {
   const { user, loading, needsMfa, signOut } = useAuth()
@@ -63,6 +67,12 @@ function AppShell() {
   const [memories, setMemories] = useState([])
   const [plaidAccounts, setPlaidAccounts] = useState([])
   const [creditScores, setCreditScores] = useState([])
+  // Calendar feature (migration 0031): employers/wages, recurring schedule
+  // rules, and their materialized event instances. Bills/paydays are NOT stored
+  // here — they render live from recurring-transaction detection.
+  const [incomeSources, setIncomeSources] = useState([])
+  const [scheduleRules, setScheduleRules] = useState([])
+  const [calendarEvents, setCalendarEvents] = useState([])
   // Itemized receipts (migration 0016) and the remembered raw-item→food rules.
   const [receipts, setReceipts] = useState([])
   const [receiptItemRules, setReceiptItemRules] = useState([])
@@ -102,7 +112,7 @@ function AppShell() {
   const loadAll = useCallback(async () => {
     if (!user) return
     if (!hasLoadedOnce.current) setDataLoading(true)
-    const [cats, txs, gls, buds, rls, fds, flogs, mtmpls, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules, recovr, tpairs] = await Promise.all([
+    const [cats, txs, gls, buds, rls, fds, flogs, mtmpls, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules, recovr, tpairs, isources, srules, cevents] = await Promise.all([
       api.ensureDefaultCategories(user.id),
       api.fetchTransactions(),
       api.fetchGoals(),
@@ -134,6 +144,10 @@ function AppShell() {
       api.fetchRecurringOverrides().catch(() => []),
       // Saved transfer-pair links live in migration 0029; degrade gracefully.
       api.fetchTransferPairs().catch(() => []),
+      // Calendar tables live in migration 0031; degrade gracefully until run.
+      api.fetchIncomeSources().catch(() => []),
+      api.fetchScheduleRules().catch(() => []),
+      api.fetchCalendarEvents().catch(() => []),
     ])
 
     // Auto-categorize: apply saved merchant rules to any uncategorized
@@ -168,6 +182,9 @@ function AppShell() {
     setReceipts(rcpts ?? [])
     setReceiptItemRules(ritemrules ?? [])
     setRecurringOverrides(recovr ?? [])
+    setIncomeSources(isources ?? [])
+    setScheduleRules(srules ?? [])
+    setCalendarEvents(cevents ?? [])
 
     // Reconcile transfer pairs over the freshly-loaded transactions: auto-link
     // confident matches (persisted), and hold suspected matches in memory for
@@ -550,6 +567,69 @@ function AppShell() {
     return created
   }
 
+  // Persists a confirmed schedule from the Calendar's AI entry bar. A recurring
+  // draft becomes a schedule_rule materialized 8 weeks forward; a one-time draft
+  // becomes standalone events. Reuses the first known employer's wage (if any)
+  // so shift gross is filled in; the wage dialog sets that up separately.
+  const commitSchedule = async (draft) => {
+    const timezone = localTimeZone()
+    let source = incomeSources[0] ?? null
+
+    // First-shift wage setup: if the user entered a rate and we have no employer
+    // yet, create one now so gross fills in and future shifts reuse it.
+    if (!source && draft.wage) {
+      source = await api.createIncomeSource({
+        name: draft.wage.name,
+        hourlyRate: draft.wage.hourlyRate,
+        closeTime: draft.wage.closeTime ?? null,
+      })
+      setIncomeSources((prev) => [...prev, source])
+    }
+
+    const hourlyRate = source?.hourly_rate != null ? Number(source.hourly_rate) : null
+    const title = source?.name || draft.employer || 'Shift'
+
+    let ruleId = null
+    if (draft.recurring && draft.days_of_week.length) {
+      const rule = await api.createScheduleRule({
+        incomeSourceId: source?.id ?? null,
+        kind: 'shift',
+        title,
+        daysOfWeek: draft.days_of_week,
+        startTime: draft.shifts[0].start_time,
+        endTime: draft.shifts[0].end_time,
+        startsOn: todayISO(),
+        source: 'ai',
+        rawInput: draft.rawInput,
+      })
+      ruleId = rule.id
+      setScheduleRules((prev) => [...prev, rule])
+    }
+
+    const rows = buildScheduleEventRows(draft, {
+      today: todayISO(),
+      timezone,
+      hourlyRate,
+      title,
+      ids: { ruleId, incomeSourceId: source?.id ?? null },
+    })
+    const created = await api.createCalendarEvents(rows)
+    setCalendarEvents((prev) => [...prev, ...created])
+  }
+
+  // Cancel a single shift instance without touching its rule (is_exception).
+  const cancelCalendarEvent = async (event) => {
+    const updated = await api.updateCalendarEvent(event.id, { status: 'cancelled', is_exception: true })
+    setCalendarEvents((prev) => prev.map((e) => (e.id === event.id ? updated : e)))
+  }
+
+  // Delete a whole recurring series: the rule and (via cascade) all its events.
+  const deleteCalendarSeries = async (ruleId) => {
+    await api.deleteScheduleRule(ruleId)
+    setScheduleRules((prev) => prev.filter((r) => r.id !== ruleId))
+    setCalendarEvents((prev) => prev.filter((e) => e.rule_id !== ruleId))
+  }
+
   // Persists a scanned itemized receipt. If it matched a Plaid charge, that row
   // stays the money record — no duplicate transaction. If not, we fall back to
   // creating a manual transaction from the total and link the receipt to it.
@@ -671,6 +751,7 @@ function AppShell() {
       Meals: <MealTrackerSkeleton />,
       Goals: <GoalTrackerSkeleton />,
       Categories: <CategoryManagerSkeleton />,
+      Calendar: <CalendarSkeleton />,
     }[activeTab] ?? <TabSkeleton />
 
   return (
@@ -779,6 +860,25 @@ function AppShell() {
               onUnpair={unpairTransfer}
             />
           </>
+        )}
+
+        {activeTab === 'Calendar' && (
+          <Calendar
+            transactions={transactions}
+            events={calendarEvents}
+            overrides={recurringOverrides}
+            onCancelEvent={cancelCalendarEvent}
+            onDeleteSeries={deleteCalendarSeries}
+            entryBar={
+              <ScheduleEntryBar
+                onCommit={commitSchedule}
+                userName={user.user_metadata?.display_name}
+                hourlyRate={incomeSources[0]?.hourly_rate != null ? Number(incomeSources[0].hourly_rate) : null}
+                employerGuess={incomeSources[0]?.name ?? null}
+                closeTime={incomeSources[0]?.close_time ?? null}
+              />
+            }
+          />
         )}
 
         {activeTab === 'Budgets' && (

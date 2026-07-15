@@ -4,18 +4,20 @@ import BottomSheet from './BottomSheet'
 import {
   DashboardIcon,
   TransactionsIcon,
+  CalendarIcon,
   MealsIcon,
   BudgetsIcon,
   MoreIcon,
 } from './NavIcons'
 
-const TABS = ['Dashboard', 'Transactions', 'Budgets', 'Credit', 'Meals', 'Goals', 'Categories']
+const TABS = ['Dashboard', 'Transactions', 'Calendar', 'Budgets', 'Credit', 'Meals', 'Goals', 'Categories']
 
-// The five primary destinations on the mobile bottom bar. Everything else lives
+// The primary destinations on the mobile bottom bar. Everything else lives
 // behind "More".
 const BOTTOM_TABS = [
   { tab: 'Dashboard', Icon: DashboardIcon },
   { tab: 'Transactions', Icon: TransactionsIcon },
+  { tab: 'Calendar', Icon: CalendarIcon },
   { tab: 'Meals', Icon: MealsIcon },
   { tab: 'Budgets', Icon: BudgetsIcon },
 ]

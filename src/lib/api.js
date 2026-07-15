@@ -853,3 +853,127 @@ export async function fetchEntitlements() {
   const row = Array.isArray(data) ? data[0] : data
   return row ?? { plan: 'free', status: null, period_end: null }
 }
+
+// ---------- calendar: income_sources / schedule_rules / calendar_events ----------
+// (migration 0031). Thin CRUD; the Calendar component orchestrates rule +
+// instance writes and keeps local state in sync, matching the app's pattern.
+
+export async function fetchIncomeSources() {
+  const { data, error } = await supabase.from('income_sources').select('*').order('created_at')
+  if (error) throw error
+  return data
+}
+
+export async function createIncomeSource({ name, hourlyRate, payFrequency, payAnchor, closeTime }) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('income_sources')
+    .insert({
+      name,
+      hourly_rate: hourlyRate ?? null,
+      pay_frequency: payFrequency ?? null,
+      pay_anchor: payAnchor ?? null,
+      close_time: closeTime ?? null,
+      user_id: user.id,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateIncomeSource(id, updates) {
+  const { data, error } = await supabase
+    .from('income_sources')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function fetchScheduleRules() {
+  const { data, error } = await supabase.from('schedule_rules').select('*').order('created_at')
+  if (error) throw error
+  return data
+}
+
+export async function createScheduleRule({
+  incomeSourceId,
+  kind,
+  title,
+  daysOfWeek,
+  startTime,
+  endTime,
+  startsOn,
+  endsOn,
+  source,
+  rawInput,
+}) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('schedule_rules')
+    .insert({
+      income_source_id: incomeSourceId ?? null,
+      kind,
+      title: title ?? null,
+      days_of_week: daysOfWeek,
+      start_time: startTime,
+      end_time: endTime,
+      starts_on: startsOn,
+      ends_on: endsOn ?? null,
+      source: source ?? 'ai',
+      raw_input: rawInput ?? null,
+      user_id: user.id,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteScheduleRule(id) {
+  // calendar_events.rule_id cascades on delete, so its instances go with it.
+  const { error } = await supabase.from('schedule_rules').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchCalendarEvents() {
+  const { data, error } = await supabase.from('calendar_events').select('*').order('starts_at')
+  if (error) throw error
+  return data
+}
+
+// Bulk-insert materialized instances (from src/lib/materialize.js). Attaches
+// user_id to every row. Returns the inserted rows.
+export async function createCalendarEvents(rows) {
+  if (!rows || rows.length === 0) return []
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const withUser = rows.map((r) => ({ ...r, user_id: user.id }))
+  const { data, error } = await supabase.from('calendar_events').insert(withUser).select()
+  if (error) throw error
+  return data
+}
+
+export async function updateCalendarEvent(id, updates) {
+  const { data, error } = await supabase
+    .from('calendar_events')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteCalendarEvent(id) {
+  const { error } = await supabase.from('calendar_events').delete().eq('id', id)
+  if (error) throw error
+}

@@ -275,6 +275,35 @@ export function CategoryManagerSkeleton() {
   )
 }
 
+export function CalendarSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* AI entry bar */}
+      <Skeleton className="h-12 w-full rounded-xl" />
+
+      {/* Next-7-days summary card */}
+      <SkeletonCard className="space-y-3">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-5 w-2/3" />
+        <Skeleton className="h-4 w-1/2" />
+      </SkeletonCard>
+
+      {/* Month grid */}
+      <SkeletonCard>
+        <div className="flex items-center justify-between mb-3">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-8 w-24 rounded-md" />
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {range(35).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-md" />
+          ))}
+        </div>
+      </SkeletonCard>
+    </div>
+  )
+}
+
 // Shown inline while a Plaid bank sync is running. Immediate (no anti-flash
 // delay) since bank sync is always slow, and paired with a "Syncing your bank…"
 // hint so the wait is explained.

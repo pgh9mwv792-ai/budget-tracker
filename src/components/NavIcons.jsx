@@ -53,6 +53,17 @@ export function BudgetsIcon({ className = 'w-6 h-6' }) {
   )
 }
 
+export function CalendarIcon({ className = 'w-6 h-6' }) {
+  return (
+    <svg className={className} {...base}>
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+    </svg>
+  )
+}
+
 export function MoreIcon({ className = 'w-6 h-6' }) {
   return (
     <svg className={className} {...base}>

@@ -64,6 +64,7 @@ export async function callVision(system, messages, maxTokens) {
   const {
     data: { session },
   } = await supabase.auth.getSession()
+  if (!session) throw new Error('Please sign in to use AI features.')
   const { data, error } = await supabase.functions.invoke('chat', {
     body: { system, messages, ...(maxTokens ? { max_tokens: maxTokens } : {}) },
     headers: { Authorization: `Bearer ${session.access_token}` },
