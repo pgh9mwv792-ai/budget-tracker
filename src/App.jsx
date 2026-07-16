@@ -16,7 +16,7 @@ const Calendar = lazy(() => import('./components/Calendar'))
 const BudgetManager = lazy(() => import('./components/BudgetManager'))
 const CreditTab = lazy(() => import('./components/CreditTab'))
 const MealTracker = lazy(() => import('./components/MealTracker'))
-const GoalTracker = lazy(() => import('./components/GoalTracker'))
+const GoalsTab = lazy(() => import('./components/GoalsTab'))
 const CategoryManager = lazy(() => import('./components/CategoryManager'))
 const Settings = lazy(() => import('./components/Settings'))
 const Subscriptions = lazy(() => import('./components/Subscriptions'))
@@ -57,6 +57,11 @@ function AppShell() {
   const [categories, setCategories] = useState([])
   const [transactions, setTransactions] = useState([])
   const [goals, setGoals] = useState([])
+  // Body stats + unit preference, and the daily weight log (migration 0032).
+  // Both power the Goals tab's fitness goals + weight chart; degrade to
+  // null/[] until the migration is run.
+  const [profile, setProfile] = useState(null)
+  const [weightLogs, setWeightLogs] = useState([])
   const [budgets, setBudgets] = useState([])
   const [rules, setRules] = useState([])
   const [foods, setFoods] = useState([])
@@ -112,7 +117,7 @@ function AppShell() {
   const loadAll = useCallback(async () => {
     if (!user) return
     if (!hasLoadedOnce.current) setDataLoading(true)
-    const [cats, txs, gls, buds, rls, fds, flogs, mtmpls, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules, recovr, tpairs, isources, srules, cevents] = await Promise.all([
+    const [cats, txs, gls, buds, rls, fds, flogs, mtmpls, ntargets, mems, paccts, cscores, digest, ents, rcpts, ritemrules, recovr, tpairs, isources, srules, cevents, prof, wlogs] = await Promise.all([
       api.ensureDefaultCategories(user.id),
       api.fetchTransactions(),
       api.fetchGoals(),
@@ -148,6 +153,9 @@ function AppShell() {
       api.fetchIncomeSources().catch(() => []),
       api.fetchScheduleRules().catch(() => []),
       api.fetchCalendarEvents().catch(() => []),
+      // Profile + weight logs live in migration 0032; degrade gracefully until run.
+      api.fetchProfile().catch(() => null),
+      api.fetchWeightLogs().catch(() => []),
     ])
 
     // Auto-categorize: apply saved merchant rules to any uncategorized
@@ -168,6 +176,8 @@ function AppShell() {
     setCategories(cats)
     setTransactions(finalTxs)
     setGoals(gls)
+    setProfile(prof ?? null)
+    setWeightLogs(wlogs ?? [])
     setBudgets(buds)
     setRules(rls)
     setFoods(fds)
@@ -965,20 +975,40 @@ function AppShell() {
         )}
 
         {activeTab === 'Goals' && (
-          <GoalTracker
+          <GoalsTab
             goals={goals}
-            displayName={user.user_metadata?.display_name}
-            onCreate={async (values) => {
+            weightLogs={weightLogs}
+            profile={profile}
+            accounts={plaidAccounts}
+            transactions={transactions}
+            categories={categories}
+            onCreateGoal={async (values) => {
               const created = await api.createGoal(values)
               setGoals((prev) => [...prev, created])
             }}
-            onUpdate={async (id, updates) => {
+            onUpdateGoal={async (id, updates) => {
               const updated = await api.updateGoal(id, updates)
               setGoals((prev) => prev.map((g) => (g.id === id ? updated : g)))
             }}
-            onDelete={async (id) => {
+            onDeleteGoal={async (id) => {
               await api.deleteGoal(id)
               setGoals((prev) => prev.filter((g) => g.id !== id))
+            }}
+            onQuickLog={async (values) => {
+              const saved = await api.upsertWeightLog(values)
+              setWeightLogs((prev) => [...prev.filter((w) => w.logged_on !== saved.logged_on), saved])
+            }}
+            onUpdateWeight={async (id, updates) => {
+              const updated = await api.updateWeightLog(id, updates)
+              setWeightLogs((prev) => prev.map((w) => (w.id === id ? updated : w)))
+            }}
+            onDeleteWeight={async (id) => {
+              await api.deleteWeightLog(id)
+              setWeightLogs((prev) => prev.filter((w) => w.id !== id))
+            }}
+            onSaveProfile={async (values) => {
+              const saved = await api.upsertProfile(values)
+              setProfile(saved)
             }}
           />
         )}

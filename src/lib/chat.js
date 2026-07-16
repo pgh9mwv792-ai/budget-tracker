@@ -359,8 +359,15 @@ export function summarizeAppData({ categories = [], transactions = [], budgets =
       .join('\n') || '(none yet)'
 
   const goalLines =
-    goals.map((g) => `- ${g.name}: ${money(g.current_amount)} saved of ${money(g.target_amount)}`).join('\n') ||
-    '(no goals)'
+    goals
+      .filter((g) => g.status !== 'archived')
+      .map((g) => {
+        const label = g.title || g.name
+        const saved = g.current_value ?? g.current_amount ?? 0
+        const target = g.target_value ?? g.target_amount ?? 0
+        return `- ${label}: ${money(saved)} of ${money(target)}`
+      })
+      .join('\n') || '(no goals)'
 
   // Today's logged nutrition.
   const todaysLogs = foodLogs.filter((l) => l.date === today())
@@ -612,19 +619,27 @@ export async function executeTool(name, input, ctx) {
         return `Set the monthly budget for "${c.name}" to $${Number(input.amount).toFixed(2)}.`
       }
       case 'add_goal': {
+        // The assistant creates manually-tracked financial savings goals — the
+        // unified goal shape (migration 0032), direction = increase.
         await actions.addGoal({
-          name: input.name,
-          targetAmount: input.target_amount,
-          currentAmount: input.current_amount || 0,
+          type: 'financial',
+          title: input.name,
+          startValue: input.current_amount || 0,
+          targetValue: input.target_amount,
+          direction: 'increase',
+          tracking: 'manual',
+          currentValue: input.current_amount || 0,
         })
         return `Created goal "${input.name}" targeting $${Number(input.target_amount).toFixed(2)}.`
       }
       case 'contribute_to_goal': {
-        const g = goals.find((x) => x.name.toLowerCase() === String(input.goal_name || '').trim().toLowerCase())
+        const wanted = String(input.goal_name || '').trim().toLowerCase()
+        const g = goals.find((x) => (x.title || x.name || '').toLowerCase() === wanted)
         if (!g) return `No goal named "${input.goal_name}" exists.`
-        const newAmount = Number(g.current_amount || 0) + Number(input.amount)
-        await actions.updateGoal(g.id, { current_amount: newAmount })
-        return `Added $${Number(input.amount).toFixed(2)} to "${g.name}". Now $${newAmount.toFixed(2)} of $${Number(g.target_amount).toFixed(2)}.`
+        const target = Number(g.target_value ?? g.target_amount ?? 0)
+        const newAmount = Number(g.current_value ?? g.current_amount ?? 0) + Number(input.amount)
+        await actions.updateGoal(g.id, { current_value: newAmount })
+        return `Added $${Number(input.amount).toFixed(2)} to "${g.title || g.name}". Now $${newAmount.toFixed(2)} of $${target.toFixed(2)}.`
       }
       case 'add_food': {
         await actions.addFood({

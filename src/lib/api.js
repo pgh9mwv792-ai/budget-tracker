@@ -130,17 +130,38 @@ export async function fetchGoals() {
   return data
 }
 
-export async function createGoal({ name, targetAmount, currentAmount }) {
+// Create a goal in the unified shape (migration 0032). Works for both financial
+// and fitness goals. Auto-tracked goals carry a sourceRef describing where their
+// current value comes from; manual goals carry a currentValue instead.
+export async function createGoal({
+  type = 'financial',
+  title,
+  startValue = 0,
+  targetValue,
+  direction = 'increase',
+  deadline,
+  tracking = 'manual',
+  sourceRef,
+  currentValue,
+  status = 'active',
+}) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
   const { data, error } = await supabase
     .from('goals')
     .insert({
-      name,
-      target_amount: targetAmount,
-      current_amount: currentAmount || 0,
       user_id: user.id,
+      type,
+      title,
+      start_value: startValue || 0,
+      target_value: targetValue,
+      direction,
+      deadline: deadline || null,
+      tracking,
+      source_ref: sourceRef ?? null,
+      current_value: tracking === 'manual' ? (currentValue ?? startValue ?? 0) : null,
+      status,
     })
     .select()
     .single()
@@ -156,6 +177,85 @@ export async function updateGoal(id, updates) {
 
 export async function deleteGoal(id) {
   const { error } = await supabase.from('goals').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ---------- profile (body stats + unit preference, migration 0032) ----------
+
+// One row per user. Returns null when the user hasn't onboarded body stats yet
+// (the Goals tab reads a null/height-less profile as "show the setup prompt").
+export async function fetchProfile() {
+  const { data, error } = await supabase.from('profiles').select('*').maybeSingle()
+  if (error) throw error
+  return data
+}
+
+// Upsert the profile. Each field is written only when provided so a unit-only
+// change doesn't clear the stored height and vice versa.
+export async function upsertProfile({ heightCm, unitPreference }) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const row = { user_id: user.id, updated_at: new Date().toISOString() }
+  if (heightCm !== undefined) row.height_cm = heightCm === '' || heightCm == null ? null : heightCm
+  if (unitPreference !== undefined) row.unit_preference = unitPreference || 'imperial'
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(row, { onConflict: 'user_id' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ---------- weight logs (one weigh-in per day, migration 0032) ----------
+
+export async function fetchWeightLogs() {
+  const { data, error } = await supabase
+    .from('weight_logs')
+    .select('*')
+    .order('logged_on', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+// Quick-log: weight is stored in kilograms. The (user_id, logged_on) unique key
+// means re-logging the same day updates that day's entry instead of erroring on
+// a duplicate — so the "Log today" button is always safe to tap twice.
+export async function upsertWeightLog({ weightKg, loggedOn, note }) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('weight_logs')
+    .upsert(
+      {
+        user_id: user.id,
+        weight_kg: weightKg,
+        logged_on: loggedOn,
+        note: note === '' || note == null ? null : note,
+      },
+      { onConflict: 'user_id,logged_on' }
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateWeightLog(id, updates) {
+  const { data, error } = await supabase
+    .from('weight_logs')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteWeightLog(id) {
+  const { error } = await supabase.from('weight_logs').delete().eq('id', id)
   if (error) throw error
 }
 
